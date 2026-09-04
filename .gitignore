@@ -1,0 +1,16 @@
+# Build outputs
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# NuGet
+*.nupkg
+packages/
+
+# Deployed add-in manifest (machine-specific absolute paths)
+deploy/HVACIDA.addin.installed
+
+# Docs / scratch
+*.tmp

@@ -1,0 +1,33 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HVACIDA.Core", "src\HVACIDA.Core\HVACIDA.Core.csproj", "{C88922AC-3B20-4B26-AE99-F4E3B38B251D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HVACIDA.UI", "src\HVACIDA.UI\HVACIDA.UI.csproj", "{C702AA64-307B-4752-A8BB-DD75203367D6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HVACIDA.Revit", "src\HVACIDA.Revit\HVACIDA.Revit.csproj", "{988A7BAA-E5E0-463A-92B7-323D0FB941BF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C88922AC-3B20-4B26-AE99-F4E3B38B251D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C88922AC-3B20-4B26-AE99-F4E3B38B251D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C88922AC-3B20-4B26-AE99-F4E3B38B251D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C88922AC-3B20-4B26-AE99-F4E3B38B251D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C702AA64-307B-4752-A8BB-DD75203367D6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C702AA64-307B-4752-A8BB-DD75203367D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C702AA64-307B-4752-A8BB-DD75203367D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C702AA64-307B-4752-A8BB-DD75203367D6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{988A7BAA-E5E0-463A-92B7-323D0FB941BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{988A7BAA-E5E0-463A-92B7-323D0FB941BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{988A7BAA-E5E0-463A-92B7-323D0FB941BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{988A7BAA-E5E0-463A-92B7-323D0FB941BF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

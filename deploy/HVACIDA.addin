@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  HVACIDA.addin(模板)
+  ====================
+  1) 先执行 build.ps1 编译,得到:
+     D:\DSH\src\HVACIDA.Revit\bin\Debug\HVACIDA.Revit.dll(含 HVACIDA.UI.dll、HVACIDA.Core.dll 一并复制)
+  2) 把下方 <Assembly> 路径改为你机器上的绝对路径,并将本文件复制到:
+     C:\ProgramData\Autodesk\Revit\Addins\2020\HVACIDA.addin
+  也可以直接运行 deploy\install.ps1(自动生成正确路径并安装)。
+-->
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>HVACIDA</Name>
+    <Assembly>__REPLACE_WITH_ABSOLUTE_DLL_PATH__</Assembly>
+    <AddInId>D257A0A5-CF45-416B-8B08-A1B3CB8A40AB</AddInId>
+    <FullClassName>HVACIDA.Revit.App</FullClassName>
+    <VendorId>HVACIDA</VendorId>
+    <VendorDescription>暖通空调智能设计助手(骨架版)</VendorDescription>
+  </AddIn>
+</RevitAddIns>
