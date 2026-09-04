@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <RootNamespace>HVACIDA.UI</RootNamespace>
+    <AssemblyName>HVACIDA.UI</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <Version>0.1.0</Version>
+    <Description>HVACIDA WPF 视图层(不引用 Revit API)</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HVACIDA.Core\HVACIDA.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,92 @@
+<Window x:Class="HVACIDA.UI.Views.LargeSystemWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="大系统负荷计算 - HVACIDA"
+        Width="1120" Height="760"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Microsoft YaHei UI" FontSize="12"
+        UseLayoutRounding="True">
+    <Window.Resources>
+        <Style x:Key="FieldLabel" TargetType="{x:Type TextBlock}">
+            <Setter Property="Width" Value="165"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="6,3,2,3"/>
+        </Style>
+        <Style x:Key="FieldInput" TargetType="{x:Type TextBox}">
+            <Setter Property="Width" Value="130"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="2,3,10,3"/>
+            <Setter Property="HorizontalContentAlignment" Value="Right"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- 顶部提示 -->
+        <Border DockPanel.Dock="Top" Background="#FFF4E5" Padding="8,6">
+            <TextBlock Text="输入站厅/站台参数后点击【计算】。当前为骨架算法:显热/潜热/送风量/排烟/选型口径待与《大系统负荷计算公式.docx》核对,仅供流程演示。"
+                       TextWrapping="Wrap" Foreground="#8A6100"/>
+        </Border>
+
+        <!-- 底部操作区 -->
+        <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <Button Content="计 算" Width="90" Height="30" Margin="0,0,8,0"
+                            Command="{Binding CalculateCommand}" IsDefault="True"/>
+                    <Button Content="导出计算书" Width="110" Height="30"
+                            Command="{Binding ExportCommand}"/>
+                </StackPanel>
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
+                           TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
+            </DockPanel>
+        </Border>
+
+        <!-- 输入与结果 -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="14"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="4">
+                <UniformGrid Columns="2">
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅空调面积 m²"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallAreaM2, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台空调面积 m²"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.PlatformAreaM2, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="排烟计算层高 m"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.SmokeZoneHeightM, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅高峰人数 人"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallOccupants, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台高峰人数 人"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.PlatformOccupants, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="集群系数"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.ClusterFactor, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="超高峰系数"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.SuperPeakFactor, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="人员显热 W/人"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.OccupantSensibleHeatPerPersonW, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="人员散湿量 g/(h·人)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.WaterVaporPerPersonGPerHour, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="照明功率密度 W/m²"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.LightingDensityWm2, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="照明同时使用系数"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.LightingUsageFactor, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="广告牌发热量 W"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.AdvertHeatW, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="扶梯台数 台"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.EscalatorCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="单台扶梯发热 W"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.EscalatorHeatPerUnitW, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="直梯台数 台"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.ElevatorCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="单台直梯发热 W"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.ElevatorHeatPerUnitW, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="AFC 设备发热 W"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.AfcHeatW, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="屏蔽门系统负荷 W"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.PsdHeatW, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="出入口渗透新风 m³/h"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.InfiltrationAirVolumeM3H, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="每人新风量 m³/(h·人)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.FreshAirPerPersonM3H, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="送风温差 ℃"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.SupplyTemperatureDiffC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                </UniformGrid>
+            </ScrollViewer>
+
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          Background="#DDDDDD" ResizeBehavior="PreviousAndNext"/>
+
+            <Border Grid.Column="2" Margin="4" BorderBrush="#DDDDDD" BorderThickness="1" Background="#FAFAFA">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="计算结果" FontWeight="Bold" Padding="8,6" Background="#EFEFEF"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <TextBlock Text="{Binding ResultText}" Padding="10" FontFamily="Consolas"
+                                   TextWrapping="Wrap" VerticalAlignment="Top"/>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>
