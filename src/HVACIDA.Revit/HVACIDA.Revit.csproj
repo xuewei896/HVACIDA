@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <RootNamespace>HVACIDA.Revit</RootNamespace>
+    <AssemblyName>HVACIDA.Revit</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <!-- Revit 2020 为 64 位进程,Add-in 输出须为 x64 以匹配 RevitAPI(AMD64) -->
+    <PlatformTarget>x64</PlatformTarget>
+    <Version>0.1.0</Version>
+    <Description>HVACIDA Revit 2020 外壳(Application/Ribbon/Command)</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Revit 2020 API:只引用,不复制到输出目录 -->
+    <Reference Include="RevitAPI">
+      <HintPath>C:\Program Files\Autodesk\Revit 2020\RevitAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="RevitAPIUI">
+      <HintPath>C:\Program Files\Autodesk\Revit 2020\RevitAPIUI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HVACIDA.Core\HVACIDA.Core.csproj" />
+    <ProjectReference Include="..\HVACIDA.UI\HVACIDA.UI.csproj" />
+  </ItemGroup>
+
+</Project>
