@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <RootNamespace>HVACIDA.Core</RootNamespace>
+    <AssemblyName>HVACIDA.Core</AssemblyName>
+    <Version>0.1.0</Version>
+    <Description>HVACIDA 领域模型与计算服务(无 Revit 依赖)</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+</Project>
