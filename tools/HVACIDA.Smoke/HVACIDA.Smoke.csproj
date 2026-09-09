@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <RootNamespace>HVACIDA.Smoke</RootNamespace>
+    <AssemblyName>HVACIDA.Smoke</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+    <Description>大系统负荷计算冒烟/数值自测(不参与插件分发)</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\HVACIDA.Core\HVACIDA.Core.csproj" />
+  </ItemGroup>
+
+</Project>
