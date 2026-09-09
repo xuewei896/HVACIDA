@@ -4,29 +4,38 @@ using HVACIDA.Core.Services;
 
 namespace HVACIDA.UI.ViewModels
 {
-    /// <summary>大系统负荷计算窗 ViewModel(需求文档 2.2.3.1)。</summary>
+    /// <summary>大系统负荷计算窗 ViewModel(需求文档 2.2.3.1,参数表按公式文档分节)。</summary>
     public class LargeSystemViewModel : ViewModelBase
     {
         private readonly ILargeSystemLoadCalculator _calculator;
+        private LargeSystemInput _input;
         private string _resultText = "";
         private string _status = "";
 
         public LargeSystemViewModel()
         {
             _calculator = new LargeSystemLoadCalculator();
-            Input = new LargeSystemInput();
+            _input = new LargeSystemInput();
             CalculateCommand = new RelayCommand(Calculate, () => true);
             ExportCommand = new RelayCommand(ExportReport, () => _lastResult != null);
+            ResetCommand = new RelayCommand(Reset);
         }
 
         /// <summary>输入参数(绑定路径 Input.*)。</summary>
-        public LargeSystemInput Input { get; }
+        public LargeSystemInput Input
+        {
+            get => _input;
+            private set => Set(ref _input, value);
+        }
 
         /// <summary>计算命令。</summary>
         public ICommand CalculateCommand { get; }
 
         /// <summary>导出计算书命令(需先计算)。</summary>
         public ICommand ExportCommand { get; }
+
+        /// <summary>恢复公式文档默认参数。</summary>
+        public ICommand ResetCommand { get; }
 
         private LargeSystemResult _lastResult;
 
@@ -50,7 +59,7 @@ namespace HVACIDA.UI.ViewModels
             {
                 _lastResult = _calculator.Calculate(Input);
                 ResultText = ResultFormatter.FormatLarge(Input, _lastResult);
-                Status = "计算完成(骨架算法,公式待核对)。可导出计算书。";
+                Status = "计算完成(与北京站算例同口径)。可导出计算书。";
             }
             catch (System.Exception ex)
             {
@@ -74,6 +83,14 @@ namespace HVACIDA.UI.ViewModels
             {
                 Status = "导出失败: " + ex.Message;
             }
+        }
+
+        private void Reset()
+        {
+            Input = new LargeSystemInput();
+            _lastResult = null;
+            ResultText = "";
+            Status = "已恢复公式文档默认参数(客流量需重新输入)。";
         }
     }
 }
