@@ -30,16 +30,21 @@ namespace HVACIDA.Revit.Commands
     }
 
     /// <summary>打开“项目信息与气象参数”窗口。</summary>
+    /// <remarks>Revit 2020 要求每个 IExternalCommand 必须标注 [Transaction];本项目命令只弹窗/读模型,
+    /// 采用 Manual——Revit 不自动开事务,未来需写回模型时可自行 Start/Commit。</remarks>
+    [Transaction(TransactionMode.Manual)]
     public class ShowProjectInfoCommand : ShowDialogCommandBase<UI.Views.ProjectInfoWindow>
     {
     }
 
     /// <summary>打开“大系统负荷计算”窗口。</summary>
+    [Transaction(TransactionMode.Manual)]
     public class ShowLargeSystemCommand : ShowDialogCommandBase<UI.Views.LargeSystemWindow>
     {
     }
 
     /// <summary>打开“小系统负荷计算”窗口。</summary>
+    [Transaction(TransactionMode.Manual)]
     public class ShowSmallSystemCommand : ShowDialogCommandBase<UI.Views.SmallSystemWindow>
     {
     }
