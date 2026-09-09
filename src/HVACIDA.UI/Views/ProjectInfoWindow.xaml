@@ -48,7 +48,7 @@
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="项目地点-省"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Basic.LocationProvince, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="项目地点-市"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Basic.LocationCity, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="项目地点-区/县"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Basic.LocationDistrict, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="车站编号"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Basic.StationNumber, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="车站名称"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Basic.StationName, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="备注"/><TextBox Width="250" VerticalAlignment="Center" Margin="2,3,10,3" Text="{Binding Model.Basic.Remark, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                     </UniformGrid>
                 </GroupBox>
