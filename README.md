@@ -4,6 +4,8 @@
 
 > ⚠️ 数值口径说明:大系统空调主链已核对可用;小系统、排烟"防烟分区"选型等仍为演示/过渡口径(见各文件注释与第 6 节),投入使用前按 TODO 完成。定稿依据 = 需求文档 + 两份公式文档(均在本仓库)。
 
+> 🧭 开发总流程、**模块状态看板**、**每轮验证清单模板**、领域口径决策记录 → 见 [docs/开发流程.md](docs/开发流程.md)。
+
 ## 1. 环境(本机已验证)
 
 - Revit 2020:`C:\Program Files\Autodesk\Revit 2020\RevitAPI.dll` / `RevitAPIUI.dll`
@@ -15,6 +17,8 @@
 ```
 D:\DSH
 ├─ HVACIDA.sln
+├─ docs
+│  └─ 开发流程.md      开发流程/模块状态看板/每轮验证清单/口径决策记录
 ├─ src
 │  ├─ HVACIDA.Core     领域模型/计算/焓湿图/仓库/报告(无 Revit 依赖,可单测)
 │  ├─ HVACIDA.UI       WPF 窗口+MVVM(不引用 Revit API)
