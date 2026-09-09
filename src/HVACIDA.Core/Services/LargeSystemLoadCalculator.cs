@@ -7,7 +7,7 @@ namespace HVACIDA.Core.Services
     /// 大系统负荷计算(需求文档 2.2.3.1)——按《大系统负荷计算公式.docx》逐格移植。
     /// 每条语句注释保留单元格代号与中文名,方便与 Excel 计算书逐格比对;
     /// 饱和含湿量采用公式文档给出的 7 次多项式(温度℃→g/kg)。
-    /// 已知文档疑点(原样保留并注释):E159 引用 D143,而正文仅定义 C143=露点焓,当前按 C143 计算。
+    /// 已确认(2026-09-04,领域核对):公式文档 E159 中引用的 D143 系 C143(露点焓)之笔误,按 C143 计算。
     /// </summary>
     public class LargeSystemLoadCalculator : ILargeSystemLoadCalculator
     {
@@ -152,7 +152,7 @@ namespace HVACIDA.Core.Services
             // C143 露点焓
             r.DewPointEnthalpy = 1.01 * r.DewPointTempC +
                                  (2500.0 + 1.84 * r.DewPointTempC) * r.DewPointMoistureGkg / 1000.0 + 0.4;
-            // E159=C125*1.15*(C146-D143)/3600;文档 D143 疑为 C143 笔误,按 C143 计算
+            // E159=C125*1.15*(C146-C143)/3600(已确认:公式文档 D143 系 C143 笔误)
             r.TotalCoolingKw = Safe(
                 r.TotalSupplyFlowM3H * 1.15 * (r.FreshReturnMixEnthalpy - r.DewPointEnthalpy) / 3600.0);
 
