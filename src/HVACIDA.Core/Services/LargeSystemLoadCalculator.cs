@@ -1,5 +1,6 @@
 using System;
 using HVACIDA.Core.Models;
+using HVACIDA.Core.Utils;
 
 namespace HVACIDA.Core.Services
 {
@@ -157,8 +158,10 @@ namespace HVACIDA.Core.Services
                 r.TotalSupplyFlowM3H * 1.15 * (r.FreshReturnMixEnthalpy - r.DewPointEnthalpy) / 3600.0);
 
             // ================= 五、排烟量 =================
-            r.HallSmokeFlowM3H = x.HallAreaM2 * 60.0;      // C171=D55×60
-            r.PlatformSmokeFlowM3H = x.PlatformAreaM2 * 60.0; // D171=D56×60
+            // 领域确认(2026-09-04):计算风量 = 公共区面积×60(即 C171/D171,与公式文档一致);
+            // 选型风量 = 计算风量×1.2(=防烟分区×72),需防烟分区几何,当前由 MAX(C171,D171)/2 过渡(见 HvacConstants 注)。
+            r.HallSmokeFlowM3H = x.HallAreaM2 * HvacConstants.SmokeAirChangesPerHour; // C171
+            r.PlatformSmokeFlowM3H = x.PlatformAreaM2 * HvacConstants.SmokeAirChangesPerHour; // D171
 
             // ================= 六、单台设备选型 =================
             r.UnitSupplyFlowM3H = r.TotalSupplyFlowM3H / 2.0;                    // A165

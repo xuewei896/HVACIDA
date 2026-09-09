@@ -81,7 +81,7 @@ namespace HVACIDA.Core.Services
             AppendLine(sb, "E178 单台排烟风机风量(MAX/2)", r.UnitSmokeFlowM3H, "m³/h");
 
             sb.AppendLine();
-            sb.AppendLine("注:公式已按《大系统负荷计算公式.docx》逐格移植;E159 按 C143(露点焓)计算,D143 系公式文档笔误(已确认)。请用 Excel 样例复核后用于设计。");
+            sb.AppendLine("注:已按公式文档移植并通过北京站算例 30 项逐格核对(2026-09-04)。口径确认:E159 用 C143(露点焓,D143 系笔误);站厅/站台送风温度一致;排烟计算风量=面积×60,选型=×1.2(需防烟分区)。");
             return sb.ToString();
         }
 

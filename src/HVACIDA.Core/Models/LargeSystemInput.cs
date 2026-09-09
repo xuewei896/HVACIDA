@@ -27,7 +27,8 @@ namespace HVACIDA.Core.Models
         /// <summary>F6 站台夏季空调计算干球温度 ℃(从项目信息调取)</summary>
         public double PlatformDesignTempC { get; set; }
 
-        /// <summary>C8 站厅公共区风温差 ℃(默认 10)</summary>
+        /// <summary>C8 站厅公共区风温差 ℃(默认 10)。
+        /// 领域确认(2026-09-04):站厅/站台送风温度必须一致,送风点由站厅送风温度统一确定(见 A118/A121)。</summary>
         public double SupplyTempDiffC { get; set; }
 
         /// <summary>C10 管道温升 ℃(默认 1.5)</summary>

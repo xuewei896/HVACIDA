@@ -1,8 +1,8 @@
 # HVACIDA — Revit 2020 地铁暖通智能设计辅助插件(骨架版)
 
-依据 `HVACIDA_需求分析文档.md`(310 行)从零搭建的可编译骨架。当前里程碑:**能编译、能出 Ribbon 页、能打开三个 WPF 功能窗并跑通"大/小系统负荷计算"演示链路**。
+依据 `HVACIDA_需求分析文档.md`(310 行)从零搭建的可编译骨架。当前里程碑:**能编译、能出 Ribbon 页、能打开三个 WPF 功能窗;大系统负荷主计算链已按《大系统负荷计算公式.docx》移植,并通过北京站算例《大系统负荷计算公式-示例.xls》30 项逐格一致校验(tools/HVACIDA.Smoke)**。
 
-> ⚠️ 计算数值为骨架口径(见各文件 `TODO(公式核对)`),**不得直接用于工程设计**,须逐条与 `大系统负荷计算公式.docx` 核对后发布。
+> ⚠️ 数值口径说明:大系统空调主链已核对可用;小系统、排烟"防烟分区"选型等仍为演示/过渡口径(见各文件注释与第 6 节),投入使用前按 TODO 完成。定稿依据 = 需求文档 + 两份公式文档(均在本仓库)。
 
 ## 1. 环境(本机已验证)
 
@@ -53,7 +53,7 @@ dotnet build .\HVACIDA.sln
 | 需求章节 | 模块 | 现状 |
 |---|---|---|
 | 2.1 项目信息 | ProjectInfoModel/DesignConditionParams + 项目信息窗(保存 XML) | ✅ 骨架可用 |
-| 2.2.3.1 大系统负荷 | LargeSystemLoadCalculator(客流/照明/设备/送风/新风/排烟/选型) | 🟡 链路通,公式待核对 |
+| 2.2.3.1 大系统负荷 | LargeSystemLoadCalculator(客流/照明/设备/送风/新风/排烟/选型) | ✅ 已按公式文档移植;北京站算例 30 项逐格一致 |
 | 2.2.3.2 小系统负荷 | SmallSystemLoadCalculator(全空气一次回风已实现,其余 6 类返回提示) | 🟡 仅一类实现 |
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | TextReportGenerator(文本计算书,`%AppData%\HVACIDA\Reports`) | 🟡 文本版 |
@@ -62,13 +62,13 @@ dotnet build .\HVACIDA.sln
 
 ## 6. 关键 TODO(按技能规范)
 
-1. **公式核对**:`src\HVACIDA.Core\` 内所有 `TODO(公式核对)` 逐条对照 `大系统负荷计算公式.docx` 修订并固化系数到 `Utils\HvacConstants.cs`。
-2. 大系统室内状态点改读 `DesignConditionParams`(当前焓差演示写死 30/28/33.5 ℃、φ0.6)。
+1. **大系统公式核对**:主计算链完成(算例 30 项逐格一致,2026-09-04);待补:**排烟"防烟分区"选型口径**(计算风量=面积×60,选型=×1.2,需分区几何输入)。
+2. 大系统输入 F4/F6/C5(站厅/站台设计温度、室外湿球)改接 `DesignConditionParams`/项目信息自动回填(当前为模型默认值)。
 3. SQLite 化:实现 `IDataRepository` 的 SQLite 版(需求:数据库 SQLite)。
 4. Revit 读取:空间(Space)面积/体积/高度、墙长;参数回写;批量空间分区。
 5. 计算书升级 Excel(EPPlus/OpenXML)与 PDF;出图/标注/图例。
 6. 按钮图标(PushButtonData.Image/ImageLarge)、中英文界面、操作日志与撤销。
-7. 骨架未含任何单元测试工程 —— Core 无 Revit 依赖,建议补 xUnit 用例后再核对公式。
+7. 数值回归:Smoke 工程已含北京算例 30 项断言(tools/HVACIDA.Smoke);建议补 xUnit 工程并持续追加用例。
 
 ## 7. 与 AI 协作(DSH 技能)
 
