@@ -1,0 +1,303 @@
+/* HVACIDA UI 原型 — Revit 2020 原生风格
+ * 依据 docs/UI设计规范.md(颜色令牌/字体/尺寸/控件规格)
+ * 仅用于评审,不代表最终 WPF 实现。
+ */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  font-size: 12px;
+  color: #000;
+  background: #F0F0F0;
+  overflow: hidden;
+}
+
+/* ---------- 顶部:原型工具条 + Revit Ribbon 模拟 ---------- */
+.proto-bar {
+  height: 30px;
+  background: #E4E4E4;
+  border-bottom: 1px solid #A0A0A0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+}
+.proto-bar .brand { font-weight: 600; color: #333; margin-right: 12px; }
+.tab-btn {
+  border: 1px solid #ADADAD;
+  background: #F5F5F5;
+  height: 22px;
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.tab-btn.active { background: #FFF; border-bottom-color: #FFF; font-weight: 600; }
+.proto-bar .spacer { flex: 1; }
+.proto-bar .note { color: #5A5A5A; }
+
+.ribbon {
+  background: #F0F0F0;
+  border-bottom: 1px solid #A0A0A0;
+  user-select: none;
+}
+.ribbon-tabs {
+  display: flex;
+  align-items: flex-end;
+  height: 26px;
+  padding-left: 6px;
+  border-bottom: 1px solid #C8C8C8;
+  background: #E8E8E8;
+}
+.ribbon-tab {
+  padding: 3px 14px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: #333;
+  cursor: default;
+  font-size: 12px;
+}
+.ribbon-tab.active {
+  background: #F0F0F0;
+  border-color: #C8C8C8;
+  border-bottom: 1px solid #F0F0F0;
+  margin-bottom: -1px;
+  font-weight: 600;
+}
+.ribbon-panels { display: flex; padding: 4px 6px 2px; gap: 0; }
+.ribbon-panel {
+  border-right: 1px solid #D7D7D7;
+  padding: 0 10px 14px;
+  position: relative;
+}
+.ribbon-panel:last-child { border-right: none; }
+.ribbon-panel .panel-title {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #5A5A5A;
+  font-size: 11px;
+}
+.ribbon-big-btns { display: flex; gap: 4px; }
+.ribbon-btn {
+  width: 74px;
+  height: 62px;
+  border: 1px solid transparent;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.15;
+  text-align: center;
+  padding: 2px;
+}
+.ribbon-btn:hover { border-color: #A0A0A0; background: #E9F2FB; }
+.ribbon-btn .ico {
+  width: 26px; height: 26px;
+  border: 1px solid #7A7A7A;
+  background: #FFF;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; color: #0078D7;
+}
+.ribbon-btn small { color: #5A5A5A; font-size: 10px; }
+
+/* ---------- 工作区(模拟 Revit 画布) ---------- */
+.canvas {
+  position: absolute;
+  left: 0; right: 0; bottom: 22px;
+  top: 118px;
+  background:
+    linear-gradient(#FBFBFB, #F2F2F2);
+  overflow: auto;
+}
+.canvas::before {
+  content: "Revit 模型视图(模拟)";
+  position: absolute;
+  left: 12px; bottom: 10px;
+  color: #B0B0B0;
+  font-size: 12px;
+}
+.app-status {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 22px; line-height: 22px;
+  background: #E8E8E8; border-top: 1px solid #C8C8C8;
+  padding: 0 10px; color: #333; font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---------- 窗口(Revit 原生观感) ---------- */
+.win {
+  position: absolute;
+  background: #F0F0F0;
+  border: 1px solid #707070;
+  box-shadow: 2px 2px 8px rgba(0,0,0,.25);
+  display: none;
+  flex-direction: column;
+  min-width: 320px;
+}
+.win.open { display: flex; }
+.win .titlebar {
+  height: 26px;
+  background: linear-gradient(#FAFAFA, #EFEFEF);
+  border-bottom: 1px solid #C8C8C8;
+  display: flex; align-items: center;
+  padding: 0 6px 0 10px;
+  cursor: move;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.win .titlebar .close {
+  margin-left: auto;
+  width: 30px; height: 20px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+.win .titlebar .close:hover { background: #E81123; color: #FFF; }
+.win .body { padding: 10px 12px; overflow: auto; flex: 1 1 auto; }
+.win .footer {
+  flex: 0 0 auto;
+  min-height: 42px;
+  border-top: 1px solid #C8C8C8;
+  background: #EAEAEA;
+  padding: 8px 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.win .footer .grow { flex: 1; }
+.win .footer .status { color: #107C10; font-size: 12px; max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.win .footer .status.err { color: #C42B1C; }
+
+/* 提示条 */
+.hint {
+  background: #FFF8E1;
+  border: 1px solid #E6D9A8;
+  padding: 6px 8px;
+  color: #8A6100;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+/* 分节 */
+.group {
+  border: 1px solid #A0A0A0;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: #F7F7F7;
+}
+.group > .gtitle {
+  font-size: 12px;
+  margin: -2px 0 6px 0;
+  color: #000;
+}
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 3px; }
+.grid1 { display: grid; grid-template-columns: 1fr; row-gap: 3px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 12px; row-gap: 3px; }
+.row { display: flex; align-items: center; gap: 6px; min-height: 24px; }
+.row > label { width: 190px; flex: 0 0 auto; color: #000; }
+.row.wide > label { width: 230px; }
+.row.tight > label { width: 150px; }
+
+input[type=text], input[type=number], select {
+  height: 23px;
+  border: 1px solid #A0A0A0;
+  background: #FFF;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 12px;
+  min-width: 0;
+}
+input[type=number] { width: 110px; text-align: right; }
+input.num-lg { width: 130px; }
+input.txt-lg { width: 250px; }
+input[readonly] { background: #F5F5F5; color: #5A5A5A; }
+input.invalid { background: #FFF3F3; border-color: #C42B1C; }
+select { min-width: 110px; }
+
+button {
+  height: 23px;
+  min-width: 75px;
+  border: 1px solid #ADADAD;
+  background: linear-gradient(#FDFDFD, #EFEFEF);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 0 10px;
+}
+button:hover { background: #E9F2FB; border-color: #7EB4E2; }
+button:active { background: #DCEBF9; }
+button.default { border-color: #0078D7; box-shadow: 0 0 0 1px #B7D9F5 inset; }
+button:disabled { color: #9A9A9A; background: #F2F2F2; cursor: default; border-color: #C8C8C8; }
+button.primary-wide { min-width: 88px; }
+
+/* 结果区 */
+.cards { display: flex; flex-direction: column; gap: 8px; }
+.card { border: 1px solid #A0A0A0; background: #FFF; }
+.card > .chead { background: #EFEFEF; border-bottom: 1px solid #D7D7D7; padding: 4px 8px; }
+.card > .cbody { padding: 6px 8px; }
+.kv { display: flex; align-items: baseline; gap: 6px; min-height: 20px; }
+.kv .k { color: #000; flex: 1; }
+.kv .v { font-family: Consolas, monospace; text-align: right; min-width: 90px; }
+.kv .u { color: #5A5A5A; width: 42px; }
+.kv .code { color: #5A5A5A; width: 52px; text-align: right; font-size: 11px; }
+.kv.strong .v { font-weight: 600; }
+
+.two-col { display: flex; gap: 10px; }
+.two-col > .left { flex: 1 1 58%; min-width: 0; }
+.two-col > .right { flex: 1 1 42%; min-width: 280px; }
+
+/* 列表 / 表格 */
+table.grid { border-collapse: collapse; width: 100%; background: #FFF; }
+table.grid th, table.grid td { border: 1px solid #D7D7D7; padding: 2px 6px; height: 24px; }
+table.grid th { background: #EFEFEF; font-weight: 400; text-align: left; }
+table.grid td.num, table.grid th.num { text-align: right; font-family: Consolas, monospace; }
+ul.picklist { list-style: none; margin: 0; padding: 0; border: 1px solid #A0A0A0; background: #FFF; max-height: 240px; overflow: auto; }
+ul.picklist li { padding: 3px 6px; cursor: pointer; }
+ul.picklist li.sel { background: #CCE4F7; }
+ul.picklist li:hover { background: #E9F2FB; }
+.space-list { border: 1px solid #A0A0A0; background: #FFF; height: 220px; overflow: auto; }
+.space-list div { padding: 3px 6px; cursor: pointer; }
+.space-list div.sel { background: #CCE4F7; }
+.mono { font-family: Consolas, monospace; }
+.warn-chip { color: #C42B1C; margin-left: 6px; font-size: 11px; }
+.hidden { display: none !important; }
+
+/* 流程图 / 交互表 视图 */
+.page { position: absolute; left: 0; right: 0; top: 118px; bottom: 22px; overflow: auto; padding: 14px 18px; display: none; background: #F7F7F7; }
+.page.open { display: block; }
+.flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.flow .lane { display: flex; gap: 18px; align-items: flex-start; justify-content: flex-start; flex-wrap: wrap; width: 100%; }
+.node {
+  border: 1px solid #7A7A7A; background: #FFF; padding: 6px 10px; min-width: 120px;
+  text-align: center; line-height: 1.4;
+}
+.node.root { background: #DCEBF9; border-color: #0078D7; font-weight: 600; }
+.node.mod { background: #EFF6FF; }
+.node.nd-win { background: #FFF; border-style: dashed; }
+.node.act { background: #F3FFF3; }
+.node.sys { background: #F5F5F5; color: #5A5A5A; border-style: dotted; }
+.arrow-down { width: 2px; height: 18px; background: #7A7A7A; position: relative; }
+.arrow-down::after {
+  content: ""; position: absolute; bottom: -1px; left: -4px;
+  border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid #7A7A7A;
+}
+.arrow-right { height: 2px; width: 18px; background: #7A7A7A; position: relative; align-self: center; }
+.arrow-right::after {
+  content: ""; position: absolute; right: -1px; top: -4px;
+  border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid #7A7A7A;
+}
+.flow h3, .page h2 { margin: 4px 0 10px; font-size: 13px; }
+.flow h3 { color: #333; align-self: flex-start; }
+.legend { margin: 10px 0 16px; color: #5A5A5A; display: flex; gap: 16px; flex-wrap: wrap; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 14px; height: 12px; border: 1px solid #7A7A7A; display: inline-block; }
+.confirm-body { min-width: 320px; }

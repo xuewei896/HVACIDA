@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>HVACIDA — Revit 2020 插件 UI 原型</title>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+
+<!-- ============ 原型工具条 ============ -->
+<div class="proto-bar">
+  <span class="brand">HVACIDA UI 原型</span>
+  <button class="tab-btn active" data-view="ui">界面原型</button>
+  <button class="tab-btn" data-view="flow">交互流程</button>
+  <button class="tab-btn" data-view="logic">交互逻辑表</button>
+  <span class="spacer"></span>
+  <span class="note">Revit 2020 原生风格 · 纯离线原型 · 供评审(docs/UI设计规范.md)</span>
+</div>
+
+<!-- ============ Revit Ribbon 模拟 ============ -->
+<div class="ribbon">
+  <div class="ribbon-tabs">
+    <div class="ribbon-tab">建筑</div>
+    <div class="ribbon-tab">结构</div>
+    <div class="ribbon-tab">系统</div>
+    <div class="ribbon-tab active">HVACIDA</div>
+    <div class="ribbon-tab">视图</div>
+    <div class="ribbon-tab">管理</div>
+  </div>
+  <div class="ribbon-panels">
+    <div class="ribbon-panel">
+      <div class="ribbon-big-btns">
+        <button class="ribbon-btn" data-open="win-project"><span class="ico">▤</span>项目信息<small>2.1</small></button>
+      </div>
+      <div class="panel-title">项目</div>
+    </div>
+    <div class="ribbon-panel">
+      <div class="ribbon-big-btns">
+        <button class="ribbon-btn" data-open="win-loadhub"><span class="ico">∑</span>负荷及<br>通风计算<small>2.2</small></button>
+      </div>
+      <div class="panel-title">负荷计算</div>
+    </div>
+    <div class="ribbon-panel">
+      <div class="ribbon-big-btns">
+        <button class="ribbon-btn" data-open="win-wind"><span class="ico">≋</span>风系统<br>水力计算<small>2.3</small></button>
+        <button class="ribbon-btn" data-open="win-water"><span class="ico">≈</span>水系统<br>水力计算<small>2.4</small></button>
+      </div>
+      <div class="panel-title">水力计算</div>
+    </div>
+    <div class="ribbon-panel">
+      <div class="ribbon-big-btns">
+        <button class="ribbon-btn" data-open="win-print"><span class="ico">▦</span>出图<small>2.6</small></button>
+      </div>
+      <div class="panel-title">出图</div>
+    </div>
+    <div class="ribbon-panel">
+      <div class="ribbon-big-btns">
+        <button class="ribbon-btn" data-open="win-ai"><span class="ico">?</span>AI问答<small>2.7</small></button>
+      </div>
+      <div class="panel-title">智能助手</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 模拟模型视图 ============ -->
+<div class="canvas" id="canvas"></div>
+<div class="app-status" id="app-status">就绪 — 点击 HVACIDA 页上的按钮打开功能窗口</div>
+
+<!-- ============ 交互流程 / 交互逻辑表 视图 ============ -->
+<div class="page" id="page-flow"></div>
+<div class="page" id="page-logic"></div>
+
+<!-- ============ 窗口 1:项目信息 ============ -->
+<div class="win" id="win-project" style="left:80px;top:20px;width:900px;">
+  <div class="titlebar">项目信息<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 可手动填写,或从固定 Excel 模板导入;点击确定后项目信息以<b>全局参数</b>写入当前 .rvt 作为模型元数据(需求 2.1.3)。</div>
+    <div class="group"><div class="gtitle">一、工程基本信息(2.1.1)</div><div class="grid2" id="proj-basic"></div></div>
+    <div class="group"><div class="gtitle">二、室外计算参数 — 大系统(2.1.2)</div><div class="grid2" id="proj-out-large"></div></div>
+    <div class="group"><div class="gtitle">三、室外计算参数 — 小系统(2.1.2)</div><div class="grid3" id="proj-out-small"></div></div>
+    <div class="group"><div class="gtitle">四、室内设计参数(2.1.2)</div><div class="grid2" id="proj-in"></div></div>
+  </div>
+  <div class="footer">
+    <button data-act="proj-import">导入 Excel 模板…</button>
+    <button data-act="proj-template">导出空模板</button>
+    <span class="status" id="proj-status"></span>
+    <span class="grow"></span>
+    <button class="default primary-wide" data-act="proj-ok">确定</button>
+    <button class="primary-wide" data-close>取消</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 2:负荷及通风计算(模块入口) ============ -->
+<div class="win" id="win-loadhub" style="left:360px;top:120px;width:520px;">
+  <div class="titlebar">负荷及通风计算<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 选择计算板块。大系统面向站厅/站台公共区;小系统面向设备与管理用房。</div>
+    <div class="row" style="gap:10px;">
+      <button style="height:56px;min-width:200px;" data-act="hub-large">大系统负荷计算<br><span style="color:#5A5A5A;font-size:11px;">公共区客流/负荷/风量/选型</span></button>
+      <button style="height:56px;min-width:200px;" data-act="hub-small">小系统负荷计算<br><span style="color:#5A5A5A;font-size:11px;">全空气/多联机/排风/排烟…</span></button>
+    </div>
+  </div>
+  <div class="footer"><span class="status"></span><span class="grow"></span><button class="primary-wide" data-close>取消</button></div>
+</div>
+
+<!-- ============ 窗口 3:大系统负荷计算 ============ -->
+<div class="win" id="win-large" style="left:60px;top:14px;width:1420px;height:620px;">
+  <div class="titlebar">大系统负荷计算<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 几何可"从模型拾取空间"自动填入;客流必须手填;站厅/站台送风温度一致;排烟按计算风量(面积×60),选型 ×1.2。</div>
+    <div class="two-col">
+      <div class="left" id="large-inputs"></div>
+      <div class="right cards" id="large-results"></div>
+    </div>
+  </div>
+  <div class="footer">
+    <button data-act="large-pick">从模型拾取空间…</button>
+    <button data-act="large-defaults">默认参数…</button>
+    <button data-act="large-reset">恢复默认</button>
+    <button data-act="large-sample">载入北京算例</button>
+    <button data-act="large-report">导出计算书</button>
+    <span class="grow"></span>
+    <span class="status" id="large-status"></span>
+    <button class="default primary-wide" data-act="large-calc">计 算</button>
+    <button class="primary-wide" data-act="large-ok">确定</button>
+    <button class="primary-wide" data-close>取消</button>
+    <span class="status" id="large-status"></span>
+  </div>
+</div>
+
+<!-- ============ 窗口 4:默认参数 ============ -->
+<div class="win" id="win-defaults" style="left:300px;top:60px;width:940px;height:560px;">
+  <div class="titlebar">默认参数(可修改)<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 数值与《大系统负荷计算公式.docx》参数表一致;修改后点确定回写到大系统窗口。</div>
+    <div id="defaults-inputs"></div>
+  </div>
+  <div class="footer">
+    <button data-act="defaults-restore">恢复公式文档默认值</button>
+    <span class="grow"></span>
+    <button class="default primary-wide" data-act="defaults-ok">确定</button>
+    <button class="primary-wide" data-close>取消</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 5:拾取空间(模拟 Revit 选择) ============ -->
+<div class="win" id="win-pickspace" style="left:420px;top:120px;width:560px;">
+  <div class="titlebar">从模型拾取空间 — 请选择空间<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 模拟 Revit 交互:实际实现为隐藏窗口 + Selection.PickObject;Esc 取消拾取。</div>
+    <ul class="picklist" id="pickspace-list"></ul>
+    <div style="margin-top:6px;color:#5A5A5A;" id="pickspace-info">已选 0 个空间</div>
+  </div>
+  <div class="footer">
+    <span class="grow"></span>
+    <button class="default primary-wide" data-act="pickspace-apply">应用</button>
+    <button class="primary-wide" data-close>取消拾取</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 6:小系统类型选择 ============ -->
+<div class="win" id="win-systype" style="left:420px;top:110px;width:600px;">
+  <div class="titlebar">选择小系统类型<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 六类系统;排风系统含子类型(环控机房通风 / 卫生间排风)。未实现类型"下一步"将禁用。</div>
+    <div id="systype-list"></div>
+    <div style="margin-top:8px;color:#5A5A5A;" id="systype-note"></div>
+  </div>
+  <div class="footer">
+    <span class="grow"></span>
+    <button class="default primary-wide" data-act="systype-next">下一步</button>
+    <button class="primary-wide" data-close>取消</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 7:全空气一次回风 ============ -->
+<div class="win" id="win-allair" style="left:140px;top:20px;width:1180px;height:580px;">
+  <div class="titlebar">小系统负荷计算 — 全空气一次回风系统<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 先在模型中依次选择空间(左侧列表),点击空间名在右侧查看/编辑该空间参数。</div>
+    <div class="two-col">
+      <div class="left">
+        <div class="space-list" id="allair-spaces"></div>
+        <div style="margin-top:6px;display:flex;gap:6px;">
+          <button data-act="allair-add">+ 从模型添加空间</button>
+          <button data-act="allair-del">− 移除</button>
+        </div>
+      </div>
+      <div class="right">
+        <div id="allair-detail"></div>
+        <div class="cards" id="allair-results"></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer">
+    <button data-act="allair-report">导出计算书</button>
+    <span class="grow"></span>
+    <span class="status" id="allair-status"></span>
+    <button class="default primary-wide" data-act="allair-calc">计 算</button>
+    <button class="primary-wide" data-act="allair-ok">确定</button>
+    <button class="primary-wide" data-close>取消</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 8:拾取墙体 ============ -->
+<div class="win" id="win-pickwall" style="left:460px;top:140px;width:520px;">
+  <div class="titlebar">拾取墙体 — 与土壤接触外墙(可多选)<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 模拟 Revit 交互:多次点选墙体,实时累计长度;Esc 取消保留原值。</div>
+    <ul class="picklist" id="pickwall-list"></ul>
+    <div style="margin-top:6px;color:#5A5A5A;" id="pickwall-info">已选 0 段,共 0.00 m</div>
+  </div>
+  <div class="footer">
+    <span class="grow"></span>
+    <button class="default primary-wide" data-act="pickwall-apply">应用总长</button>
+    <button class="primary-wide" data-close>取消</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 9:计算书预览 ============ -->
+<div class="win" id="win-report" style="left:300px;top:40px;width:900px;height:600px;">
+  <div class="titlebar">计算书预览<span class="close" data-close>✕</span></div>
+  <div class="body" style="background:#FFF;">
+    <pre class="mono" id="report-text" style="margin:0; white-space:pre-wrap; line-height:1.5;"></pre>
+  </div>
+  <div class="footer">
+    <button data-act="report-copy">复制全部</button>
+    <span class="status" id="report-status"></span>
+    <span class="grow"></span>
+    <button class="primary-wide" data-close>关闭</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 10~13:后续模块占位 ============ -->
+<div class="win" id="win-wind" style="left:200px;top:60px;width:900px;height:480px;">
+  <div class="titlebar">风系统水力计算<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 布局示意(需求 2.3):左=系统树(风管/末端),中=参数表(风速/阻力),右=结果与"计算/平衡"。当前为骨架,算法待实现。</div>
+    <div class="two-col">
+      <div class="left">
+        <div class="group"><div class="gtitle">风系统树</div>
+          <ul class="picklist" style="max-height:180px;"><li class="sel">送风系统 A 端</li><li>站厅送风干管</li><li>站台送风干管</li><li>末端(风口)…</li></ul>
+        </div>
+      </div>
+      <div class="right">
+        <div class="group"><div class="gtitle">管段参数 / 结果</div>
+          <table class="grid"><tr><th>管段</th><th class="num">风量 m³/h</th><th class="num">风速 m/s</th><th class="num">阻力 Pa</th></tr>
+            <tr><td>干管-1</td><td class="num">43884</td><td class="num">—</td><td class="num">—</td></tr>
+            <tr><td>支管-1</td><td class="num">11079</td><td class="num">—</td><td class="num">—</td></tr>
+          </table>
+        </div>
+        <div class="card"><div class="chead">风机选型</div><div class="cbody">待实现(需求 2.3:风机选型/末端选型/平衡计算/可视化)</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span class="status err">骨架占位 — 算法未实现</span><span class="grow"></span><button class="primary-wide" data-close>关闭</button></div>
+</div>
+
+<div class="win" id="win-water" style="left:220px;top:70px;width:900px;height:480px;">
+  <div class="titlebar">水系统水力计算<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 布局示意(需求 2.4):水管阻力、水泵选型、管路平衡、调节阀选型、结果可视化。当前为骨架。</div>
+    <table class="grid">
+      <tr><th>环路</th><th class="num">流量 m³/h</th><th class="num">管径 DN</th><th class="num">比摩阻 Pa/m</th><th class="num">阻力 kPa</th></tr>
+      <tr><td>冷冻水主环</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+      <tr><td>冷却水主环</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+    </table>
+  </div>
+  <div class="footer"><span class="status err">骨架占位 — 算法未实现</span><span class="grow"></span><button class="primary-wide" data-close>关闭</button></div>
+</div>
+
+<div class="win" id="win-print" style="left:240px;top:60px;width:940px;height:500px;">
+  <div class="titlebar">出图<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 布局示意(需求 2.6):左=图纸模板列表,中=预览缩略图,右=标注/图例选项,底部批量出图。</div>
+    <div class="two-col">
+      <div class="left">
+        <div class="group"><div class="gtitle">图纸模板</div>
+          <ul class="picklist" style="max-height:170px;"><li class="sel">站厅空调平面(A1)</li><li>站台空调平面(A1)</li><li>机房大样(A2)</li></ul>
+        </div>
+      </div>
+      <div class="right">
+        <div class="group"><div class="gtitle">标注与图例选项</div>
+          <div class="row tight"><label>自动标注</label><input type="checkbox" checked></div>
+          <div class="row tight"><label>生成图例</label><input type="checkbox" checked></div>
+          <div class="row tight"><label>批量出图</label><input type="checkbox"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span class="status err">骨架占位 — 出图未实现</span><span class="grow"></span><button class="primary-wide" data-close>关闭</button></div>
+</div>
+
+<div class="win" id="win-ai" style="left:320px;top:50px;width:760px;height:520px;">
+  <div class="titlebar">AI 问答<span class="close" data-close>✕</span></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:8px;background:#FFF;">
+    <div id="ai-log" style="flex:1 1 auto;overflow:auto;border:1px solid #D7D7D7;background:#FAFAFA;padding:8px;line-height:1.6;"></div>
+    <div style="display:flex;gap:6px;">
+      <input type="text" id="ai-input" class="txt-lg" style="flex:1 1 auto;width:auto;" placeholder="例:地铁站厅夏季送风温差一般取多少?">
+      <button class="default" data-act="ai-send" style="min-width:64px;">发送</button>
+    </div>
+    <div style="color:#5A5A5A;font-size:11px;">当前为本地规则应答(原型);正式版接 AI 服务接口(需求 4.1)。</div>
+  </div>
+  <div class="footer"><span class="status err">骨架占位 — 未接 AI 服务</span><span class="grow"></span><button class="primary-wide" data-close>关闭</button></div>
+</div>
+
+<!-- ============ 通用确认框 ============ -->
+<div class="win" id="win-confirm" style="left:560px;top:250px;width:420px;">
+  <div class="titlebar">确认<span class="close" data-close>✕</span></div>
+  <div class="body confirm-body">
+    <div class="row"><span id="confirm-msg">确定执行该操作?</span></div>
+  </div>
+  <div class="footer">
+    <span class="grow"></span>
+    <button class="default primary-wide" id="confirm-yes">是</button>
+    <button class="primary-wide" data-close>否</button>
+  </div>
+</div>
+
+<script src="ui.js"></script>
+</body>
+</html>

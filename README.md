@@ -19,7 +19,8 @@ D:\DSH
 ├─ HVACIDA.sln
 ├─ docs
 │  ├─ 开发流程.md      开发流程/模块状态看板/每轮验证清单/口径决策记录
-│  └─ UI设计规范.md    Revit 原生风格 UI 规范(窗口框架/线框/交互/文案/落地映射)
+│  ├─ UI设计规范.md    Revit 原生风格 UI 规范(窗口框架/线框/交互/文案/落地映射)
+│  └─ ui-prototype/    HTML 可点击原型(双击 index.html;含流程/逻辑视图与深链接)
 ├─ src
 │  ├─ HVACIDA.Core     领域模型/计算/焓湿图/仓库/报告(无 Revit 依赖,可单测)
 │  ├─ HVACIDA.UI       WPF 窗口+MVVM(不引用 Revit API)
