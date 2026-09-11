@@ -765,7 +765,8 @@
     html += lane(node('Revit 2020 → Ribbon「HVACIDA」页', 'root')) + down();
     html += lane(
       node('项目信息<br><small>2.1</small>', 'mod') +
-      node('负荷及通风计算<br><small>2.2</small>', 'mod') +
+      node('大系统负荷计算<br><small>2.2.3.1</small>', 'mod') +
+      node('小系统负荷计算<br><small>2.2.3.2</small>', 'mod') +
       node('风系统水力<br><small>2.3</small>', 'mod') +
       node('水系统水力<br><small>2.4</small>', 'mod') +
       node('出图<br><small>2.6</small>', 'mod') +
@@ -779,13 +780,9 @@
       node('确定 → 写入 .rvt 全局参数', 'act')
     ) + down();
 
-    html += '<h3>② 负荷及通风计算</h3>' + lane(
-      node('负荷及通风计算(入口窗)', 'nd-win') + '<div class="arrow-right"></div>' +
-      node('大系统负荷计算', 'mod') + '<div class="arrow-right"></div>' +
-      node('小系统负荷计算', 'mod')
-    ) + down();
-
+    html += '<h3>② 负荷及通风计算(Ribbon 两个一级入口,2026-09-11 调整)</h3>';
     html += lane(
+      node('Ribbon:大系统负荷计算', 'mod') + '<div class="arrow-right"></div>' +
       node('大系统窗口<br>左:输入七节 / 右:结果卡片', 'nd-win') + '<div class="arrow-right"></div>' +
       node('拾取空间 → 面积/层高/长度', 'act') + '<div class="arrow-right"></div>' +
       node('默认参数…(子窗)', 'act') + '<div class="arrow-right"></div>' +
@@ -793,7 +790,8 @@
       node('导出计算书', 'act')
     ) + down();
     html += lane(
-      node('小系统:类型选择窗(六类)', 'nd-win') + '<div class="arrow-right"></div>' +
+      node('Ribbon:小系统负荷计算', 'mod') + '<div class="arrow-right"></div>' +
+      node('系统类型选择窗(六类)', 'nd-win') + '<div class="arrow-right"></div>' +
       node('全空气一次回风窗口', 'nd-win') + '<div class="arrow-right"></div>' +
       node('空间列表 → 详情(拾取墙体…)', 'act') + '<div class="arrow-right"></div>' +
       node('计算 → 负荷/通风量/新风/选型', 'act')
@@ -819,6 +817,8 @@
   function buildLogic() {
     var rows = [
       ['点击 Ribbon 按钮', 'HVACIDA 页', '打开对应模态窗(Owner=Revit 主窗口, CenterOwner)', '窗口未打开/报错'],
+      ['点击「大系统负荷计算」', 'Ribbon 一级按钮', '直接打开大系统窗(不再经过入口窗)', '—'],
+      ['点击「小系统负荷计算」', 'Ribbon 一级按钮', '直接打开系统类型选择窗 → 下一步进入对应计算窗', '未实现类型:下一步禁用 + 灰字说明'],
       ['从模型拾取空间', '大系统 / 小系统', '隐藏窗口 → PickObject 选择 → 回填面积/层高/长度(只读底 → 可编辑)', 'Esc 取消保留原值;空间缺参数则标红提示'],
       ['拾取墙体(多选)', '全空气一次回风 · 外墙长度', '多次点选 → 实时累计长度 → 应用总长', '未选中时提示"未选择,保持原值"'],
       ['默认参数…', '大系统底栏', '打开子窗(第三~七节)→ 确定回写 → 提示可重算', '取消不回写'],
@@ -871,8 +871,7 @@
         appStatus('项目信息已以全局参数写入当前 .rvt(模拟)');
         break;
       // 负荷 hub
-      case 'hub-large': closeWin($('#win-loadhub')); openWin('win-large'); appStatus('已打开:大系统负荷计算'); break;
-      case 'hub-small': closeWin($('#win-loadhub')); renderSysTypes(); openWin('win-systype'); appStatus('已打开:小系统类型选择'); break;
+      // 负荷计算:Ribbon 两个一级按钮直接进入(data-open="win-large" / "win-systype")
       // 大系统
       case 'large-pick': openPickSpace(); appStatus('拾取空间:请在列表中选择(模拟 Revit PickObject)'); break;
       case 'large-defaults': openDefaults(); break;

@@ -36,7 +36,8 @@
     </div>
     <div class="ribbon-panel">
       <div class="ribbon-big-btns">
-        <button class="ribbon-btn" data-open="win-loadhub"><span class="ico">∑</span>负荷及<br>通风计算<small>2.2</small></button>
+        <button class="ribbon-btn" data-open="win-large"><span class="ico">∑</span>大系统<br>负荷计算<small>2.2.3.1</small></button>
+        <button class="ribbon-btn" data-open="win-systype"><span class="ico">∑</span>小系统<br>负荷计算<small>2.2.3.2</small></button>
       </div>
       <div class="panel-title">负荷计算</div>
     </div>
@@ -90,18 +91,8 @@
   </div>
 </div>
 
-<!-- ============ 窗口 2:负荷及通风计算(模块入口) ============ -->
-<div class="win" id="win-loadhub" style="left:360px;top:120px;width:520px;">
-  <div class="titlebar">负荷及通风计算<span class="close" data-close>✕</span></div>
-  <div class="body">
-    <div class="hint">[!] 选择计算板块。大系统面向站厅/站台公共区;小系统面向设备与管理用房。</div>
-    <div class="row" style="gap:10px;">
-      <button style="height:56px;min-width:200px;" data-act="hub-large">大系统负荷计算<br><span style="color:#5A5A5A;font-size:11px;">公共区客流/负荷/风量/选型</span></button>
-      <button style="height:56px;min-width:200px;" data-act="hub-small">小系统负荷计算<br><span style="color:#5A5A5A;font-size:11px;">全空气/多联机/排风/排烟…</span></button>
-    </div>
-  </div>
-  <div class="footer"><span class="status"></span><span class="grow"></span><button class="primary-wide" data-close>取消</button></div>
-</div>
+<!-- 窗口 2(已取消):原"负荷及通风计算"入口窗 —— 2026-09-11 调整:
+     大系统/小系统负荷计算提升为 Ribbon 一级按钮,点击直接进入对应窗口。 -->
 
 <!-- ============ 窗口 3:大系统负荷计算 ============ -->
 <div class="win" id="win-large" style="left:60px;top:14px;width:1420px;height:620px;">
