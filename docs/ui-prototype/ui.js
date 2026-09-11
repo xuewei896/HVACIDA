@@ -737,73 +737,70 @@
   // =========================================================================
   // 8. 交互流程 / 交互逻辑表(由数据生成)
   // =========================================================================
-  function buildFlow() {
-    function node(text, cls) { return '<div class="node ' + (cls || '') + '">' + text + '</div>'; }
-    function down() { return '<div class="arrow-down"></div>'; }
-    function lane(inner) { return '<div class="lane">' + inner + '</div>'; }
+  // --- 8.1 内置默认数据(可被 flow-data.js 与页面内编辑覆盖) -----------------
+  // 数据来源优先级:本机编辑(localStorage)> flow-data.js > 本文件内置默认
+  var STORE_KEY = 'hvacida.prototype.flowdata.v1';
 
-    var html = '<h2>HVACIDA 交互流程(原型)</h2>' +
-      '<div class="legend">' +
-      '<span><i style="background:#DCEBF9;border-color:#0078D7;"></i>入口</span>' +
-      '<span><i style="background:#EDF5FE;border-color:#A9CDEB;"></i>功能板块</span>' +
-      '<span><i style="background:#FFF;border-style:dashed;border-color:#9C9C9C;"></i>窗口</span>' +
-      '<span><i style="background:#EAF7EA;border-color:#9CCF9C;"></i>操作</span>' +
-      '<span><i style="background:#F6F6F6;border-style:dotted;border-color:#B4B4B4;"></i>未实现</span>' +
-      '</div><div class="flow">';
-
-    html += lane(node('Revit 2020 → Ribbon「HVACIDA」页', 'root')) + down();
-    html += lane(
-      node('项目信息<br><small>2.1</small>', 'mod') +
-      node('大系统负荷计算<br><small>2.2.3.1</small>', 'mod') +
-      node('小系统负荷计算<br><small>2.2.3.2 · 六类按钮</small>', 'mod') +
-      node('风系统水力<br><small>2.3</small>', 'mod') +
-      node('水系统水力<br><small>2.4</small>', 'mod') +
-      node('出图<br><small>2.6</small>', 'mod') +
-      node('AI问答<br><small>2.7</small>', 'mod')
-    ) + down();
-
-    html += '<h3>① 项目信息</h3>' + lane(
-      node('项目信息窗口', 'nd-win') + '<div class="arrow-right"></div>' +
-      node('手动填写 / Excel 模板导入', 'act') + '<div class="arrow-right"></div>' +
-      node('校验(必填/数值范围)', 'act') + '<div class="arrow-right"></div>' +
-      node('确定 → 写入 .rvt 全局参数', 'act')
-    ) + down();
-
-    html += '<h3>② 负荷及通风计算(Ribbon 两个一级入口,2026-09-11 调整)</h3>';
-    html += lane(
-      node('Ribbon:大系统负荷计算', 'mod') + '<div class="arrow-right"></div>' +
-      node('大系统窗口<br>左:输入七节 / 右:结果卡片', 'nd-win') + '<div class="arrow-right"></div>' +
-      node('拾取空间 → 面积/层高/长度', 'act') + '<div class="arrow-right"></div>' +
-      node('默认参数…(子窗)', 'act') + '<div class="arrow-right"></div>' +
-      node('计算 → 客流/负荷/风量/制冷/选型', 'act') + '<div class="arrow-right"></div>' +
-      node('导出计算书', 'act')
-    ) + down();
-    html += lane(
-      node('Ribbon:小系统六类按钮', 'mod') + '<div class="arrow-right"></div>' +
-      node('全空气一次回风窗口<br>(其余五类:待实现提示)', 'nd-win') + '<div class="arrow-right"></div>' +
-      node('空间列表 → 详情(拾取墙体…)', 'act') + '<div class="arrow-right"></div>' +
-      node('计算 → 负荷/通风量/新风/选型', 'act')
-    ) + down();
-
-    html += '<h3>③ 水力 / 出图 / AI(骨架占位)</h3>' + lane(
-      node('风系统水力: 系统树 → 参数表 → 计算/平衡', 'sys') +
-      node('水系统水力: 环路 → 参数 → 计算/选型', 'sys') +
-      node('出图: 模板 → 标注/图例 → 批量出图', 'sys') +
-      node('AI问答: 提问 → 规则应答(AI 服务待接)', 'sys')
-    ) + down();
-
-    html += '<h3>④ 公用交互(所有窗口一致)</h3>' + lane(
-      node('确定 / 取消 / Esc', 'act') +
-      node('必填与范围校验(行内标红)', 'act') +
-      node('状态栏反馈(成功绿 / 失败红)', 'act') +
-      node('Window Owner = Revit 主窗口,居中显示', 'act')
-    );
-    html += '</div>';
-    $('#page-flow').innerHTML = html;
+  var NODE_TYPES = [
+    { t: 'root', name: '入口', cls: 'root' },
+    { t: 'mod', name: '板块', cls: 'mod' },
+    { t: 'win', name: '窗口', cls: 'nd-win' },
+    { t: 'act', name: '操作', cls: 'act' },
+    { t: 'sys', name: '未实现', cls: 'sys' }
+  ];
+  function nodeCls(t) {
+    for (var i = 0; i < NODE_TYPES.length; i++) { if (NODE_TYPES[i].t === t) return NODE_TYPES[i].cls; }
+    return 'act';
   }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
-  function buildLogic() {
-    var rows = [
+  var DEFAULT_FLOW = [
+    { items: [{ t: 'root', x: 'Revit 2020 → Ribbon「HVACIDA」页' }] },
+    { items: [
+      { t: 'mod', x: '项目信息<br><small>2.1</small>' },
+      { t: 'mod', x: '大系统负荷计算<br><small>2.2.3.1</small>' },
+      { t: 'mod', x: '小系统负荷计算<br><small>2.2.3.2 · 六类按钮</small>' },
+      { t: 'mod', x: '风系统水力<br><small>2.3</small>' },
+      { t: 'mod', x: '水系统水力<br><small>2.4</small>' },
+      { t: 'mod', x: '出图<br><small>2.6</small>' },
+      { t: 'mod', x: 'AI问答<br><small>2.7</small>' }
+    ] },
+    { h: '① 项目信息', items: [
+      { t: 'win', x: '项目信息窗口' }, { t: 'arrow' },
+      { t: 'act', x: '手动填写 / Excel 模板导入' }, { t: 'arrow' },
+      { t: 'act', x: '校验(必填/数值范围)' }, { t: 'arrow' },
+      { t: 'act', x: '确定 → 写入 .rvt 全局参数' }
+    ] },
+    { h: '② 负荷及通风计算(Ribbon 两个一级入口,2026-09-11 调整)', items: [
+      { t: 'mod', x: 'Ribbon:大系统负荷计算' }, { t: 'arrow' },
+      { t: 'win', x: '大系统窗口<br>左:输入七节 / 右:结果卡片' }, { t: 'arrow' },
+      { t: 'act', x: '拾取空间 → 面积/层高/长度' }, { t: 'arrow' },
+      { t: 'act', x: '默认参数…(子窗)' }, { t: 'arrow' },
+      { t: 'act', x: '计算 → 客流/负荷/风量/制冷/选型' }, { t: 'arrow' },
+      { t: 'act', x: '导出计算书' }
+    ] },
+    { items: [
+      { t: 'mod', x: 'Ribbon:小系统六类按钮' }, { t: 'arrow' },
+      { t: 'win', x: '全空气一次回风窗口<br>(其余五类:待实现提示)' }, { t: 'arrow' },
+      { t: 'act', x: '空间列表 → 详情(拾取墙体…)' }, { t: 'arrow' },
+      { t: 'act', x: '计算 → 负荷/通风量/新风/选型' }
+    ] },
+    { h: '③ 水力 / 出图 / AI(骨架占位)', items: [
+      { t: 'sys', x: '风系统水力: 系统树 → 参数表 → 计算/平衡' },
+      { t: 'sys', x: '水系统水力: 环路 → 参数 → 计算/选型' },
+      { t: 'sys', x: '出图: 模板 → 标注/图例 → 批量出图' },
+      { t: 'sys', x: 'AI问答: 提问 → 规则应答(AI 服务待接)' }
+    ] },
+    { h: '④ 公用交互(所有窗口一致)', items: [
+      { t: 'act', x: '确定 / 取消 / Esc' },
+      { t: 'act', x: '必填与范围校验(行内标红)' },
+      { t: 'act', x: '状态栏反馈(成功绿 / 失败红)' },
+      { t: 'act', x: 'Window Owner = Revit 主窗口,居中显示' }
+    ] }
+  ];
+
+  var DEFAULT_LOGIC = {
+    table: [
       ['点击 Ribbon 按钮', 'HVACIDA 页', '打开对应模态窗(Owner=Revit 主窗口, CenterOwner)', '窗口未打开/报错'],
       ['点击「大系统负荷计算」', 'Ribbon 一级按钮', '直接打开大系统窗(不再经过入口窗)', '—'],
       ['点击「小系统」六类按钮', 'Ribbon 一级按钮(一行六键·图标+文字)', '全空气→直接进计算窗;其余五类→待实现提示窗(说明计算要点)', '未实现类型:不伪装可用,状态栏红字'],
@@ -818,25 +815,312 @@
       ['取消 / Esc', '所有窗口', '关闭不保存;有未保存修改时弹确认', '—'],
       ['未实现模块', '水力 / 出图 / AI', '灰字说明 + 状态栏红字,按钮禁用或仅演示', '不伪装可用'],
       ['AI 提问', 'AI 问答窗', '输入问题 → 发送 → 追加对话(原型:规则应答)', '无匹配时给出能力范围说明']
-    ];
-    var html = '<h2>交互逻辑表</h2>' +
-      '<table class="grid"><tr><th style="width:150px;">操作</th><th style="width:190px;">位置</th>' +
-      '<th>触发与反馈</th><th style="width:240px;">异常/边界处理</th></tr>';
-    rows.forEach(function (r) {
-      html += '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td></tr>';
+    ],
+    units: [
+      ['温度 / 温差', '℃', '1', '19.0'],
+      ['面积', 'm²', '1', '2000.0'],
+      ['风量', 'm³/h', '0(千分位)', '87,768'],
+      ['冷负荷 / 制冷量', 'kW', '2', '381.60'],
+      ['焓', 'kJ/kg', '2', '49.72'],
+      ['含湿量', 'g/kg', '2', '11.89']
+    ]
+  };
+
+  var FLOW_LEGEND = [
+    { bg: '#DCEBF9', bd: '#0078D7', text: '入口' },
+    { bg: '#EDF5FE', bd: '#A9CDEB', text: '功能板块' },
+    { bg: '#FFF', bd: '#9C9C9C', dash: true, text: '窗口' },
+    { bg: '#EAF7EA', bd: '#9CCF9C', text: '操作' },
+    { bg: '#F6F6F6', bd: '#B4B4B4', dot: true, text: '未实现' }
+  ];
+
+  // --- 8.2 数据装载 / 保存 ---------------------------------------------------
+  var pageData = { flow: DEFAULT_FLOW, logic: DEFAULT_LOGIC };
+  var dataSource = '内置默认(ui.js)';
+
+  function loadPageData() {
+    var local = null;
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw) local = JSON.parse(raw);
+    } catch (e) { local = null; }
+    if (local && local.flow && local.logic) {
+      pageData.flow = local.flow; pageData.logic = local.logic;
+      dataSource = '本机编辑(localStorage)';
+      return;
+    }
+    if (window.HVACIDA_FLOW && window.HVACIDA_LOGIC) {
+      pageData.flow = window.HVACIDA_FLOW; pageData.logic = window.HVACIDA_LOGIC;
+      dataSource = 'flow-data.js 文件';
+      return;
+    }
+    pageData.flow = clone(DEFAULT_FLOW); pageData.logic = clone(DEFAULT_LOGIC);
+    dataSource = '内置默认(ui.js)';
+  }
+
+  function savePageData() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ flow: pageData.flow, logic: pageData.logic }));
+      dataSource = '本机编辑(localStorage)';
+    } catch (e) {
+      appStatus('本机保存失败(' + e.message + '):请用「导出/导入数据…」备份');
+    }
+    syncSourceLabel();
+  }
+
+  function syncSourceLabel() { var el = $('#flowdata-source'); if (el) el.textContent = dataSource; }
+  function isEdit() { return document.body.classList.contains('edit-on'); }
+  function editTag() { return isEdit() ? '<span class="edit-tag">编辑中</span>' : ''; }
+  function editHint(t) { return '<div class="edit-hint">' + t + '</div>'; }
+
+  // --- 8.3 渲染(数据驱动) --------------------------------------------------
+  function renderFlow() {
+    var html = '<h2>HVACIDA 交互流程(原型)' + editTag() + '</h2>' +
+      editHint('编辑中:直接点<b>节点文字</b>修改(Enter 换行);节点右上角可改<b>类型</b>或<b>删除</b>;' +
+        '每条泳道末尾「+ 节点」新增;改完点顶部「导出/导入数据…」把结果粘进 flow-data.js。') +
+      '<div class="legend">' +
+      FLOW_LEGEND.map(function (g) {
+        return '<span><i style="background:' + g.bg + ';border-color:' + g.bd + ';' +
+          (g.dash ? 'border-style:dashed;' : '') + (g.dot ? 'border-style:dotted;' : '') + '"></i>' + g.text + '</span>';
+      }).join('') +
+      '</div><div class="flow">';
+
+    pageData.flow.forEach(function (block, bi) {
+      if (block.h) html += '<h3>' + block.h + '</h3>';
+      html += '<div class="lane">';
+      (block.items || []).forEach(function (it, ii) { html += flowItemHtml(it, bi, ii); });
+      if (isEdit()) html += '<button class="lane-add" data-edbtn="lane-add" data-i="' + bi + '">+ 节点</button>';
+      html += '</div>';
+      if (bi < pageData.flow.length - 1) html += '<div class="arrow-down"></div>';
     });
-    html += '</table>' +
-      '<h2 style="margin-top:16px;">数值与单位规范(节选)</h2>' +
-      '<table class="grid"><tr><th>量</th><th>单位</th><th>小数位</th><th>显示示例</th></tr>' +
-      '<tr><td>温度 / 温差</td><td>℃</td><td class="num">1</td><td class="num">19.0</td></tr>' +
-      '<tr><td>面积</td><td>m²</td><td class="num">1</td><td class="num">2000.0</td></tr>' +
-      '<tr><td>风量</td><td>m³/h</td><td class="num">0(千分位)</td><td class="num">87,768</td></tr>' +
-      '<tr><td>冷负荷 / 制冷量</td><td>kW</td><td class="num">2</td><td class="num">381.60</td></tr>' +
-      '<tr><td>焓</td><td>kJ/kg</td><td class="num">2</td><td class="num">49.72</td></tr>' +
-      '<tr><td>含湿量</td><td>g/kg</td><td class="num">2</td><td class="num">11.89</td></tr>' +
-      '</table>';
+    html += '</div>';
+    $('#page-flow').innerHTML = html;
+  }
+
+  function flowItemHtml(it, bi, ii) {
+    if (it.t === 'arrow') return '<div class="arrow-right"></div>';
+    var cls = nodeCls(it.t);
+    if (!isEdit()) return '<div class="node ' + cls + '">' + it.x + '</div>';
+    var opts = NODE_TYPES.map(function (n) {
+      return '<option value="' + n.t + '"' + (n.t === it.t ? ' selected' : '') + '>' + n.name + '</option>';
+    }).join('');
+    return '<div class="node ' + cls + ' nd-edit">' +
+      '<span class="nd-ctl">' +
+      '<select data-edsel="node-type" data-i="' + bi + '" data-j="' + ii + '" title="节点类型">' + opts + '</select>' +
+      '<button class="nd-del" data-edbtn="node-del" data-i="' + bi + '" data-j="' + ii + '" title="删除该节点">✕</button>' +
+      '</span>' +
+      '<span contenteditable="true" data-edtxt="node" data-i="' + bi + '" data-j="' + ii + '">' + it.x + '</span>' +
+      '</div>';
+  }
+
+  function renderLogic() {
+    var L = pageData.logic;
+    var html = '<h2>交互逻辑表' + editTag() + '</h2>' +
+      editHint('编辑中:直接点<b>单元格</b>改文字(Enter 结束输入);行尾 ✕ 删除该行;表下「+ 添加一行」。') +
+      '<table class="grid"><tr><th style="width:150px;">操作</th><th style="width:190px;">位置</th>' +
+      '<th>触发与反馈</th><th style="width:240px;">异常/边界处理</th>' +
+      (isEdit() ? '<th style="width:34px;"></th>' : '') + '</tr>';
+    L.table.forEach(function (r, ri) {
+      html += '<tr>';
+      for (var ci = 0; ci < 4; ci++) html += logicCellHtml('logic', ri, ci, r[ci]);
+      if (isEdit()) html += '<td class="num"><button class="row-del" data-edbtn="logic-del" data-i="' + ri + '" title="删除该行">✕</button></td>';
+      html += '</tr>';
+    });
+    html += '</table>';
+    if (isEdit()) html += '<button class="tbl-add" data-edbtn="logic-add">+ 添加一行</button>';
+
+    html += '<h2 style="margin-top:16px;">数值与单位规范(节选)' + editTag() + '</h2>' +
+      '<table class="grid"><tr><th>量</th><th>单位</th><th>小数位</th><th>显示示例</th>' +
+      (isEdit() ? '<th style="width:34px;"></th>' : '') + '</tr>';
+    L.units.forEach(function (r, ri) {
+      html += '<tr>';
+      for (var ci = 0; ci < 4; ci++) html += logicCellHtml('units', ri, ci, r[ci]);
+      if (isEdit()) html += '<td class="num"><button class="row-del" data-edbtn="units-del" data-i="' + ri + '" title="删除该行">✕</button></td>';
+      html += '</tr>';
+    });
+    html += '</table>';
+    if (isEdit()) html += '<button class="tbl-add" data-edbtn="units-add">+ 添加一行</button>';
     $('#page-logic').innerHTML = html;
   }
+
+  function logicCellHtml(kind, ri, ci, val) {
+    var num = (kind === 'units' && ci >= 2);
+    if (!isEdit()) return '<td' + (num ? ' class="num"' : '') + '>' + (val == null ? '' : val) + '</td>';
+    return '<td' + (num ? ' class="num"' : '') + '><span contenteditable="true" data-edtxt="' + kind +
+      '" data-i="' + ri + '" data-j="' + ci + '">' + (val == null ? '' : val) + '</span></td>';
+  }
+
+  // --- 8.4 编辑模式 / 导入导出 ---------------------------------------------
+  function setEditMode(on) {
+    document.body.classList.toggle('edit-on', !!on);
+    var b = $('#btn-edit-flow');
+    if (b) {
+      b.classList.toggle('active', !!on);
+      b.textContent = on ? '✓ 编辑中(点此退出)' : '✎ 编辑流程图/逻辑表';
+    }
+    renderFlow(); renderLogic(); syncSourceLabel();
+    if (on) {
+      var v = (location.hash || '#ui').slice(1);
+      if (v !== 'flow' && v !== 'logic') setView('flow');
+      appStatus('编辑模式:点文字直接改;改完用「导出/导入数据…」把结果粘进 flow-data.js');
+    } else {
+      appStatus('已退出编辑模式(改动存在本机浏览器,导出后可固化到 flow-data.js)');
+    }
+  }
+
+  function exportText() {
+    return '/* HVACIDA UI 原型 —— 交互流程图 / 交互逻辑表 数据(由原型「导出数据」生成)\n' +
+      ' * 保存为 docs/ui-prototype/flow-data.js(与 index.html 同目录),刷新页面即生效。\n' +
+      ' * 节点类型 t:root(入口)/ mod(板块)/ win(窗口)/ act(操作)/ sys(未实现);x 为节点文字,可含 <br>。\n' +
+      ' */\n' +
+      'window.HVACIDA_FLOW = ' + JSON.stringify(pageData.flow, null, 2) + ';\n\n' +
+      'window.HVACIDA_LOGIC = ' + JSON.stringify(pageData.logic, null, 2) + ';\n';
+  }
+
+  function importText(txt) {
+    var sandbox = {};
+    try { (new Function('window', txt))(sandbox); }
+    catch (e) { return '解析失败:' + e.message; }
+    if (!sandbox.HVACIDA_FLOW || !sandbox.HVACIDA_LOGIC) return '缺少 window.HVACIDA_FLOW / window.HVACIDA_LOGIC';
+    if (!sandbox.HVACIDA_FLOW.length || !sandbox.HVACIDA_LOGIC.table) return '数据结构不完整';
+    pageData.flow = sandbox.HVACIDA_FLOW;
+    pageData.logic = sandbox.HVACIDA_LOGIC;
+    savePageData(); renderFlow(); renderLogic();
+    return 'ok';
+  }
+
+  function copyText(txt) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try { navigator.clipboard.writeText(txt); return 'copied'; } catch (e) { /* 落到下面的兜底 */ }
+    }
+    var ta = $('#flowdata-text');
+    if (ta) {
+      ta.focus(); ta.select();
+      try { if (document.execCommand('copy')) return 'copied'; } catch (e2) { /* 需要手动复制 */ }
+    }
+    return 'manual';
+  }
+
+  function fillDataWin() {
+    var ta = $('#flowdata-text');
+    if (ta) ta.value = exportText();
+    syncSourceLabel();
+  }
+
+  // --- 8.5 编辑事件(委托,重渲染后依然有效) -------------------------------
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target.closest('[data-edbtn]') : null;
+    if (!t) return;
+    var act = t.getAttribute('data-edbtn');
+    var i = parseInt(t.getAttribute('data-i'), 10);
+    var j = parseInt(t.getAttribute('data-j'), 10);
+    var changed = false;
+
+    switch (act) {
+      case 'node-del':
+        pageData.flow[i].items.splice(j, 1); changed = true;
+        appStatus('已删除节点(第 ' + (i + 1) + ' 组第 ' + (j + 1) + ' 项),可用「+ 节点」补回');
+        break;
+      case 'lane-add':
+        pageData.flow[i].items.push({ t: 'act', x: '新节点(点文字修改)' }); changed = true;
+        appStatus('已在第 ' + (i + 1) + ' 组末尾新增节点');
+        break;
+      case 'logic-del':
+        pageData.logic.table.splice(i, 1); changed = true;
+        appStatus('已删除逻辑表第 ' + (i + 1) + ' 行');
+        break;
+      case 'logic-add':
+        pageData.logic.table.push(['新操作', '位置', '触发与反馈', '异常/边界处理']); changed = true;
+        appStatus('已在逻辑表末尾新增一行');
+        break;
+      case 'units-del':
+        pageData.logic.units.splice(i, 1); changed = true;
+        appStatus('已删除单位规范第 ' + (i + 1) + ' 行');
+        break;
+      case 'units-add':
+        pageData.logic.units.push(['新量', '单位', '0', '0']); changed = true;
+        appStatus('已在单位规范末尾新增一行');
+        break;
+      case 'copy': {
+        var ta = $('#flowdata-text');
+        var ok = copyText(ta ? ta.value : exportText());
+        setStatus($('#flowdata-status'), ok === 'copied'
+          ? '已复制到剪贴板 — 整段覆盖 flow-data.js 即固化'
+          : '已全选文本,请按 Ctrl+C 复制', ok !== 'copied');
+        break;
+      }
+      case 'import': {
+        var r = importText($('#flowdata-text').value);
+        if (r === 'ok') setStatus($('#flowdata-status'), '导入成功:流程图与逻辑表已更新', false);
+        else setStatus($('#flowdata-status'), '导入失败 — ' + r, true);
+        break;
+      }
+      case 'reset':
+        askConfirm('恢复出厂数据?本机浏览器里的编辑将被清空(flow-data.js 与内置默认不受影响)', function () {
+          try { localStorage.removeItem(STORE_KEY); } catch (e2) { }
+          loadPageData(); renderFlow(); renderLogic(); fillDataWin();
+          setStatus($('#flowdata-status'), '已恢复出厂 — 当前数据来源:' + dataSource, false);
+        });
+        break;
+      case 'discard-local':
+        try { localStorage.removeItem(STORE_KEY); } catch (e3) { }
+        loadPageData(); renderFlow(); renderLogic(); fillDataWin();
+        setStatus($('#flowdata-status'), '已丢弃本机编辑 — 当前数据来源:' + dataSource, false);
+        break;
+      default:
+        break;
+    }
+    if (changed) { savePageData(); renderFlow(); renderLogic(); }
+  });
+
+  // 节点类型下拉
+  document.addEventListener('change', function (e) {
+    var s = e.target;
+    if (!s.getAttribute || s.getAttribute('data-edsel') !== 'node-type') return;
+    var i = parseInt(s.getAttribute('data-i'), 10), j = parseInt(s.getAttribute('data-j'), 10);
+    pageData.flow[i].items[j].t = s.value;
+    savePageData(); renderFlow();
+    appStatus('节点类型已改为「' + (s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : s.value) + '」');
+  });
+
+  // 文字编辑:输入即存(不重渲染,保留光标)
+  document.addEventListener('input', function (e) {
+    var el = e.target;
+    if (!el.getAttribute || !el.getAttribute('data-edtxt')) return;
+    var kind = el.getAttribute('data-edtxt');
+    var i = parseInt(el.getAttribute('data-i'), 10), j = parseInt(el.getAttribute('data-j'), 10);
+    if (kind === 'node') {
+      if (pageData.flow[i] && pageData.flow[i].items[j]) pageData.flow[i].items[j].x = el.innerHTML;
+    } else if (kind === 'logic') {
+      if (pageData.logic.table[i]) pageData.logic.table[i][j] = el.innerHTML;
+    } else if (kind === 'units') {
+      if (pageData.logic.units[i]) pageData.logic.units[i][j] = el.innerHTML;
+    }
+    savePageData();
+  });
+
+  // 节点内 Enter 换行;表格内 Enter 结束输入
+  document.addEventListener('keydown', function (e) {
+    var el = e.target;
+    if (!el.getAttribute || !el.getAttribute('data-edtxt')) return;
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (el.getAttribute('data-edtxt') === 'node') {
+      try { document.execCommand('insertHTML', false, '<br>'); } catch (e2) { /* 忽略 */ }
+    } else {
+      el.blur();
+    }
+  });
+
+  // 粘贴时只取纯文本,避免粘进外部样式
+  document.addEventListener('paste', function (e) {
+    var el = e.target;
+    if (!el.getAttribute || !el.getAttribute('data-edtxt')) return;
+    e.preventDefault();
+    var txt = '';
+    try { txt = (e.clipboardData || window.clipboardData).getData('text/plain'); } catch (e2) { txt = ''; }
+    try { document.execCommand('insertText', false, txt); } catch (e3) { /* 忽略 */ }
+  });
 
   // =========================================================================
   // 9. 事件绑定:大系统 / 小系统 / 项目信息 等
@@ -1006,8 +1290,20 @@
   renderProject();
   renderLargeInputs();
   renderLargeResults(null);
-  buildFlow();
-  buildLogic();
+  loadPageData();
+  renderFlow();
+  renderLogic();
+  syncSourceLabel();
+  (function bindEditTools() {
+    var eb = $('#btn-edit-flow');
+    if (eb) eb.addEventListener('click', function () { setEditMode(!isEdit()); });
+    var db = $('#btn-flowdata');
+    if (db) db.addEventListener('click', function () {
+      fillDataWin();
+      openWin('win-flowdata');
+      setStatus($('#flowdata-status'), '当前数据来源:' + dataSource, false);
+    });
+  })();
   aiAppend('ai', '你好,我是 HVACIDA 设计助手(原型)。可试问:送风温差取多少?排烟风机怎么选?新风量怎么定?');
 
   var v0 = (location.hash || '#ui').slice(1);

@@ -13,6 +13,8 @@
   <button class="tab-btn active" data-view="ui">界面原型</button>
   <button class="tab-btn" data-view="flow">交互流程</button>
   <button class="tab-btn" data-view="logic">交互逻辑表</button>
+  <button class="bar-btn" id="btn-edit-flow">✎ 编辑流程图/逻辑表</button>
+  <button class="bar-btn" id="btn-flowdata">导出/导入数据…</button>
   <span class="spacer"></span>
   <span class="note">Revit 2020 原生风格 · 纯离线原型 · 供评审(docs/UI设计规范.md)</span>
 </div>
@@ -302,6 +304,32 @@
   <div class="footer"><span class="status err">骨架占位 — 未接 AI 服务</span><span class="grow"></span><button class="primary-wide" data-close>关闭</button></div>
 </div>
 
+<!-- ============ 窗口 14:流程图/逻辑表 数据(编辑与导出) ============ -->
+<div class="win" id="win-flowdata" style="left:180px;top:30px;width:820px;height:560px;">
+  <div class="titlebar">交互流程 / 逻辑表 — 编辑与导出<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 页面内改的内容先存在<b>本机浏览器</b>;要固化/共享请点「复制全部」,把结果<b>覆盖粘贴到 <code>docs/ui-prototype/flow-data.js</code></b>(替换文件内注释),保存后刷新即生效。</div>
+    <div class="row tight" style="margin-bottom:6px;">
+      <label>当前数据来源</label>
+      <span id="flowdata-source" class="mono">—</span>
+      <span class="grow" style="flex:1"></span>
+      <button data-edbtn="discard-local" title="清空本机编辑,改用 flow-data.js 或内置默认">丢弃本机编辑</button>
+    </div>
+    <textarea id="flowdata-text" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:6px;color:#5A5A5A;">
+      <span>复制后直接整段覆盖 <code>flow-data.js</code> 即可;也可把别处的内容粘进来点「从文本导入」立即生效。</span>
+    </div>
+  </div>
+  <div class="footer">
+    <button data-edbtn="copy">复制全部</button>
+    <button data-edbtn="import">从文本导入</button>
+    <button data-edbtn="reset">恢复出厂数据</button>
+    <span class="status" id="flowdata-status"></span>
+    <span class="grow"></span>
+    <button class="primary-wide" data-close>关闭</button>
+  </div>
+</div>
+
 <!-- ============ 通用确认框 ============ -->
 <div class="win" id="win-confirm" style="left:560px;top:250px;width:420px;">
   <div class="titlebar">确认<span class="close" data-close>✕</span></div>
@@ -315,6 +343,7 @@
   </div>
 </div>
 
+<script src="flow-data.js"></script>
 <script src="ui.js"></script>
 </body>
 </html>
