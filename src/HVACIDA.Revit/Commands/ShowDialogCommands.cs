@@ -42,10 +42,4 @@ namespace HVACIDA.Revit.Commands
     public class ShowLargeSystemCommand : ShowDialogCommandBase<UI.Views.LargeSystemWindow>
     {
     }
-
-    /// <summary>打开“小系统负荷计算”窗口。</summary>
-    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowSmallSystemCommand : ShowDialogCommandBase<UI.Views.SmallSystemWindow>
-    {
-    }
 }

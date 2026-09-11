@@ -37,9 +37,19 @@
     <div class="ribbon-panel">
       <div class="ribbon-big-btns">
         <button class="ribbon-btn" data-open="win-large"><span class="ico">∑</span>大系统<br>负荷计算<small>2.2.3.1</small></button>
-        <button class="ribbon-btn" data-open="win-systype"><span class="ico">∑</span>小系统<br>负荷计算<small>2.2.3.2</small></button>
       </div>
-      <div class="panel-title">负荷计算</div>
+      <div class="panel-title">大系统负荷计算</div>
+    </div>
+    <div class="ribbon-panel">
+      <div class="ribbon-grid6">
+        <button class="ribbon-small" data-act="small-type" data-type="allair">全空气一次回风</button>
+        <button class="ribbon-small" data-act="small-type" data-type="vrf">多联机+新风</button>
+        <button class="ribbon-small" data-act="small-type" data-type="exhaust">排风系统</button>
+        <button class="ribbon-small" data-act="small-type" data-type="smoke">排烟系统</button>
+        <button class="ribbon-small" data-act="small-type" data-type="sesmoke">送风排风排烟</button>
+        <button class="ribbon-small" data-act="small-type" data-type="press">加压送风</button>
+      </div>
+      <div class="panel-title">小系统负荷计算</div>
     </div>
     <div class="ribbon-panel">
       <div class="ribbon-big-btns">
@@ -149,18 +159,16 @@
   </div>
 </div>
 
-<!-- ============ 窗口 6:小系统类型选择 ============ -->
-<div class="win" id="win-systype" style="left:420px;top:110px;width:600px;">
-  <div class="titlebar">选择小系统类型<span class="close" data-close>✕</span></div>
+<!-- ============ 窗口 6:未实现类型提示(原"小系统类型选择窗"已取消) ============ -->
+<div class="win" id="win-todo" style="left:480px;top:180px;width:520px;">
+  <div class="titlebar">小系统负荷计算 — 待实现<span class="close" data-close>✕</span></div>
   <div class="body">
-    <div class="hint">[!] 六类系统;排风系统含子类型(环控机房通风 / 卫生间排风)。未实现类型"下一步"将禁用。</div>
-    <div id="systype-list"></div>
-    <div style="margin-top:8px;color:#5A5A5A;" id="systype-note"></div>
+    <div class="hint">[!] 六类小系统已提升为 Ribbon 一级按钮(2026-09-11)。当前仅"全空气一次回风"完成计算链路。</div>
+    <div id="todo-msg" style="line-height:1.7;"></div>
   </div>
   <div class="footer">
     <span class="grow"></span>
-    <button class="default primary-wide" data-act="systype-next">下一步</button>
-    <button class="primary-wide" data-close>取消</button>
+    <button class="primary-wide" data-close>关闭</button>
   </div>
 </div>
 

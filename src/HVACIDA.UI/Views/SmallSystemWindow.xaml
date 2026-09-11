@@ -1,19 +1,12 @@
 <Window x:Class="HVACIDA.UI.Views.SmallSystemWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:core="clr-namespace:HVACIDA.Core.Models;assembly=HVACIDA.Core"
-        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="小系统负荷计算 - HVACIDA"
         Width="1120" Height="720"
         WindowStartupLocation="CenterScreen"
         FontFamily="Microsoft YaHei UI" FontSize="12"
         UseLayoutRounding="True">
     <Window.Resources>
-        <ObjectDataProvider x:Key="SystemTypeOptions" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
-            <ObjectDataProvider.MethodParameters>
-                <x:Type TypeName="core:SmallSystemType"/>
-            </ObjectDataProvider.MethodParameters>
-        </ObjectDataProvider>
         <Style x:Key="FieldLabel" TargetType="{x:Type TextBlock}">
             <Setter Property="Width" Value="175"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -29,7 +22,7 @@
 
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="#FFF4E5" Padding="8,6">
-            <TextBlock Text="选择系统类型并输入参数后点击【计算】。当前仅完整实现“全空气一次回风系统”;其余类型输出提示后按需求文档 2.2.3.2 逐条实现。"
+            <TextBlock Text="系统类型由 Ribbon「小系统负荷计算」面板的六类按钮决定;当前仅完整实现“全空气一次回风系统”,其余类型在 Ribbon 上给出待实现说明(需求 2.2.3.2)。"
                        TextWrapping="Wrap" Foreground="#8A6100"/>
         </Border>
 
@@ -59,9 +52,9 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="系统类型"/>
-                                <ComboBox Width="180" VerticalAlignment="Center" Margin="2,3,10,3"
-                                          ItemsSource="{Binding Source={StaticResource SystemTypeOptions}}"
-                                          SelectedItem="{Binding Input.SystemType}"/>
+                                <TextBox Width="220" VerticalAlignment="Center" Margin="2,3,10,3" IsReadOnly="True"
+                                         Background="#F5F5F5" Text="{Binding SystemTypeName}"
+                                         ToolTip="系统类型由 Ribbon「小系统负荷计算」面板的六类按钮决定"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="房间/区域名称"/>

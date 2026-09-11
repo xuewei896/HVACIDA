@@ -571,7 +571,7 @@
   }
 
   // =========================================================================
-  // 6. 小系统:类型选择 + 全空气一次回风
+  // 6. 小系统:六类类型(Ribbon 一级按钮)+ 全空气一次回风
   // =========================================================================
   var SYSTYPES = [
     { id: 'allair', name: '全空气一次回风系统', impl: true, note: '按空间:照明/人员/设备负荷 + 除热通风量 + 换气次数 + 新风量;输出柜式空调机组与回排风机选型。' },
@@ -581,33 +581,22 @@
     { id: 'sesmoke', name: '送风排风排烟系统', impl: false, note: '送/排/排烟共用系统,需风量叠加与阀门切换逻辑。' },
     { id: 'press', name: '加压送风系统', impl: false, note: '楼梯间/前室加压送风量,按规范查表与门洞风速校核。' }
   ];
-  var sysSel = 'allair';
 
-  function renderSysTypes() {
-    $('#systype-list').innerHTML = SYSTYPES.map(function (s) {
-      var html = '<div class="row"><label style="width:24px;"><input type="radio" name="st" value="' + s.id + '"' +
-        (s.id === sysSel ? ' checked' : '') + '></label><label style="width:auto;">' + s.name +
-        (s.impl ? '' : ' <span style="color:#5A5A5A;font-size:11px;">(骨架未实现)</span>') + '</label></div>';
-      if (s.sub) {
-        html += '<div style="padding-left:36px;color:#333;">子类型:' +
-          s.sub.map(function (x, i) { return ' <label><input type="radio" name="st-sub" ' + (i === 0 ? 'checked' : '') + '>' + x + '</label>'; }).join('') + '</div>';
-      }
-      return html;
-    }).join('');
-    $$('#systype-list input[name=st]').forEach(function (r) {
-      r.addEventListener('change', function () {
-        sysSel = r.value;
-        var s = SYSTYPES.filter(function (x) { return x.id === sysSel; })[0];
-        $('#systype-note').textContent = '说明:' + s.note;
-        var next = $('[data-act=systype-next]');
-        next.disabled = !s.impl;
-        next.title = s.impl ? '' : '该类型尚未实现(骨架阶段)';
-      });
-    });
-    var s0 = SYSTYPES[0];
-    $('#systype-note').textContent = '说明:' + s0.note;
-    var next = $('[data-act=systype-next]');
-    next.disabled = false;
+  /** 点击 Ribbon 小系统类型按钮:全空气直接进计算窗,其余给待实现说明。 */
+  function openSmallType(id) {
+    var s = SYSTYPES.filter(function (x) { return x.id === id; })[0];
+    if (!s) return;
+    if (s.impl) {
+      renderAllAir();
+      openWin('win-allair');
+      appStatus('已打开:小系统 — ' + s.name);
+    } else {
+      $('#todo-msg').innerHTML = '<b>' + s.name + '</b>尚未实现(骨架阶段)。<br>' +
+        '<span style="color:#5A5A5A;">计算要点:' + s.note + '</span>' +
+        (s.sub ? '<br><span style="color:#5A5A5A;">子类型:' + s.sub.join(' / ') + '</span>' : '');
+      openWin('win-todo');
+      appStatus('小系统类型「' + s.name + '」尚未实现(骨架阶段)');
+    }
   }
 
   // 小系统 — 全空气一次回风
@@ -766,7 +755,7 @@
     html += lane(
       node('项目信息<br><small>2.1</small>', 'mod') +
       node('大系统负荷计算<br><small>2.2.3.1</small>', 'mod') +
-      node('小系统负荷计算<br><small>2.2.3.2</small>', 'mod') +
+      node('小系统负荷计算<br><small>2.2.3.2 · 六类按钮</small>', 'mod') +
       node('风系统水力<br><small>2.3</small>', 'mod') +
       node('水系统水力<br><small>2.4</small>', 'mod') +
       node('出图<br><small>2.6</small>', 'mod') +
@@ -790,9 +779,8 @@
       node('导出计算书', 'act')
     ) + down();
     html += lane(
-      node('Ribbon:小系统负荷计算', 'mod') + '<div class="arrow-right"></div>' +
-      node('系统类型选择窗(六类)', 'nd-win') + '<div class="arrow-right"></div>' +
-      node('全空气一次回风窗口', 'nd-win') + '<div class="arrow-right"></div>' +
+      node('Ribbon:小系统六类按钮', 'mod') + '<div class="arrow-right"></div>' +
+      node('全空气一次回风窗口<br>(其余五类:待实现提示)', 'nd-win') + '<div class="arrow-right"></div>' +
       node('空间列表 → 详情(拾取墙体…)', 'act') + '<div class="arrow-right"></div>' +
       node('计算 → 负荷/通风量/新风/选型', 'act')
     ) + down();
@@ -818,7 +806,7 @@
     var rows = [
       ['点击 Ribbon 按钮', 'HVACIDA 页', '打开对应模态窗(Owner=Revit 主窗口, CenterOwner)', '窗口未打开/报错'],
       ['点击「大系统负荷计算」', 'Ribbon 一级按钮', '直接打开大系统窗(不再经过入口窗)', '—'],
-      ['点击「小系统负荷计算」', 'Ribbon 一级按钮', '直接打开系统类型选择窗 → 下一步进入对应计算窗', '未实现类型:下一步禁用 + 灰字说明'],
+      ['点击「小系统」六类按钮', 'Ribbon 一级按钮(3×2)', '全空气→直接进计算窗;其余五类→待实现提示窗(说明计算要点)', '未实现类型:不伪装可用,状态栏红字'],
       ['从模型拾取空间', '大系统 / 小系统', '隐藏窗口 → PickObject 选择 → 回填面积/层高/长度(只读底 → 可编辑)', 'Esc 取消保留原值;空间缺参数则标红提示'],
       ['拾取墙体(多选)', '全空气一次回风 · 外墙长度', '多次点选 → 实时累计长度 → 应用总长', '未选中时提示"未选择,保持原值"'],
       ['默认参数…', '大系统底栏', '打开子窗(第三~七节)→ 确定回写 → 提示可重算', '取消不回写'],
@@ -871,7 +859,7 @@
         appStatus('项目信息已以全局参数写入当前 .rvt(模拟)');
         break;
       // 负荷 hub
-      // 负荷计算:Ribbon 两个一级按钮直接进入(data-open="win-large" / "win-systype")
+      // 负荷计算:Ribbon 一级按钮直接进入(大系统 data-open="win-large";小系统六类 data-act="small-type")
       // 大系统
       case 'large-pick': openPickSpace(); appStatus('拾取空间:请在列表中选择(模拟 Revit PickObject)'); break;
       case 'large-defaults': openDefaults(); break;
@@ -892,11 +880,9 @@
       // 默认参数
       case 'defaults-ok': applyDefaults(); break;
       case 'defaults-restore': restoreDefaults(); break;
-      // 小系统
-      case 'systype-next':
-        closeWin($('#win-systype'));
-        if (sysSel === 'allair') { renderAllAir(); openWin('win-allair'); appStatus('已打开:全空气一次回风计算'); }
-        else appStatus('该系统类型尚未实现(骨架阶段)');
+      // 小系统(Ribbon 六类一级按钮 → 直达计算窗 / 待实现提示)
+      case 'small-type':
+        openSmallType(t.getAttribute('data-type'));
         break;
       case 'allair-add':
         allAirSpaces.push({ name: '设备区-强电用房', area: 80, height: 4.5, wallLen: 28, roofArea: 80, equip: 25, light: 15, occupants: 6, ach: 8, indoorT: 28, dT: 10, freshPP: 30 });
@@ -964,7 +950,7 @@
     $('#proj-in').innerHTML = PROJ.indoor.map(function (f) { return inputHtml(f, 'pk'); }).join('');
   }
 
-  // 深链接演示:#demo-large / #demo-project / #demo-defaults / #demo-systype / #demo-allair / #demo-report / #demo-ai
+  // 深链接演示:#demo-large / #demo-project / #demo-defaults / #demo-todo / #demo-allair / #demo-report / #demo-ai
   function openDemo(name) {
     switch (name) {
       case 'project':
@@ -980,9 +966,8 @@
         openWin('win-large');
         openDefaults();
         break;
-      case 'systype':
-        renderSysTypes();
-        openWin('win-systype');
+      case 'todo':
+        openSmallType('vrf');
         break;
       case 'allair':
         renderAllAir();
@@ -1022,7 +1007,6 @@
   renderLargeResults(null);
   buildFlow();
   buildLogic();
-  renderSysTypes();
   aiAppend('ai', '你好,我是 HVACIDA 设计助手(原型)。可试问:送风温差取多少?排烟风机怎么选?新风量怎么定?');
 
   var v0 = (location.hash || '#ui').slice(1);

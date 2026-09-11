@@ -12,11 +12,36 @@ namespace HVACIDA.UI.ViewModels
         private string _status = "";
 
         public SmallSystemViewModel()
+            : this(SmallSystemType.AllAirOnceReturn)
+        {
+        }
+
+        /// <summary>按 Ribbon 选定的系统类型构造(六类小系统为 Ribbon 一级按钮,2026-09-11)。</summary>
+        public SmallSystemViewModel(SmallSystemType systemType)
         {
             _calculator = new SmallSystemLoadCalculator();
-            Input = new SmallSystemInput();
+            Input = new SmallSystemInput { SystemType = systemType };
+            SystemTypeName = DescribeSystemType(systemType);
             CalculateCommand = new RelayCommand(Calculate);
             ExportCommand = new RelayCommand(ExportReport, () => _lastResult != null);
+        }
+
+        /// <summary>当前系统类型名称(窗口只读展示,类型由 Ribbon 按钮决定)。</summary>
+        public string SystemTypeName { get; }
+
+        private static string DescribeSystemType(SmallSystemType type)
+        {
+            switch (type)
+            {
+                case SmallSystemType.AllAirOnceReturn: return "全空气一次回风系统";
+                case SmallSystemType.VrfWithFreshAir: return "多联机 + 新风系统";
+                case SmallSystemType.ExhaustVentilation: return "排风系统 — 环控机房通风";
+                case SmallSystemType.ExhaustToilet: return "排风系统 — 卫生间排风";
+                case SmallSystemType.SmokeExhaust: return "排烟系统";
+                case SmallSystemType.SupplyExhaustSmoke: return "送风排风排烟系统";
+                case SmallSystemType.PressurizationSupply: return "加压送风系统";
+                default: return type.ToString();
+            }
         }
 
         public SmallSystemInput Input { get; }

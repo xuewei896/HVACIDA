@@ -52,11 +52,37 @@ namespace HVACIDA.Revit
             AddButton(projectPanel, "HVACIDA.ProjectInfo", "项目信息", "维护工程基本\n信息与气象参数",
                 typeof(Commands.ShowProjectInfoCommand));
 
-            RibbonPanel loadPanel = application.CreateRibbonPanel(TabName, "负荷计算");
-            AddButton(loadPanel, "HVACIDA.LargeSystem", "大系统\n负荷计算", "地铁站厅/站台空调\n负荷、风量与选型",
+            // 大系统:一级大按钮(2026-09-11 评审决定)
+            RibbonPanel largePanel = application.CreateRibbonPanel(TabName, "大系统负荷计算");
+            AddButton(largePanel, "HVACIDA.LargeSystem", "大系统\n负荷计算", "地铁站厅/站台空调\n负荷、风量与选型",
                 typeof(Commands.ShowLargeSystemCommand));
-            AddButton(loadPanel, "HVACIDA.SmallSystem", "小系统\n负荷计算", "管理/设备用房等\n小系统负荷计算",
-                typeof(Commands.ShowSmallSystemCommand));
+
+            // 小系统:六类系统各一个按钮,3 行 × 2 列堆叠(2026-09-11 评审决定:由选择对话框提升到 Ribbon)
+            RibbonPanel smallPanel = application.CreateRibbonPanel(TabName, "小系统负荷计算");
+            smallPanel.AddStackedItems(
+                NewSmallButton("HVACIDA.Small.AllAir", "全空气一次回风", "照明/人员/设备负荷、除热通风量、换气次数、新风量 → 柜式机组与回排风机选型",
+                    typeof(Commands.ShowSmallAllAirCommand)),
+                NewSmallButton("HVACIDA.Small.Vrf", "多联机+新风", "多联机 + 新风系统计算(待实现)",
+                    typeof(Commands.ShowSmallVrfCommand)),
+                NewSmallButton("HVACIDA.Small.Exhaust", "排风系统", "环控机房通风 / 卫生间排风(待实现)",
+                    typeof(Commands.ShowSmallExhaustCommand)));
+            smallPanel.AddStackedItems(
+                NewSmallButton("HVACIDA.Small.Smoke", "排烟系统", "防烟分区排烟量与风机选型(待实现)",
+                    typeof(Commands.ShowSmallSmokeCommand)),
+                NewSmallButton("HVACIDA.Small.SupplyExhaustSmoke", "送风排风排烟", "送/排/排烟共用系统(待实现)",
+                    typeof(Commands.ShowSmallSupplyExhaustSmokeCommand)),
+                NewSmallButton("HVACIDA.Small.Pressurization", "加压送风", "楼梯间/前室加压送风(待实现)",
+                    typeof(Commands.ShowSmallPressurizationCommand)));
+        }
+
+        /// <summary>构造小型堆叠按钮数据。</summary>
+        private static PushButtonData NewSmallButton(string name, string text, string description, Type commandType)
+        {
+            return new PushButtonData(name, text, commandType.Assembly.Location, commandType.FullName)
+            {
+                ToolTip = description,
+                LongDescription = description
+            };
         }
 
         private static void AddButton(
