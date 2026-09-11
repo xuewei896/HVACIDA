@@ -745,10 +745,10 @@
     var html = '<h2>HVACIDA 交互流程(原型)</h2>' +
       '<div class="legend">' +
       '<span><i style="background:#DCEBF9;border-color:#0078D7;"></i>入口</span>' +
-      '<span><i style="background:#EFF6FF;"></i>功能板块</span>' +
-      '<span><i style="background:#FFF;border-style:dashed;"></i>窗口</span>' +
-      '<span><i style="background:#F3FFF3;"></i>操作</span>' +
-      '<span><i style="background:#F5F5F5;border-style:dotted;"></i>未实现</span>' +
+      '<span><i style="background:#EDF5FE;border-color:#A9CDEB;"></i>功能板块</span>' +
+      '<span><i style="background:#FFF;border-style:dashed;border-color:#9C9C9C;"></i>窗口</span>' +
+      '<span><i style="background:#EAF7EA;border-color:#9CCF9C;"></i>操作</span>' +
+      '<span><i style="background:#F6F6F6;border-style:dotted;border-color:#B4B4B4;"></i>未实现</span>' +
       '</div><div class="flow">';
 
     html += lane(node('Revit 2020 → Ribbon「HVACIDA」页', 'root')) + down();
