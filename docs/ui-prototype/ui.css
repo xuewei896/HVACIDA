@@ -67,7 +67,7 @@ html, body {
   margin-bottom: -1px;
   font-weight: 600;
 }
-.ribbon-panels { display: flex; padding: 4px 6px 2px; gap: 0; }
+.ribbon-panels { display: flex; padding: 4px 6px 2px; gap: 0; overflow-x: auto; overflow-y: hidden; }
 .ribbon-panel {
   border-right: 1px solid #D7D7D7;
   padding: 0 10px 14px;
@@ -110,10 +110,11 @@ html, body {
 }
 .ribbon-btn small { color: #5A5A5A; font-size: 10px; }
 
-/* 小系统六类:Ribbon 一级按钮(图标 + 文字,单行并排 1 行 × 6 键) */
+/* 小系统六类:Ribbon 一级按钮(图标 + 文字,单行并排 1 行 × 6 键;任何宽度都不换行) */
 .ribbon-row6 {
   display: flex;
   flex-direction: row;
+  flex-wrap: nowrap;      /* 无论窗口多窄都保持一行六键,不折行、不堆叠 */
   align-items: flex-start;
   gap: 4px;
   padding-bottom: 2px;
@@ -122,6 +123,7 @@ html, body {
   width: 76px;
   height: 62px;
   min-width: 0; /* 覆盖全局 button{min-width:75px},否则窄窗口降级档位被撑住 */
+  flex: 0 0 auto;
   border: 1px solid transparent;
   background: transparent;
   display: flex;
@@ -147,28 +149,20 @@ html, body {
   font-size: 13px; color: #0078D7;
   flex: 0 0 auto;
 }
+/* 标签:最多 2 行,尽量均衡断行(全空气一次回风 → 全空气 / 一次回风) */
+.ribbon-small .lbl { display: block; text-wrap: balance; }
 
-/* ---------- 窄窗口兜底(Revit 面板在窄窗口会折叠;此处三档降级,保证不裁切) ---------- */
-/* ≤1120px:隐藏图标,六键仍保持单行 */
+/* ---------- 窄窗口降级(始终保持单行六键;不够宽时压缩,最后才横向滚动) ---------- */
+/* ≤1120px:隐藏图标,六键仍单行 */
 @media (max-width: 1120px) {
   .ribbon-small { width: 62px; }
   .ribbon-small .ico { display: none; }
 }
-/* ≤1000px:兜底为 3 行 × 2 列,面板收窄,不再裁切 */
-@media (max-width: 1000px) {
-  .ribbon-row6 {
-    display: grid;
-    grid-template-columns: 62px 62px;
-    gap: 4px;
-    width: auto;
-    align-content: flex-start;
-  }
-  .ribbon-small { width: 62px; height: 34px; }
+/* ≤980px:按钮再收窄,标签仍最多 2 行 */
+@media (max-width: 980px) {
+  .ribbon-small { width: 56px; padding: 2px 1px; }
 }
-/* 极窄(<860px):整条 Ribbon 允许横向滚动,避免内容丢失 */
-@media (max-width: 860px) {
-  .ribbon-panels { overflow-x: auto; }
-}
+/* 再窄下去不再压缩:六键仍是同一排,靠 .ribbon-panels 的 overflow-x:auto 横向滚动查看 */
 
 /* ---------- 工作区(模拟 Revit 画布) ---------- */
 .canvas {
