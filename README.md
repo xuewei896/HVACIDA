@@ -86,7 +86,7 @@ dotnet build .\HVACIDA.sln
 7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、小系统)——
    `tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe`。
 
-## 6b. 三项自检(不需要打开 Revit)
+## 6b. 四项自检(不需要打开 Revit)
 ```powershell
 # 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统)
 & ".\tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe"
@@ -98,6 +98,9 @@ powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smo
 # 3) Ribbon 结构自检:反射检查 22 个命令注册 + [Transaction] 标注
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\ribbon-smoke.ps1 `
   -BinDir .\src\HVACIDA.Revit\bin\Release\net48
+
+# 4) 文档同步自检:交付 docx 与 Markdown 副本的 SHA256 是否一致(0 = 副本不过期)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\docx2md\check-docx-sync.ps1
 ```
 
 ## 6c. docx → Markdown 正文副本(便于 diff)
@@ -117,6 +120,7 @@ python tools\docx2md\docx_to_markdown.py "通风空调智能设计助手.docx" `
 | `--auto-headings` | 源文档没有标题样式时,把**标签式行**(短、以冒号结尾、不含分号句号)提升为 `###`,**正文一字不改** |
 | `--toc` | 开头生成目录 |
 | 约定 | **docx 是交付件、Markdown 是派生件**:改正文改 docx,然后重跑上面的命令;两边不要各改各的 |
+| 门禁 | `tools\docx2md\check-docx-sync.ps1` 校验副本头部记录的 SHA256 与当前 docx 是否一致;**过期则退出码 1**(加 `-Regenerate` 可自动重生成)——已挂到 `docs/开发流程.md` §5.4 与 §6 交付清单 |
 
 ## 7. 与 AI 协作(DSH 技能)
 
