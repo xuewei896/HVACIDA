@@ -48,7 +48,8 @@ dotnet build .\HVACIDA.sln
 ## 4. 部署到 Revit 2020
 
 1. 运行 `deploy\install.ps1`(需要管理员权限写 ProgramData)。
-2. 重启 Revit 2020 → Ribbon 出现 **HVACIDA** 页:**项目信息 / 大系统负荷计算 / 小系统负荷计算**。
+2. 重启 Revit 2020 → Ribbon 出现 **HVACIDA** 页。**当前代码**为 3 个面板(项目信息 / 大系统负荷计算 / 小系统负荷计算 六键);
+   **评审定稿的目标结构是 7 面板 / 22 PushButton**(项目信息·大系统·小系统·水力计算·出图·AI问答·产品支持),详见 `docs/UI设计规范.md` §4.0 —— WPF 侧待按该表重建。
 3. 卸载:删除 `C:\ProgramData\Autodesk\Revit\Addins\2020\HVACIDA.addin`。
 
 > 若本机 2020 之外还要支持 2017/2018:改 `deploy\install.ps1 -RevitYear 2018`,并把各 csproj 的

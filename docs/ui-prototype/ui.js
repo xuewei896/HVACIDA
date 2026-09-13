@@ -395,9 +395,12 @@
 
   function renderLargeResults(r, invalid) {
     var host = $('#large-results');
+    var host2 = $('#large-result-win');   // Ribbon「大系统 → 计算结果」独立窗
     if (!r) {
-      host.innerHTML = '<div class="card"><div class="chead">计算结果</div><div class="cbody">' +
+      if (host) host.innerHTML = '<div class="card"><div class="chead">计算结果</div><div class="cbody">' +
         '<div style="color:#5A5A5A;">点击底栏【计 算】生成结果;<br>结果将按四组卡片展示(客流 / 冷负荷 / 风量与制冷 / 设备选型)。</div></div></div>';
+      if (host2) host2.innerHTML = '<div class="card"><div class="chead">计算结果</div><div class="cbody">' +
+        '<div style="color:#5A5A5A;">尚未计算 — 点左下【计 算】按当前参数生成结果。</div></div></div>';
       return;
     }
     var html = '';
@@ -435,7 +438,8 @@
     html += '<div class="card"><div class="chead">提示</div><div class="cbody" style="color:#5A5A5A;">' +
       '排烟为<b>计算风量</b>(面积×60);选型风量 = 计算×1.2(防烟分区口径)。<br>' +
       '站厅/站台送风温度一致(本窗 A118=' + fmt(r.A118, 1) + ' ℃)。</div></div>';
-    host.innerHTML = html;
+    if (host) host.innerHTML = html;
+    if (host2) host2.innerHTML = html;
   }
 
   var lastLarge = null;
@@ -502,6 +506,78 @@
       var k = inp.getAttribute('data-k');
       inp.value = L[k];
     });
+  }
+
+  /**
+   * 公共区参数窗(Ribbon:大系统 → 公共区参数)
+   * 复用大系统七节里的「二、车站几何与出入口」与「三、高峰客流资料」,与大系统输入共享同一份 L。
+   */
+  var PUBLIC_SECS = [1, 2];
+  function renderPublicInputs() {
+    var host = $('#public-inputs');
+    if (!host) return;
+    var html = '';
+    PUBLIC_SECS.forEach(function (si) {
+      var sec = LARGE_SPEC[si];
+      html += '<div class="group" data-sec="' + si + '"><div class="gtitle">' + sec.title +
+        (sec.required ? '<span class="warn-chip hidden" data-req="1">必填</span>' : '') + '</div><div class="grid2">';
+      sec.fields.forEach(function (f) {
+        html += '<div class="row"><label>' + f.label + '</label>' +
+          '<input type="number" data-k="' + f.k + '" value="' + L[f.k] + '"' + (f.pick ? ' class="num-lg"' : '') + '></div>';
+      });
+      html += '</div></div>';
+    });
+    host.innerHTML = html;
+    $$('input[data-k]', host).forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        L[inp.getAttribute('data-k')] = num(inp.value);
+        inp.classList.remove('invalid');
+        largeDirty = true;
+        syncLargeSheet();
+      });
+    });
+  }
+  function resetPublicParams() {
+    // 只恢复「公共区参数」涉及的两节(几何 + 客流)
+    LARGE_SPEC[1].fields.forEach(function (f) { L[f.k] = f.def; });
+    LARGE_SPEC[2].fields.forEach(function (f) { L[f.k] = f.def; });
+    renderPublicInputs(); syncLargeSheet(); largeDirty = true;
+  }
+
+  // =========================================================================
+  // 4b. 未实现模块的统一占位说明(不伪装可用)
+  // =========================================================================
+  var MODULE_TODO = {
+    'smoke': {
+      title: '大系统 — 排烟计算',
+      body: '按站厅/站台公共区面积计算排烟量并选型(需求 2.2.3.1)。<br>' +
+        '<b>已定口径:</b>计算风量 = 公共区面积 × 60 m³/(h·m²);单台排烟风机风量取站厅、站台<b>最大值的一半</b>;风机 2 台;选型风量 = 计算风量 × 1.2。<br>' +
+        '<b>待补:</b>防烟分区几何(分区面积/挡烟垂壁/储烟仓)的模型读取 —— 目前仅有公共区总面积,尚不能按防烟分区出量。'
+    },
+    'hyd-result': {
+      title: '水力计算 — 计算结果',
+      body: '风系统/水系统的阻力平衡、风机水泵选型结果汇总(需求 2.3 / 2.4)。<br>' +
+        '<b>待实现:</b>沿程/局部阻力算法、环路平衡与选型规则库;计算书与明细同 2.3/2.4。'
+    },
+    'schedule': {
+      title: '出图 — 明细表(材料表统计)',
+      body: '按需求 2.5:设备材料统计 / 管道材料统计 / 配件材料统计 → 自动生成材料清单 → 导出 Excel 报表。<br>' +
+        '<b>待实现:</b>材料数据库接口(4.2)与按系统/楼层的归类统计;当前仅保留模块与入口。'
+    },
+    'feedback': {
+      title: '产品支持 — 问题反馈',
+      body: '提交使用问题、日志与截图(需接入反馈服务或邮件通道,尚未实现)。<br>' +
+        '<b>当前可手动提供:</b>Revit 日志 %LOCALAPPDATA%\\Autodesk\\Revit\\Autodesk Revit 2020\\Journals\\;' +
+        '加载清单 C:\\ProgramData\\Autodesk\\Revit\\Addins\\2020\\HVACIDA.addin(详见「产品支持 → 帮助」)。'
+    }
+  };
+  function openModuleTodo(key) {
+    var m = MODULE_TODO[key];
+    if (!m) return;
+    $('.titlebar', $('#win-todo')).innerHTML = m.title + '<span class="close" data-close>✕</span>';
+    $('#todo-msg').innerHTML = m.body;
+    openWin('win-todo');
+    appStatus('「' + m.title + '」尚未实现(骨架阶段)');
   }
 
   function openDefaults() {
@@ -591,6 +667,7 @@
       openWin('win-allair');
       appStatus('已打开:小系统 — ' + s.name);
     } else {
+      $('.titlebar', $('#win-todo')).innerHTML = '小系统负荷计算 — 待实现<span class="close" data-close>✕</span>';
       $('#todo-msg').innerHTML = '<b>' + s.name + '</b>尚未实现(骨架阶段)。<br>' +
         '<span style="color:#5A5A5A;">计算要点:' + s.note + '</span>' +
         (s.sub ? '<br><span style="color:#5A5A5A;">子类型:' + s.sub.join(' / ') + '</span>' : '');
@@ -693,7 +770,7 @@
       sum += totalW / 1000;
     });
     lastAllAir = { rows: rows, sumKw: sum };
-    $('#allair-results').innerHTML =
+    var resHtml =
       '<div class="card"><div class="chead">计算结果</div><div class="cbody">' +
       rows.map(function (r) {
         return '<div class="kv strong"><span class="k">' + r.name + ' 总冷负荷</span><span class="v">' + fmt(r.totalKw, 2) +
@@ -704,7 +781,11 @@
       '</div></div>' +
       '<div class="card"><div class="chead">设备选型</div><div class="cbody" style="color:#5A5A5A;">' +
       '柜式空调机组 / 回排风机选型:待接入选型规则库(需求 2.2.3.2)。</div></div>';
+    $('#allair-results').innerHTML = resHtml;
+    var host2 = $('#allair-result-win');   // Ribbon「小系统 → 计算结果」独立窗
+    if (host2) host2.innerHTML = resHtml;
     setStatus($('#allair-status'), '计算完成:' + allAirSpaces.length + ' 个空间,合计 ' + fmt(sum, 2) + ' kW');
+    setStatus($('#small-result-status'), '计算完成:' + allAirSpaces.length + ' 个空间,合计 ' + fmt(sum, 2) + ' kW');
   }
 
   // =========================================================================
@@ -755,43 +836,42 @@
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
   var DEFAULT_FLOW = [
-    { items: [{ t: 'root', x: 'Revit 2020 → Ribbon「HVACIDA」页' }] },
+    { items: [{ t: 'root', x: 'Revit 2020 → Ribbon「HVACIDA」页(7 个面板)' }] },
     { items: [
-      { t: 'mod', x: '项目信息<br><small>2.1</small>' },
-      { t: 'mod', x: '大系统负荷计算<br><small>2.2.3.1</small>' },
-      { t: 'mod', x: '小系统负荷计算<br><small>2.2.3.2 · 六类按钮</small>' },
-      { t: 'mod', x: '风系统水力<br><small>2.3</small>' },
-      { t: 'mod', x: '水系统水力<br><small>2.4</small>' },
-      { t: 'mod', x: '出图<br><small>2.6</small>' },
-      { t: 'mod', x: 'AI问答<br><small>2.7</small>' }
+      { t: 'mod', x: '项目信息<br><small>工程信息 / 气象参数</small>' },
+      { t: 'mod', x: '大系统<br><small>公共区参数 / 负荷 / 排烟 / 结果</small>' },
+      { t: 'mod', x: '小系统<br><small>六类系统 / 计算结果</small>' },
+      { t: 'mod', x: '水力计算<br><small>风系统 / 水系统 / 结果</small>' },
+      { t: 'mod', x: '出图<br><small>明细表 / 图框</small>' },
+      { t: 'mod', x: 'AI问答<br><small>操作指南 / 规范知识库</small>' },
+      { t: 'mod', x: '产品支持<br><small>问题反馈 / 帮助</small>' }
     ] },
-    { h: '① 项目信息', items: [
-      { t: 'win', x: '项目信息窗口' }, { t: 'arrow' },
-      { t: 'act', x: '手动填写 / Excel 模板导入' }, { t: 'arrow' },
-      { t: 'act', x: '校验(必填/数值范围)' }, { t: 'arrow' },
+    { h: '① 项目信息:工程信息 + 气象参数', items: [
+      { t: 'win', x: '工程信息窗<br>(2.1.1 基本信息 / 模板导入)' }, { t: 'arrow' },
+      { t: 'win', x: '气象参数窗<br>(2.1.2 室外 / 室内 / 其他)' }, { t: 'arrow' },
       { t: 'act', x: '确定 → 写入 .rvt 全局参数' }
     ] },
-    { h: '② 负荷及通风计算(Ribbon 两个一级入口,2026-09-11 调整)', items: [
-      { t: 'mod', x: 'Ribbon:大系统负荷计算' }, { t: 'arrow' },
-      { t: 'win', x: '大系统窗口<br>左:输入七节 / 右:结果卡片' }, { t: 'arrow' },
-      { t: 'act', x: '拾取空间 → 面积/层高/长度' }, { t: 'arrow' },
-      { t: 'act', x: '默认参数…(子窗)' }, { t: 'arrow' },
-      { t: 'act', x: '计算 → 客流/负荷/风量/制冷/选型' }, { t: 'arrow' },
-      { t: 'act', x: '导出计算书' }
+    { h: '② 大系统:公共区参数 → 负荷计算 → 排烟计算 → 计算结果', items: [
+      { t: 'win', x: '公共区参数窗<br>几何模型获取 + 客流手填' }, { t: 'arrow' },
+      { t: 'win', x: '负荷计算窗<br>七节参数 / 默认参数子窗' }, { t: 'arrow' },
+      { t: 'act', x: '计 算 → 客流/负荷/风量/制冷/选型' }, { t: 'arrow' },
+      { t: 'win', x: '计算结果窗<br>结果卡片 + 导出计算书' }, { t: 'arrow' },
+      { t: 'sys', x: '排烟计算(待实现:需防烟分区几何)' }
     ] },
-    { items: [
-      { t: 'mod', x: 'Ribbon:小系统六类按钮' }, { t: 'arrow' },
-      { t: 'win', x: '全空气一次回风窗口<br>(其余五类:待实现提示)' }, { t: 'arrow' },
+    { h: '③ 小系统:六类系统按钮 + 计算结果', items: [
+      { t: 'mod', x: 'Ribbon:小系统 7 键(六类 + 计算结果)' }, { t: 'arrow' },
+      { t: 'win', x: '全空气一次回风窗<br>(其余五类:待实现提示)' }, { t: 'arrow' },
       { t: 'act', x: '空间列表 → 详情(拾取墙体…)' }, { t: 'arrow' },
-      { t: 'act', x: '计算 → 负荷/通风量/新风/选型' }
+      { t: 'act', x: '计 算 → 负荷/通风量/新风/选型' }, { t: 'arrow' },
+      { t: 'win', x: '小系统计算结果窗' }
     ] },
-    { h: '③ 水力 / 出图 / AI(骨架占位)', items: [
-      { t: 'sys', x: '风系统水力: 系统树 → 参数表 → 计算/平衡' },
-      { t: 'sys', x: '水系统水力: 环路 → 参数 → 计算/选型' },
-      { t: 'sys', x: '出图: 模板 → 标注/图例 → 批量出图' },
-      { t: 'sys', x: 'AI问答: 提问 → 规则应答(AI 服务待接)' }
+    { h: '④ 水力 / 出图 / AI / 产品支持(骨架与占位)', items: [
+      { t: 'sys', x: '水力:风系统 / 水系统(骨架)+ 计算结果(待实现)' },
+      { t: 'sys', x: '出图:明细表(需求 2.5 待实现)/ 图框(骨架)' },
+      { t: 'act', x: 'AI:操作指南 / 规范知识库(原型规则应答)' },
+      { t: 'act', x: '产品支持:问题反馈(待接服务)/ 帮助(版本与排错)' }
     ] },
-    { h: '④ 公用交互(所有窗口一致)', items: [
+    { h: '⑤ 公用交互(所有窗口一致)', items: [
       { t: 'act', x: '确定 / 取消 / Esc' },
       { t: 'act', x: '必填与范围校验(行内标红)' },
       { t: 'act', x: '状态栏反馈(成功绿 / 失败红)' },
@@ -801,20 +881,24 @@
 
   var DEFAULT_LOGIC = {
     table: [
-      ['点击 Ribbon 按钮', 'HVACIDA 页', '打开对应模态窗(Owner=Revit 主窗口, CenterOwner)', '窗口未打开/报错'],
-      ['点击「大系统负荷计算」', 'Ribbon 一级按钮', '直接打开大系统窗(不再经过入口窗)', '—'],
-      ['点击「小系统」六类按钮', 'Ribbon 一级按钮(一行六键·图标+文字)', '全空气→直接进计算窗;其余五类→待实现提示窗(说明计算要点)', '未实现类型:不伪装可用,状态栏红字'],
-      ['窗口宽度变窄', 'Ribbon 自适应(始终一行六键)', '≤1120px 隐藏图标 → ≤980px 收窄至 56px → 再窄则整条 Ribbon 横向滚动', '不折行、不堆叠;每个标签最多 2 行,不截断'],
-      ['从模型拾取空间', '大系统 / 小系统', '隐藏窗口 → PickObject 选择 → 回填面积/层高/长度(只读底 → 可编辑)', 'Esc 取消保留原值;空间缺参数则标红提示'],
+      ['点击 Ribbon 按钮', 'HVACIDA 页(7 面板)', '打开对应模态窗(Owner=Revit 主窗口, CenterOwner)', '窗口未打开/报错'],
+      ['点击未实现模块按钮', '大系统·排烟计算 / 出图·明细表 / 水力·计算结果 / 产品支持·问题反馈', '统一"待实现说明窗":写清已定口径与待补项', '不伪装可用;状态栏红字'],
+      ['点击「项目信息 → 工程信息」', 'Ribbon', '工程基本信息(2.1.1);可导入 Excel 模板 → 确定写入 .rvt 全局参数', '必填缺失阻止确定'],
+      ['点击「项目信息 → 气象参数」', 'Ribbon', '室外/室内/其他计算参数;可"从气象数据库获取"覆盖', '获取失败保留原值'],
+      ['点击「大系统 → 公共区参数」', 'Ribbon', '几何(模型拾取)+ 高峰客流(必填)→ 确定回写大系统输入', '客流为 0:标红并阻止确定'],
+      ['点击「大系统 → 负荷计算」', 'Ribbon', '打开七节参数窗;默认参数子窗、恢复默认(二次确认)、载入北京算例', '未计算时结果区提示先计算'],
+      ['点击「大系统 → 计算结果」', 'Ribbon', '显示结果卡片(客流/冷负荷/风量与制冷/选型),可导出计算书', '未算过则自动按当前参数计算一次'],
+      ['点击「小系统」七键', 'Ribbon 单行七键', '六类系统直达对应计算窗(未实现类型给待实现说明);第 7 键=计算结果', '不折行、不堆叠;标签最多 2 行'],
+      ['从模型拾取空间', '大系统 / 公共区参数 / 小系统', '隐藏窗口 → PickObject 选择 → 回填面积/层高/长度(只读底 → 可编辑)', 'Esc 取消保留原值'],
       ['拾取墙体(多选)', '全空气一次回风 · 外墙长度', '多次点选 → 实时累计长度 → 应用总长', '未选中时提示"未选择,保持原值"'],
       ['默认参数…', '大系统底栏', '打开子窗(第三~七节)→ 确定回写 → 提示可重算', '取消不回写'],
-      ['恢复默认', '大系统底栏', '二次确认后恢复公式文档默认值(客流清零)', '取消则不变'],
-      ['计 算', '大系统 / 小系统', '校验必填 → 执行公式链 → 右侧结果卡片', '客流为 0:结果区提示"缺少必填参数",不弹系统框'],
-      ['导出计算书', '大系统 / 小系统', '生成报告文本 → 预览窗(可复制/导出)', '未计算时提示先计算'],
-      ['确定', '所有窗口', '保存参数 / 写入 .rvt 全局参数(项目信息)→ 关闭', '校验失败阻止关闭并定位首个错误'],
+      ['恢复默认', '大系统 / 公共区参数 / 气象参数', '二次确认后恢复公式文档默认值(客流清零)', '取消则不变'],
+      ['计 算', '大系统 / 小系统 / 计算结果窗', '校验必填 → 执行公式链 → 结果卡片(结果窗同步刷新)', '客流为 0:提示"缺少必填参数",不弹系统框'],
+      ['导出计算书', '大系统 / 小系统 / 结果窗', '生成报告文本 → 预览窗(可复制/导出)', '未计算时提示先计算'],
+      ['确定', '所有窗口', '保存参数 / 写入 .rvt 全局参数 → 关闭', '校验失败阻止关闭并定位首个错误'],
       ['取消 / Esc', '所有窗口', '关闭不保存;有未保存修改时弹确认', '—'],
-      ['未实现模块', '水力 / 出图 / AI', '灰字说明 + 状态栏红字,按钮禁用或仅演示', '不伪装可用'],
-      ['AI 提问', 'AI 问答窗', '输入问题 → 发送 → 追加对话(原型:规则应答)', '无匹配时给出能力范围说明']
+      ['AI 提问', 'AI问答 → 规范知识库', '输入问题 → 发送 → 追加对话(原型:规则应答)', '无匹配时给出能力范围说明'],
+      ['操作指南 / 帮助', 'AI问答 / 产品支持', '操作指南给 ①→⑥ 步骤;帮助给版本、日志与加载清单路径', '只读,不改模型']
     ],
     units: [
       ['温度 / 温差', '℃', '1', '19.0'],
@@ -1126,6 +1210,9 @@
   // 9. 事件绑定:大系统 / 小系统 / 项目信息 等
   // =========================================================================
   document.addEventListener('click', function (e) {
+    // 未实现模块:Ribbon 上的 data-todo 按钮 → 统一占位说明窗
+    var td = e.target.closest ? e.target.closest('[data-todo]') : null;
+    if (td) { openModuleTodo(td.getAttribute('data-todo')); return; }
     var t = e.target.closest ? e.target.closest('[data-act]') : null;
     if (!t) return;
     var act = t.getAttribute('data-act');
@@ -1142,6 +1229,69 @@
       case 'proj-ok':
         closeWin($('#win-project'));
         appStatus('项目信息已以全局参数写入当前 .rvt(模拟)');
+        break;
+      // 气象参数(Ribbon:项目信息 → 气象参数)
+      case 'wx-fetch':
+        PROJ.outLarge.forEach(function (f) { var el = $('[data-pk=' + f.k + ']'); if (el) el.value = f.def; });
+        PROJ.outSmall.forEach(function (f) { var el = $('[data-pk=' + f.k + ']'); if (el) el.value = f.def; });
+        PROJ.indoor.forEach(function (f) { var el = $('[data-pk=' + f.k + ']'); if (el) el.value = f.def; });
+        $('#wx-source').textContent = '气象数据库(已自动获取,可手工覆盖)';
+        setStatus($('#wx-status'), '已从气象数据库获取室外/室内计算参数(模拟)');
+        break;
+      case 'wx-reset':
+        askConfirm('恢复气象参数默认值?', function () {
+          PROJ.outLarge.forEach(function (f) { var el = $('[data-pk=' + f.k + ']'); if (el) el.value = f.def; });
+          PROJ.outSmall.forEach(function (f) { var el = $('[data-pk=' + f.k + ']'); if (el) el.value = f.def; });
+          PROJ.indoor.forEach(function (f) { var el = $('[data-pk=' + f.k + ']'); if (el) el.value = f.def; });
+          $('#wx-source').textContent = '手工填写(已恢复默认)';
+          setStatus($('#wx-status'), '已恢复默认气象参数');
+        });
+        break;
+      case 'wx-ok':
+        closeWin($('#win-weather'));
+        appStatus('气象参数已保存并写入当前 .rvt(模拟)');
+        break;
+      // 公共区参数(Ribbon:大系统 → 公共区参数)
+      case 'public-reset':
+        askConfirm('恢复公共区几何与客流默认值?(已填客流将清零)', resetPublicParams);
+        break;
+      case 'public-ok': {
+        var bad = (L.upBoard + L.upAlight + L.downBoard + L.downAlight + L.xferBoard + L.xferAlight) === 0;
+        var reqP = $('span[data-req]', $('#public-inputs'));
+        if (reqP) reqP.classList.toggle('hidden', !bad);
+        if (bad) { setStatus($('#public-status'), '高峰客流为必填,请先填写(A27~F27)', true); break; }
+        closeWin($('#win-public'));
+        syncLargeSheet();
+        appStatus('公共区参数已回写大系统输入(几何 ' + fmt(L.hallArea, 1) + ' / ' + fmt(L.platArea, 1) + ' m²)');
+        break;
+      }
+      // 大系统计算结果(Ribbon:大系统 → 计算结果)
+      case 'large-result':
+        if (!lastLarge) doLargeCalc();
+        openWin('win-large-result');
+        setStatus($('#large-result-status'), lastLarge ? '已显示当前参数的计算结果' : '');
+        break;
+      case 'large-calc-here':
+        doLargeCalc();
+        setStatus($('#large-result-status'), '计算完成 — 总制冷量 ' + (lastLarge ? fmt(lastLarge.E159, 2) + ' kW' : '—'));
+        break;
+      // 小系统计算结果(Ribbon:小系统 → 计算结果)
+      case 'small-result':
+        renderAllAir();
+        calcAllAir();
+        openWin('win-small-result');
+        break;
+      case 'allair-calc-here':
+        calcAllAir();
+        break;
+      // 操作指南 / 帮助
+      case 'guide-tour':
+        closeWin($('#win-guide'));
+        openWin('win-project');
+        appStatus('演示第①步:项目信息 → 工程信息(填完点确定,再走气象参数)');
+        break;
+      case 'help-log':
+        setStatus($('#help-status'), '已请求打开日志目录(模拟):%LOCALAPPDATA%\\Autodesk\\Revit\\Autodesk Revit 2020\\Journals\\');
         break;
       // 负荷 hub
       // 负荷计算:Ribbon 一级按钮直接进入(大系统 data-open="win-large";小系统六类 data-act="small-type")
@@ -1241,11 +1391,35 @@
       case 'project':
         openWin('win-project');
         break;
+      case 'weather':
+        openWin('win-weather');
+        break;
+      case 'public':
+        renderPublicInputs();
+        openWin('win-public');
+        break;
       case 'large':
         openWin('win-large');
         Object.keys(SAMPLE).forEach(function (k) { L[k] = SAMPLE[k]; });
         syncLargeSheet();
         doLargeCalc();
+        break;
+      case 'lresult':
+        Object.keys(SAMPLE).forEach(function (k) { L[k] = SAMPLE[k]; });
+        syncLargeSheet();
+        doLargeCalc();
+        openWin('win-large-result');
+        break;
+      case 'sresult':
+        renderAllAir();
+        calcAllAir();
+        openWin('win-small-result');
+        break;
+      case 'guide':
+        openWin('win-guide');
+        break;
+      case 'help':
+        openWin('win-help');
         break;
       case 'defaults':
         openWin('win-large');
@@ -1289,7 +1463,9 @@
 
   renderProject();
   renderLargeInputs();
+  renderPublicInputs();
   renderLargeResults(null);
+  renderAllAir();
   loadPageData();
   renderFlow();
   renderLogic();

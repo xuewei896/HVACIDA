@@ -175,63 +175,20 @@ html, body {
   letter-spacing: .3px;
   pointer-events: none;
 }
-.ribbon-big-btns { display: flex; gap: 4px; }
-.ribbon-btn {
-  width: 74px;
-  height: 62px;
-  border: 1px solid transparent;
-  border-radius: var(--r);
-  background: transparent;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1.15;
-  text-align: center;
-  padding: 2px;
-  font-family: inherit;
-  color: var(--text);
-  transition: background var(--t), border-color var(--t), box-shadow var(--t);
-}
-.ribbon-btn:hover {
-  border-color: #9CC7EA;
-  background: linear-gradient(#F5FAFE, #E4F0FB);
-  box-shadow: var(--sh-1);
-}
-.ribbon-btn:active {
-  background: linear-gradient(#DCEBF9, #CFE6F8);
-  border-color: var(--accent);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
-}
-.ribbon-btn .ico {
-  width: 26px; height: 26px;
-  border: 1px solid #8C8C8C;
-  border-radius: var(--r-sm);
-  background: linear-gradient(#FFFFFF, #F4F8FC);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 15px; color: var(--accent);
-  box-shadow: var(--sh-inset), var(--sh-1);
-  transition: border-color var(--t), background var(--t);
-}
-.ribbon-btn:hover .ico { border-color: var(--accent); background: linear-gradient(#FFFFFF, #E9F2FB); }
-.ribbon-btn small { color: var(--text-dim); font-size: 10px; }
-
-/* 小系统六类:Ribbon 一级按钮(图标 + 文字,单行并排 1 行 × 6 键;任何宽度都不换行) */
-.ribbon-row6 {
+/* Ribbon 按钮:图标 + 标签(垂直),所有面板共用同一规格
+ * 布局约束:每个面板内**一行并排、不折行、不堆叠**;标签最多 2 行;窗口不够宽时整条 Ribbon 横向滚动 */
+.ribbon-row {
   display: flex;
   flex-direction: row;
-  flex-wrap: nowrap;      /* 无论窗口多窄都保持一行六键,不折行、不堆叠 */
+  flex-wrap: nowrap;
   align-items: flex-start;
   gap: 4px;
   padding-bottom: 2px;
 }
-.ribbon-small {
-  width: 76px;
+.rb {
+  width: 68px;
   height: 62px;
-  min-width: 0; /* 覆盖全局 button{min-width:75px},否则窄窗口降级档位被撑住 */
+  min-width: 0; /* 覆盖全局 button{min-width:75px},否则窄窗口档位被撑住 */
   flex: 0 0 auto;
   border: 1px solid transparent;
   border-radius: var(--r);
@@ -252,17 +209,17 @@ html, body {
   word-break: break-all;
   transition: background var(--t), border-color var(--t), box-shadow var(--t), color var(--t);
 }
-.ribbon-small:hover {
+.rb:hover {
   border-color: #9CC7EA;
   background: linear-gradient(#F5FAFE, #E4F0FB);
   box-shadow: var(--sh-1);
 }
-.ribbon-small:active {
+.rb:active {
   background: linear-gradient(#DCEBF9, #CFE6F8);
   border-color: var(--accent);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
 }
-.ribbon-small .ico {
+.rb .ico {
   width: 22px; height: 22px;
   border: 1px solid #8C8C8C;
   border-radius: var(--r-sm);
@@ -273,21 +230,18 @@ html, body {
   box-shadow: var(--sh-inset), var(--sh-1);
   transition: border-color var(--t), background var(--t);
 }
-.ribbon-small:hover .ico { border-color: var(--accent); background: linear-gradient(#FFFFFF, #E9F2FB); }
-/* 标签:最多 2 行,尽量均衡断行(全空气一次回风 → 全空气 / 一次回风) */
-.ribbon-small .lbl { display: block; text-wrap: balance; }
+.rb:hover .ico { border-color: var(--accent); background: linear-gradient(#FFFFFF, #E9F2FB); }
+/* 标签:最多 2 行,尽量均衡断行(全空气一次回风系统 → 全空气 / 一次回风系统) */
+.rb .lbl { display: block; text-wrap: balance; }
 
-/* ---------- 窄窗口降级(始终保持单行六键;不够宽时压缩,最后才横向滚动) ---------- */
-/* ≤1120px:隐藏图标,六键仍单行 */
-@media (max-width: 1120px) {
-  .ribbon-small { width: 62px; }
-  .ribbon-small .ico { display: none; }
+/* ---------- 宽度档位(7 面板 22 键:68px 时整条固有宽度约 1708px) ---------- */
+/* ≤1720px:按钮 68 → 64px。不可再窄:64-6=58px 内容宽刚好放 5 个中文字,
+ * 9 字标签(全空气一次回风系统)才是 2 行;再窄会变 3 行并溢出按钮高度 */
+@media (max-width: 1720px) {
+  .rb { width: 64px; }
 }
-/* ≤980px:按钮再收窄,标签仍最多 2 行 */
-@media (max-width: 980px) {
-  .ribbon-small { width: 56px; padding: 2px 1px; }
-}
-/* 再窄下去不再压缩:六键仍是同一排,靠 .ribbon-panels 的 overflow-x:auto 横向滚动查看 */
+/* 再窄不再压缩(再压就会超 2 行):由 .ribbon-panels 的 overflow-x:auto 横向滚动查看,
+ * 面板内始终是一行并排,不折行、不堆叠 */
 
 /* ---------- 工作区(模拟 Revit 画布) ---------- */
 .canvas {

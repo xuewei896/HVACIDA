@@ -30,47 +30,69 @@
     <div class="ribbon-tab">管理</div>
   </div>
   <div class="ribbon-panels">
+    <!-- 1. 项目信息:2 个 PushButton -->
     <div class="ribbon-panel">
-      <div class="ribbon-big-btns">
-        <button class="ribbon-btn" data-open="win-project"><span class="ico">▤</span>项目信息<small>2.1</small></button>
+      <div class="ribbon-row">
+        <button class="rb" data-open="win-project" title="工程信息(需求 2.1.1)"><span class="ico">▤</span><span class="lbl">工程信息</span></button>
+        <button class="rb" data-open="win-weather" title="气象参数(需求 2.1.2)"><span class="ico">∿</span><span class="lbl">气象参数</span></button>
       </div>
-      <div class="panel-title">项目</div>
+      <div class="panel-title">项目信息</div>
     </div>
+    <!-- 2. 大系统:4 个 PushButton -->
     <div class="ribbon-panel">
-      <div class="ribbon-big-btns">
-        <button class="ribbon-btn" data-open="win-large"><span class="ico">∑</span>大系统<br>负荷计算<small>2.2.3.1</small></button>
+      <div class="ribbon-row">
+        <button class="rb" data-open="win-public" title="公共区参数(需求 2.2.3.1)"><span class="ico">▦</span><span class="lbl">公共区参数</span></button>
+        <button class="rb" data-open="win-large" title="大系统负荷计算(需求 2.2.3.1)"><span class="ico">∑</span><span class="lbl">负荷计算</span></button>
+        <button class="rb" data-todo="smoke" title="大系统排烟计算(待实现)"><span class="ico">▲</span><span class="lbl">排烟计算</span></button>
+        <button class="rb" data-act="large-result" title="大系统计算结果"><span class="ico">▣</span><span class="lbl">计算结果</span></button>
       </div>
-      <div class="panel-title">大系统负荷计算</div>
+      <div class="panel-title">大系统</div>
     </div>
+    <!-- 3. 小系统:7 个 PushButton(六类 + 计算结果),单行并排 -->
     <div class="ribbon-panel">
-      <div class="ribbon-row6">
-        <button class="ribbon-small" data-act="small-type" data-type="allair" title="全空气一次回风系统(已实现)"><span class="ico">⇄</span><span class="lbl">全空气一次回风</span></button>
-        <button class="ribbon-small" data-act="small-type" data-type="vrf" title="多联机+新风(待实现)"><span class="ico">◈</span><span class="lbl">多联机+新风</span></button>
-        <button class="ribbon-small" data-act="small-type" data-type="exhaust" title="排风系统(待实现)"><span class="ico">⇥</span><span class="lbl">排风系统</span></button>
-        <button class="ribbon-small" data-act="small-type" data-type="smoke" title="排烟系统(待实现)"><span class="ico">▲</span><span class="lbl">排烟系统</span></button>
-        <button class="ribbon-small" data-act="small-type" data-type="sesmoke" title="送风排风排烟系统(待实现)"><span class="ico">⇅</span><span class="lbl">送风排风排烟</span></button>
-        <button class="ribbon-small" data-act="small-type" data-type="press" title="加压送风系统(待实现)"><span class="ico">⊕</span><span class="lbl">加压送风</span></button>
+      <div class="ribbon-row">
+        <button class="rb" data-act="small-type" data-type="allair" title="全空气一次回风系统(已实现)"><span class="ico">⇄</span><span class="lbl">全空气一次回风系统</span></button>
+        <button class="rb" data-act="small-type" data-type="vrf" title="多联机+新风系统(待实现)"><span class="ico">◈</span><span class="lbl">多联机+新风系统</span></button>
+        <button class="rb" data-act="small-type" data-type="exhaust" title="排风系统(待实现)"><span class="ico">⇥</span><span class="lbl">排风系统</span></button>
+        <button class="rb" data-act="small-type" data-type="sesmoke" title="送风排风排烟系统(待实现)"><span class="ico">⇅</span><span class="lbl">送风排风排烟系统</span></button>
+        <button class="rb" data-act="small-type" data-type="press" title="加压送风系统(待实现)"><span class="ico">⊕</span><span class="lbl">加压送风系统</span></button>
+        <button class="rb" data-act="small-type" data-type="smoke" title="排烟系统(待实现)"><span class="ico">▲</span><span class="lbl">排烟系统</span></button>
+        <button class="rb" data-act="small-result" title="小系统计算结果"><span class="ico">▣</span><span class="lbl">计算结果</span></button>
       </div>
-      <div class="panel-title">小系统负荷计算</div>
+      <div class="panel-title">小系统</div>
     </div>
+    <!-- 4. 水力计算:3 个 PushButton -->
     <div class="ribbon-panel">
-      <div class="ribbon-big-btns">
-        <button class="ribbon-btn" data-open="win-wind"><span class="ico">≋</span>风系统<br>水力计算<small>2.3</small></button>
-        <button class="ribbon-btn" data-open="win-water"><span class="ico">≈</span>水系统<br>水力计算<small>2.4</small></button>
+      <div class="ribbon-row">
+        <button class="rb" data-open="win-wind" title="风系统水力计算(需求 2.3 · 骨架)"><span class="ico">≋</span><span class="lbl">风系统</span></button>
+        <button class="rb" data-open="win-water" title="水系统水力计算(需求 2.4 · 骨架)"><span class="ico">≈</span><span class="lbl">水系统</span></button>
+        <button class="rb" data-todo="hyd-result" title="水力计算结果(待实现)"><span class="ico">▣</span><span class="lbl">计算结果</span></button>
       </div>
       <div class="panel-title">水力计算</div>
     </div>
+    <!-- 5. 出图:2 个 PushButton -->
     <div class="ribbon-panel">
-      <div class="ribbon-big-btns">
-        <button class="ribbon-btn" data-open="win-print"><span class="ico">▦</span>出图<small>2.6</small></button>
+      <div class="ribbon-row">
+        <button class="rb" data-todo="schedule" title="明细表 / 材料统计(需求 2.5 · 待实现)"><span class="ico">▤</span><span class="lbl">明细表</span></button>
+        <button class="rb" data-open="win-print" title="图框与出图(需求 2.6 · 骨架)"><span class="ico">▥</span><span class="lbl">图框</span></button>
       </div>
       <div class="panel-title">出图</div>
     </div>
+    <!-- 6. AI问答:2 个 PushButton -->
     <div class="ribbon-panel">
-      <div class="ribbon-big-btns">
-        <button class="ribbon-btn" data-open="win-ai"><span class="ico">?</span>AI问答<small>2.7</small></button>
+      <div class="ribbon-row">
+        <button class="rb" data-open="win-guide" title="操作指南"><span class="ico">?</span><span class="lbl">操作指南</span></button>
+        <button class="rb" data-open="win-ai" title="规范知识库 / 问答(需求 2.7)"><span class="ico">§</span><span class="lbl">规范知识库</span></button>
       </div>
-      <div class="panel-title">智能助手</div>
+      <div class="panel-title">AI问答</div>
+    </div>
+    <!-- 7. 产品支持:2 个 PushButton -->
+    <div class="ribbon-panel">
+      <div class="ribbon-row">
+        <button class="rb" data-todo="feedback" title="问题反馈(待接入服务)"><span class="ico">✉</span><span class="lbl">问题反馈</span></button>
+        <button class="rb" data-open="win-help" title="帮助 / 关于"><span class="ico">⌂</span><span class="lbl">帮助</span></button>
+      </div>
+      <div class="panel-title">产品支持</div>
     </div>
   </div>
 </div>
@@ -83,15 +105,16 @@
 <div class="page" id="page-flow"></div>
 <div class="page" id="page-logic"></div>
 
-<!-- ============ 窗口 1:项目信息 ============ -->
-<div class="win" id="win-project" style="left:80px;top:20px;width:900px;">
-  <div class="titlebar">项目信息<span class="close" data-close>✕</span></div>
+<!-- ============ 窗口 1:工程信息(Ribbon:项目信息 → 工程信息) ============ -->
+<div class="win" id="win-project" style="left:80px;top:20px;width:820px;">
+  <div class="titlebar">项目信息 — 工程信息<span class="close" data-close>✕</span></div>
   <div class="body">
     <div class="hint">[!] 可手动填写,或从固定 Excel 模板导入;点击确定后项目信息以<b>全局参数</b>写入当前 .rvt 作为模型元数据(需求 2.1.3)。</div>
     <div class="group"><div class="gtitle">一、工程基本信息(2.1.1)</div><div class="grid2" id="proj-basic"></div></div>
-    <div class="group"><div class="gtitle">二、室外计算参数 — 大系统(2.1.2)</div><div class="grid2" id="proj-out-large"></div></div>
-    <div class="group"><div class="gtitle">三、室外计算参数 — 小系统(2.1.2)</div><div class="grid3" id="proj-out-small"></div></div>
-    <div class="group"><div class="gtitle">四、室内设计参数(2.1.2)</div><div class="grid2" id="proj-in"></div></div>
+    <div class="group"><div class="gtitle">存储与模板(2.1.3)</div>
+      <div class="row"><label>存储方式</label><span class="mono">当前 .rvt 全局参数(模型元数据)</span></div>
+      <div class="row"><label>模板字段</label><span class="mono">与 2.1.1 / 2.1.2 完全一致,由插件生成</span></div>
+    </div>
   </div>
   <div class="footer">
     <button data-act="proj-import">导入 Excel 模板…</button>
@@ -99,6 +122,30 @@
     <span class="status" id="proj-status"></span>
     <span class="grow"></span>
     <button class="default primary-wide" data-act="proj-ok">确定</button>
+    <button class="primary-wide" data-close>取消</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 1b:气象参数(Ribbon:项目信息 → 气象参数) ============ -->
+<div class="win" id="win-weather" style="left:130px;top:40px;width:960px;height:600px;">
+  <div class="titlebar">项目信息 — 气象参数<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 室外/室内计算参数(需求 2.1.2);相对湿度、大气压力等可由气象数据库自动获取,也可手工覆盖。</div>
+    <div class="group"><div class="gtitle">二、室外计算参数 — 大系统(2.1.2)</div><div class="grid2" id="proj-out-large"></div></div>
+    <div class="group"><div class="gtitle">三、室外计算参数 — 小系统(2.1.2)</div><div class="grid3" id="proj-out-small"></div></div>
+    <div class="group"><div class="gtitle">四、室内设计参数 — 大/小系统(2.1.2)</div><div class="grid2" id="proj-in"></div></div>
+    <div class="group"><div class="gtitle">五、其他气象参数</div>
+      <div class="row"><label>相对湿度 %</label><input type="number" data-wx="rh" value="60"></div>
+      <div class="row"><label>大气压力 kPa</label><input type="number" data-wx="atm" value="102.17"></div>
+      <div class="row"><label>数据来源</label><span class="mono" id="wx-source">手工填写(可点左下按钮从气象数据库获取)</span></div>
+    </div>
+  </div>
+  <div class="footer">
+    <button data-act="wx-fetch">从气象数据库获取…</button>
+    <button data-act="wx-reset">恢复默认</button>
+    <span class="status" id="wx-status"></span>
+    <span class="grow"></span>
+    <button class="default primary-wide" data-act="wx-ok">确定</button>
     <button class="primary-wide" data-close>取消</button>
   </div>
 </div>
@@ -127,6 +174,39 @@
     <button class="default primary-wide" data-act="large-calc">计 算</button>
     <button class="primary-wide" data-act="large-ok">确定</button>
     <button class="primary-wide" data-close>取消</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 3b:公共区参数(Ribbon:大系统 → 公共区参数) ============ -->
+<div class="win" id="win-public" style="left:200px;top:50px;width:900px;height:560px;">
+  <div class="titlebar">大系统 — 公共区参数<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 公共区几何由模型空间获取(D55 / D56 / C13 / C14);<b>高峰客流必须手工输入</b>(A27~F27,需求 2.2.3.1)。确定后回写大系统输入。</div>
+    <div id="public-inputs"></div>
+  </div>
+  <div class="footer">
+    <button data-act="large-pick">从模型拾取公共区空间…</button>
+    <button data-act="public-reset">恢复默认</button>
+    <span class="status" id="public-status"></span>
+    <span class="grow"></span>
+    <button class="default primary-wide" data-act="public-ok">确定</button>
+    <button class="primary-wide" data-close>取消</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 3c:大系统计算结果(Ribbon:大系统 → 计算结果) ============ -->
+<div class="win" id="win-large-result" style="left:260px;top:40px;width:760px;height:600px;">
+  <div class="titlebar">大系统 — 计算结果<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 结果口径与《大系统负荷计算公式.docx》一致;未计算时点左下「计 算」。</div>
+    <div class="cards" id="large-result-win"></div>
+  </div>
+  <div class="footer">
+    <button data-act="large-calc-here">计 算</button>
+    <button data-act="large-report">导出计算书</button>
+    <span class="status" id="large-result-status"></span>
+    <span class="grow"></span>
+    <button class="primary-wide" data-close>关闭</button>
   </div>
 </div>
 
@@ -202,6 +282,22 @@
   </div>
 </div>
 
+<!-- ============ 窗口 7b:小系统计算结果(Ribbon:小系统 → 计算结果) ============ -->
+<div class="win" id="win-small-result" style="left:300px;top:50px;width:720px;height:560px;">
+  <div class="titlebar">小系统 — 计算结果<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 按空间汇总各小系统计算结果;当前仅「全空气一次回风系统」完成计算链路,其余五类为骨架。</div>
+    <div class="cards" id="allair-result-win"></div>
+  </div>
+  <div class="footer">
+    <button data-act="allair-calc-here">计 算</button>
+    <button data-act="allair-report">导出计算书</button>
+    <span class="status" id="small-result-status"></span>
+    <span class="grow"></span>
+    <button class="primary-wide" data-close>关闭</button>
+  </div>
+</div>
+
 <!-- ============ 窗口 8:拾取墙体 ============ -->
 <div class="win" id="win-pickwall" style="left:460px;top:140px;width:520px;">
   <div class="titlebar">拾取墙体 — 与土壤接触外墙(可多选)<span class="close" data-close>✕</span></div>
@@ -270,7 +366,7 @@
 </div>
 
 <div class="win" id="win-print" style="left:240px;top:60px;width:940px;height:500px;">
-  <div class="titlebar">出图<span class="close" data-close>✕</span></div>
+  <div class="titlebar">出图 — 图框与图纸模板<span class="close" data-close>✕</span></div>
   <div class="body">
     <div class="hint">[!] 布局示意(需求 2.6):左=图纸模板列表,中=预览缩略图,右=标注/图例选项,底部批量出图。</div>
     <div class="two-col">
@@ -302,6 +398,73 @@
     <div style="color:#5A5A5A;font-size:11px;">当前为本地规则应答(原型);正式版接 AI 服务接口(需求 4.1)。</div>
   </div>
   <div class="footer"><span class="status err">骨架占位 — 未接 AI 服务</span><span class="grow"></span><button class="primary-wide" data-close>关闭</button></div>
+</div>
+
+<!-- ============ 窗口 11:操作指南(Ribbon:AI问答 → 操作指南) ============ -->
+<div class="win" id="win-guide" style="left:220px;top:50px;width:820px;height:580px;">
+  <div class="titlebar">操作指南<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="hint">[!] 推荐按 ①→⑥ 顺序操作;每步都可"取消",不改动模型。</div>
+    <div class="group"><div class="gtitle">① 项目信息(工程信息 + 气象参数)</div>
+      <div class="row tight"><label>做什么</label><span>填工程基本信息;气象参数可整表导入 Excel 模板,或从气象数据库获取</span></div>
+      <div class="row tight"><label>结果</label><span>确定后写入当前 .rvt 全局参数(模型元数据)</span></div>
+    </div>
+    <div class="group"><div class="gtitle">② 大系统 → 公共区参数</div>
+      <div class="row tight"><label>做什么</label><span>从模型拾取站厅/站台公共区空间(面积 D55/D56、层高 C13、长度 C14);<b>填高峰客流</b></span></div>
+      <div class="row tight"><label>注意</label><span>客流为必填,缺失时标红并阻止计算</span></div>
+    </div>
+    <div class="group"><div class="gtitle">③ 大系统 → 负荷计算 / 计算结果</div>
+      <div class="row tight"><label>做什么</label><span>核对七节参数(可用「默认参数…」恢复公式文档值)→「计 算」</span></div>
+      <div class="row tight"><label>结果</label><span>客流、分项冷负荷、风量与制冷量、设备选型;可导出计算书</span></div>
+    </div>
+    <div class="group"><div class="gtitle">④ 小系统 → 六类系统按钮</div>
+      <div class="row tight"><label>做什么</label><span>点具体系统类型直达计算窗(如全空气一次回风):选空间 → 改参数 →「计 算」</span></div>
+      <div class="row tight"><label>注意</label><span>外墙长度可「拾取…」多选累计;系统类型在窗内只读(由 Ribbon 决定)</span></div>
+    </div>
+    <div class="group"><div class="gtitle">⑤ 水力计算 / 出图(骨架)</div>
+      <div class="row tight"><label>做什么</label><span>风系统、水系统水力计算与明细表、图框出图</span></div>
+      <div class="row tight"><label>当前</label><span>仅布局骨架,算法未实现(不伪装可用)</span></div>
+    </div>
+    <div class="group"><div class="gtitle">⑥ AI问答 / 产品支持</div>
+      <div class="row tight"><label>规范知识库</label><span>问设计口径(送风温差、排烟、新风、焓湿、屏蔽门…)</span></div>
+      <div class="row tight"><label>问题反馈 / 帮助</label><span>反馈问题;查看版本、日志路径与快捷键</span></div>
+    </div>
+  </div>
+  <div class="footer">
+    <button data-act="guide-tour">从头演示一遍</button>
+    <span class="status" id="guide-status"></span>
+    <span class="grow"></span>
+    <button class="primary-wide" data-close>关闭</button>
+  </div>
+</div>
+
+<!-- ============ 窗口 12:帮助 / 关于(Ribbon:产品支持 → 帮助) ============ -->
+<div class="win" id="win-help" style="left:340px;top:80px;width:640px;">
+  <div class="titlebar">帮助 — 关于 HVACIDA<span class="close" data-close>✕</span></div>
+  <div class="body">
+    <div class="group"><div class="gtitle">版本信息</div>
+      <div class="row tight"><label>插件名称</label><span class="mono">HVACIDA — 地铁通风空调智能设计助手</span></div>
+      <div class="row tight"><label>插件版本</label><span class="mono">0.1.0(原型评审版)</span></div>
+      <div class="row tight"><label>运行环境</label><span class="mono">Revit 2020 · .NET Framework 4.8 · x64</span></div>
+      <div class="row tight"><label>AddInId</label><span class="mono">D257A0A5-CF45-416B-8B08-A1B3CB8A40AB</span></div>
+    </div>
+    <div class="group"><div class="gtitle">排错信息(反馈问题时请附上)</div>
+      <div class="row tight"><label>加载清单</label><span class="mono">C:\ProgramData\Autodesk\Revit\Addins\2020\HVACIDA.addin</span></div>
+      <div class="row tight"><label>Revit 日志</label><span class="mono">%LOCALAPPDATA%\Autodesk\Revit\Autodesk Revit 2020\Journals\</span></div>
+      <div class="row tight"><label>插件日志</label><span class="mono">%AppData%\HVACIDA\logs\(待实现)</span></div>
+    </div>
+    <div class="group"><div class="gtitle">常用操作</div>
+      <div class="row tight"><label>计算书</label><span>大系统 / 小系统窗口底栏「导出计算书」</span></div>
+      <div class="row tight"><label>恢复默认</label><span>各窗口「恢复默认」(需二次确认)</span></div>
+      <div class="row tight"><label>快捷键</label><span class="mono">Enter = 确定 / Esc = 取消 / Tab 顺序 = 视觉顺序</span></div>
+    </div>
+  </div>
+  <div class="footer">
+    <button data-act="help-log">打开日志目录(模拟)</button>
+    <span class="status" id="help-status"></span>
+    <span class="grow"></span>
+    <button class="primary-wide" data-close>关闭</button>
+  </div>
 </div>
 
 <!-- ============ 窗口 14:流程图/逻辑表 数据(编辑与导出) ============ -->
