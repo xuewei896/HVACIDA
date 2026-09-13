@@ -159,20 +159,27 @@ html, body {
 }
 .ribbon-panels { display: flex; padding: 4px 6px 2px; gap: 0; overflow-x: auto; overflow-y: hidden; }
 .ribbon-panel {
-  border-right: 1px solid var(--line-soft);
-  padding: 0 10px 14px;
+  border-right: 1px solid var(--line-soft);   /* 面板分隔竖线:贯穿面板全高(Revit 原生) */
+  padding: 0 10px 14px;                       /* 底部留出面板名称栏 */
   position: relative;
 }
 .ribbon-panel:last-child { border-right: none; }
+/* 面板名称:位于按钮下方、水平居中(Revit 2020 原生面板标题规格) */
 .ribbon-panel .panel-title {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
+  height: 14px;                               /* 固定名称栏高度,保证各面板基线一致 */
+  line-height: 14px;
   text-align: center;
-  color: var(--text-dim);
-  font-size: 11px;
-  letter-spacing: .3px;
+  color: #4F4F4F;
+  font-size: 12px;                            /* 9pt,与正文同字号、更浅的灰 */
+  letter-spacing: .2px;
+  white-space: nowrap;                        /* 名称不换行,过长省略(不影响面板内按钮排布) */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
   pointer-events: none;
 }
 /* Ribbon 按钮:图标 + 标签(垂直),所有面板共用同一规格
