@@ -14,3 +14,6 @@ deploy/HVACIDA.addin.installed
 
 # Docs / scratch
 *.tmp
+
+# Office 临时锁文件(Word/Excel 打开文档时生成,不应入库)
+~$*
