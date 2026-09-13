@@ -38,11 +38,14 @@
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Button Content="计 算" Width="90" Height="30" Margin="0,0,8,0"
                             Command="{Binding CalculateCommand}" IsDefault="True"/>
-                    <Button Content="导出计算书" Width="110" Height="30"
+                    <Button Content="保 存 参 数" Width="110" Height="30"
+                            Command="{Binding SaveCommand}"/>
+                    <Button Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0"
                             Command="{Binding ExportCommand}"/>
                     <Button Content="恢复默认参数" Width="120" Height="30" Margin="8,0,0,0"
                             Command="{Binding ResetCommand}"/>
                 </StackPanel>
+                <Button DockPanel.Dock="Right" Content="关 闭" Width="90" Height="30" IsCancel="True"/>
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
                            TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
             </DockPanel>

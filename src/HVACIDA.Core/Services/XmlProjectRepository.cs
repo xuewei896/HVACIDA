@@ -9,12 +9,11 @@ namespace HVACIDA.Core.Services
 {
     /// <summary>
     /// XML 文件仓库实现(骨架期落盘方案)。
+    /// 文件:project.xml(工程信息)/ large-system.xml(大系统输入)/ small-system.xml(小系统输入)。
     /// TODO(存储):后续切换 SQLite(System.Data.SQLite 或 Microsoft.Data.Sqlite),保留本实现用于迁移/测试。
     /// </summary>
     public class XmlProjectRepository : IDataRepository
     {
-        private static readonly XmlSerializer Serializer = new XmlSerializer(typeof(ProjectInfoModel));
-
         public XmlProjectRepository()
             : this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HVACIDA"))
         {
@@ -29,32 +28,62 @@ namespace HVACIDA.Core.Services
 
         private string ProjectFilePath => Path.Combine(StorageDirectory, "project.xml");
 
-        public ProjectInfoModel LoadProject()
-        {
-            try
-            {
-                if (!File.Exists(ProjectFilePath)) return new ProjectInfoModel();
-                using (var stream = File.OpenRead(ProjectFilePath))
-                {
-                    var loaded = Serializer.Deserialize(stream) as ProjectInfoModel;
-                    return loaded ?? new ProjectInfoModel();
-                }
-            }
-            catch
-            {
-                // 损坏文件不阻断启动,回退默认并交由上层提示。
-                return new ProjectInfoModel();
-            }
-        }
+        private string LargeSystemFilePath => Path.Combine(StorageDirectory, "large-system.xml");
+
+        private string SmallSystemFilePath => Path.Combine(StorageDirectory, "small-system.xml");
+
+        public ProjectInfoModel LoadProject() => Load(ProjectFilePath, () => new ProjectInfoModel());
 
         public void SaveProject(ProjectInfoModel project)
         {
             if (project == null) throw new ArgumentNullException(nameof(project));
-            Directory.CreateDirectory(StorageDirectory);
-            var settings = new XmlWriterSettings { Indent = true, Encoding = new UTF8Encoding(false) };
-            using (var writer = XmlWriter.Create(ProjectFilePath, settings))
+            Save(ProjectFilePath, project);
+        }
+
+        public LargeSystemInput LoadLargeSystem() => Load(LargeSystemFilePath, () => new LargeSystemInput());
+
+        public void SaveLargeSystem(LargeSystemInput input)
+        {
+            if (input == null) throw new ArgumentNullException(nameof(input));
+            Save(LargeSystemFilePath, input);
+        }
+
+        public SmallSystemInput LoadSmallSystem() => Load(SmallSystemFilePath, () => new SmallSystemInput());
+
+        public void SaveSmallSystem(SmallSystemInput input)
+        {
+            if (input == null) throw new ArgumentNullException(nameof(input));
+            Save(SmallSystemFilePath, input);
+        }
+
+        /// <summary>反序列化;文件缺失或损坏时回退默认(不阻断启动,由上层提示)。</summary>
+        private static T Load<T>(string path, Func<T> fallback)
+        {
+            try
             {
-                Serializer.Serialize(writer, project);
+                if (!File.Exists(path)) return fallback();
+                var serializer = new XmlSerializer(typeof(T));
+                using (var stream = File.OpenRead(path))
+                {
+                    var loaded = serializer.Deserialize(stream);
+                    return loaded == null ? fallback() : (T)loaded;
+                }
+            }
+            catch
+            {
+                return fallback();
+            }
+        }
+
+        /// <summary>序列化落盘(UTF-8 无 BOM,缩进可读)。</summary>
+        private void Save<T>(string path, T value)
+        {
+            Directory.CreateDirectory(StorageDirectory);
+            var serializer = new XmlSerializer(typeof(T));
+            var settings = new XmlWriterSettings { Indent = true, Encoding = new UTF8Encoding(false) };
+            using (var writer = XmlWriter.Create(path, settings))
+            {
+                serializer.Serialize(writer, value);
             }
         }
     }

@@ -1,0 +1,33 @@
+<Window x:Class="HVACIDA.UI.Views.LargeSystemResultWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="大系统 — 计算结果 - HVACIDA"
+        Width="900" Height="640" MinWidth="700" MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Microsoft YaHei UI" FontSize="12"
+        UseLayoutRounding="True">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
+            <TextBlock TextWrapping="Wrap"
+                       Text="读取「公共区参数 / 负荷计算」保存的参数后计算结果(需求 2.2.3.1)。未保存过输入时按公式文档默认参数计算;结果口径与《大系统负荷计算公式.docx》一致。"/>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
+            <DockPanel>
+                <Button DockPanel.Dock="Left" Content="计 算" Width="100" Height="30"
+                        Command="{Binding CalculateCommand}" IsDefault="True"/>
+                <Button DockPanel.Dock="Left" Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0"
+                        Command="{Binding ExportCommand}"/>
+                <Button DockPanel.Dock="Right" Content="关 闭" Width="96" Height="30" IsCancel="True"/>
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
+                           TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
+            </DockPanel>
+        </Border>
+
+        <TextBox Text="{Binding ResultText, Mode=OneWay}" IsReadOnly="True"
+                 FontFamily="Consolas" FontSize="12"
+                 Background="White" BorderThickness="0"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                 TextWrapping="NoWrap" Padding="10"/>
+    </DockPanel>
+</Window>

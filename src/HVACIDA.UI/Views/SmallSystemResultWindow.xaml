@@ -1,0 +1,33 @@
+<Window x:Class="HVACIDA.UI.Views.SmallSystemResultWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="小系统 — 计算结果 - HVACIDA"
+        Width="860" Height="580" MinWidth="680" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Microsoft YaHei UI" FontSize="12"
+        UseLayoutRounding="True">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
+            <TextBlock TextWrapping="Wrap"
+                       Text="小系统计算结果汇总(需求 2.2.3.2)。当前仅「全空气一次回风系统」完成计算链路,其余五类实现后自动纳入;骨架算法结论请以公式核对后为准。"/>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
+            <DockPanel>
+                <Button DockPanel.Dock="Left" Content="计 算" Width="100" Height="30"
+                        Command="{Binding CalculateCommand}" IsDefault="True"/>
+                <Button DockPanel.Dock="Left" Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0"
+                        Command="{Binding ExportCommand}"/>
+                <Button DockPanel.Dock="Right" Content="关 闭" Width="96" Height="30" IsCancel="True"/>
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
+                           TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
+            </DockPanel>
+        </Border>
+
+        <TextBox Text="{Binding ResultText, Mode=OneWay}" IsReadOnly="True"
+                 FontFamily="Consolas" FontSize="12"
+                 Background="White" BorderThickness="0"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                 TextWrapping="NoWrap" Padding="10"/>
+    </DockPanel>
+</Window>

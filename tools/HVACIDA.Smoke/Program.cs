@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using HVACIDA.Core.Models;
 using HVACIDA.Core.Services;
@@ -6,10 +8,14 @@ using HVACIDA.Core.Services;
 namespace HVACIDA.Smoke
 {
     /// <summary>
-    /// 大系统负荷计算数值自测:
+    /// 数值自测 + 结构自测:
     /// 场景1:默认参数(客流=0)不崩溃、无负数(含焓差退化保护);
     /// 场景2:典型高峰客流自检;
-    /// 场景3:北京站算例回归 —— 输入取自《大系统负荷计算公式-示例.xls》,逐格断言比对(源:工作簿首表)。
+    /// 场景3:北京站算例回归 —— 输入取自《大系统负荷计算公式-示例.xls》,逐格断言比对(源:工作簿首表);
+    /// 场景4:Ribbon 模块目录自检(7 面板 / 22 按钮,与 App.cs 的 CommandMap 键一一对应);
+    /// 场景5:数据仓库(XML)往返 + 损坏文件回退;
+    /// 场景6:规范知识库规则应答;
+    /// 场景7:小系统计算(骨架)自检。
     /// 退出码 0 = 全部通过;1 = 存在偏差。
     /// </summary>
     internal static class Program
@@ -24,13 +30,162 @@ namespace HVACIDA.Smoke
             RunScenario(calculator, "场景1:默认参数(客流=0)", new LargeSystemInput());
             RunScenario(calculator, "场景2:典型高峰客流", BuildBusyScenario());
             RunScenario(calculator, "场景3:北京站算例回归(源:大系统负荷计算公式-示例.xls)", BuildBeijingSample());
+            RunCatalogChecks();
+            RunRepositoryChecks();
+            RunQaChecks();
+            RunSmallSystemChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:实现与《大系统负荷计算公式-示例.xls》逐格一致。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
+        }
+
+        // =====================================================================
+        // 场景4:Ribbon 模块目录自检
+        // =====================================================================
+        private static void RunCatalogChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景4:Ribbon 模块目录自检(7 面板 / 22 按钮)");
+            Console.WriteLine("==================================================");
+
+            string[] expectedPanels = { "项目信息", "大系统", "小系统", "水力计算", "出图", "AI问答", "产品支持" };
+            int[] expectedCounts = { 2, 4, 7, 3, 2, 2, 2 };
+
+            CheckInt("面板数 = 7", ModuleCatalog.PanelOrder.Count, 7);
+            CheckInt("按钮数 = 22", ModuleCatalog.All.Count, 22);
+            CheckInt("面板顺序一致", string.Join(",", ModuleCatalog.PanelOrder) == string.Join(",", expectedPanels) ? 1 : 0, 1);
+
+            for (int i = 0; i < expectedPanels.Length; i++)
+            {
+                CheckInt("面板「" + expectedPanels[i] + "」按钮数", ModuleCatalog.ByPanel(expectedPanels[i]).Count, expectedCounts[i]);
+            }
+
+            var keys = new HashSet<string>();
+            int bad = 0;
+            foreach (var module in ModuleCatalog.All)
+            {
+                if (string.IsNullOrWhiteSpace(module.Key) ||
+                    string.IsNullOrWhiteSpace(module.Title) ||
+                    string.IsNullOrWhiteSpace(module.Summary)) bad++;
+                if (!keys.Add(module.Key)) bad++;
+            }
+            CheckInt("键唯一且字段完整(0 = 正常)", bad, 0);
+
+            const string expectedKeys =
+                "eng-info,weather,public-area,large-load,large-smoke,large-result," +
+                "small-allair,small-vrf,small-exhaust,small-sesmoke,small-press,small-smoke,small-result," +
+                "hyd-air,hyd-water,hyd-result,schedule,titleblock,guide,knowledge,feedback,help";
+            CheckInt("键清单与 App.cs 命令注册一致", string.Join(",", ModuleCatalog.Keys) == expectedKeys ? 1 : 0, 1);
+
+            // 待实现类模块必须写出"待补/待实现"口径,不能只是空壳说明
+            int thin = 0;
+            foreach (var module in ModuleCatalog.All)
+            {
+                if (module.Status != ModuleStatus.Implemented && module.Notes.Count == 0) thin++;
+            }
+            CheckInt("未实现模块均带口径说明(0 = 正常)", thin, 0);
+            Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景5:数据仓库往返
+        // =====================================================================
+        private static void RunRepositoryChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景5:数据仓库(XML)往返与容错");
+            Console.WriteLine("==================================================");
+
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Smoke-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var repo = new XmlProjectRepository(dir);
+
+                var project = repo.LoadProject();
+                project.Basic.ProjectName = "烟测工程";
+                project.Basic.StationName = "XX 站";
+                project.Design.LargeSystemOutdoor.SummerACWetBulbC = 25.5;
+                project.Design.SmallSystemOutdoor.SummerVentDryBulbC = 26.4;
+                repo.SaveProject(project);
+                var project2 = repo.LoadProject();
+                CheckText("工程信息往返 名称", project2.Basic.ProjectName, "烟测工程");
+                Check("工程信息往返 大系统室外湿球", project2.Design.LargeSystemOutdoor.SummerACWetBulbC, 25.5);
+                Check("工程信息往返 小系统室外通风", project2.Design.SmallSystemOutdoor.SummerVentDryBulbC, 26.4);
+
+                var large = repo.LoadLargeSystem();
+                large.HallAreaM2 = 2345.5;
+                large.UpLineBoardCount = 777;
+                repo.SaveLargeSystem(large);
+                var large2 = repo.LoadLargeSystem();
+                Check("大系统输入往返 站厅面积", large2.HallAreaM2, 2345.5);
+                Check("大系统输入往返 上行上客量", large2.UpLineBoardCount, 777);
+
+                var small = repo.LoadSmallSystem();
+                small.AreaM2 = 88.5;
+                small.SystemType = SmallSystemType.AllAirOnceReturn;
+                repo.SaveSmallSystem(small);
+                var small2 = repo.LoadSmallSystem();
+                Check("小系统输入往返 面积", small2.AreaM2, 88.5);
+                CheckText("小系统输入往返 类型", small2.SystemType.ToString(), SmallSystemType.AllAirOnceReturn.ToString());
+
+                // 损坏文件必须回退默认而不是抛异常(插件不能因数据文件坏掉而打不开窗口)
+                File.WriteAllText(Path.Combine(dir, "large-system.xml"), "<broken");
+                CheckInt("损坏文件回退默认", repo.LoadLargeSystem().HallAreaM2 > 0 ? 1 : 0, 1);
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { /* 忽略清理失败 */ }
+            }
+            Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景6:规范知识库
+        // =====================================================================
+        private static void RunQaChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景6:规范知识库规则应答");
+            Console.WriteLine("==================================================");
+
+            var qa = new DesignQaService();
+            string a1 = qa.Answer("站厅夏季送风温差取多少?");
+            CheckInt("送风温差命中(含「10 ℃」)", a1.Contains("10 ℃") ? 1 : 0, 1);
+
+            string a2 = qa.Answer("排烟风机怎么选?");
+            CheckInt("排烟命中(含 60 m³/(h·m²))", a2.Contains("60") ? 1 : 0, 1);
+            CheckInt("排烟命中(含选型系数 1.2)", a2.Contains("1.2") ? 1 : 0, 1);
+
+            string a3 = qa.Answer("新风量怎么确定?");
+            CheckInt("新风命中(含 20 m³/(h·人))", a3.Contains("20") ? 1 : 0, 1);
+
+            string a4 = qa.Answer("今天天气怎么样");
+            CheckInt("未覆盖问题给出知识范围", a4.Contains("知识库") ? 1 : 0, 1);
+            CheckInt("常用问题数量 >= 5", qa.SampleQuestions.Count >= 5 ? 1 : 0, 1);
+            Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景7:小系统计算(骨架)
+        // =====================================================================
+        private static void RunSmallSystemChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景7:小系统计算(骨架)自检");
+            Console.WriteLine("==================================================");
+
+            var input = new SmallSystemInput();
+            var result = new SmallSystemLoadCalculator().Calculate(input);
+            Console.WriteLine(ResultFormatter.FormatSmall(input, result));
+            Console.WriteLine("-- 自检 --");
+            CheckInt("总冷负荷 > 0", result.TotalCoolingW > 0 ? 1 : 0, 1);
+            CheckInt("实际通风量 >= 换气次数通风量", result.ActualVentilationM3H >= result.VentilationByACHM3H ? 1 : 0, 1);
+            CheckInt("新风量 <= 实际通风量", result.FreshAirM3H <= result.ActualVentilationM3H + 1e-9 ? 1 : 0, 1);
+            Console.WriteLine();
         }
 
         private static LargeSystemInput BuildBusyScenario()
@@ -169,6 +324,24 @@ namespace HVACIDA.Smoke
             bool pass = Math.Abs(actual - expected) <= tolerance;
             Console.WriteLine((pass ? "PASS  " : "FAIL  ") + name +
                               "  actual=" + actual.ToString("R") + "  expected=" + expected.ToString("R"));
+            if (!pass) _failures++;
+        }
+
+        /// <summary>整数/布尔型断言(结构自检用)。</summary>
+        private static void CheckInt(string name, int actual, int expected)
+        {
+            bool pass = actual == expected;
+            Console.WriteLine((pass ? "PASS  " : "FAIL  ") + name +
+                              "  actual=" + actual + "  expected=" + expected);
+            if (!pass) _failures++;
+        }
+
+        /// <summary>字符串断言(结构自检用)。</summary>
+        private static void CheckText(string name, string actual, string expected)
+        {
+            bool pass = string.Equals(actual, expected, StringComparison.Ordinal);
+            Console.WriteLine((pass ? "PASS  " : "FAIL  ") + name +
+                              "  actual=\"" + actual + "\"  expected=\"" + expected + "\"");
             if (!pass) _failures++;
         }
     }

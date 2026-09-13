@@ -1,19 +1,70 @@
 using System;
-using System.Linq;
-using System.Windows.Media.Imaging;
+using System.Collections.Generic;
 using Autodesk.Revit.UI;
+using HVACIDA.Core.Services;
 
 namespace HVACIDA.Revit
 {
     /// <summary>
-    /// HVACIDA 插件入口(ExternalApplication):启动时在 Revit 增加“HVACIDA”功能页与按钮。
+    /// HVACIDA 插件入口(ExternalApplication):启动时在 Revit 增加“HVACIDA”功能页。
     /// .addin 中 FullClassName 必须为 HVACIDA.Revit.App。
+    ///
+    /// Ribbon 结构(2026-09-11 评审定稿,7 面板 / 22 PushButton):
+    ///   项目信息:工程信息 / 气象参数
+    ///   大系统  :公共区参数 / 负荷计算 / 排烟计算 / 计算结果
+    ///   小系统  :全空气一次回风系统 / 多联机+新风系统 / 排风系统 /
+    ///            送风排风排烟系统 / 加压送风系统 / 排烟系统 / 计算结果
+    ///   水力计算:风系统 / 水系统 / 计算结果
+    ///   出图    :明细表 / 图框
+    ///   AI问答  :操作指南 / 规范知识库
+    ///   产品支持:问题反馈 / 帮助
+    /// 面板名与按钮文字取自 <see cref="ModuleCatalog"/>(单一数据源,避免两头维护)。
     /// </summary>
     public class App : IExternalApplication
     {
         public const string TabName = "HVACIDA";
         public const string VendorId = "HVACIDA";
         public const string VendorDescription = "暖通空调智能设计助手(骨架版)";
+
+        /// <summary>模块键 → 命令类型(键与 ModuleCatalog 中的 Key 一致)。</summary>
+        private static readonly Dictionary<string, Type> CommandMap = new Dictionary<string, Type>
+        {
+            // 1. 项目信息
+            { "eng-info", typeof(Commands.ShowEngineeringInfoCommand) },
+            { "weather", typeof(Commands.ShowWeatherCommand) },
+
+            // 2. 大系统
+            { "public-area", typeof(Commands.ShowPublicAreaCommand) },
+            { "large-load", typeof(Commands.ShowLargeSystemCommand) },
+            { "large-smoke", typeof(Commands.ShowLargeSmokeCommand) },
+            { "large-result", typeof(Commands.ShowLargeResultCommand) },
+
+            // 3. 小系统(7 键)
+            { "small-allair", typeof(Commands.ShowSmallAllAirCommand) },
+            { "small-vrf", typeof(Commands.ShowSmallVrfCommand) },
+            { "small-exhaust", typeof(Commands.ShowSmallExhaustCommand) },
+            { "small-sesmoke", typeof(Commands.ShowSmallSupplyExhaustSmokeCommand) },
+            { "small-press", typeof(Commands.ShowSmallPressurizationCommand) },
+            { "small-smoke", typeof(Commands.ShowSmallSmokeCommand) },
+            { "small-result", typeof(Commands.ShowSmallResultCommand) },
+
+            // 4. 水力计算
+            { "hyd-air", typeof(Commands.ShowAirHydraulicCommand) },
+            { "hyd-water", typeof(Commands.ShowWaterHydraulicCommand) },
+            { "hyd-result", typeof(Commands.ShowHydraulicResultCommand) },
+
+            // 5. 出图
+            { "schedule", typeof(Commands.ShowScheduleCommand) },
+            { "titleblock", typeof(Commands.ShowTitleBlockCommand) },
+
+            // 6. AI问答
+            { "guide", typeof(Commands.ShowGuideCommand) },
+            { "knowledge", typeof(Commands.ShowKnowledgeCommand) },
+
+            // 7. 产品支持
+            { "feedback", typeof(Commands.ShowFeedbackCommand) },
+            { "help", typeof(Commands.ShowHelpCommand) }
+        };
 
         public Result OnStartup(UIControlledApplication application)
         {
@@ -34,9 +85,9 @@ namespace HVACIDA.Revit
             return Result.Succeeded;
         }
 
+        /// <summary>按 ModuleCatalog 建 7 个面板与 22 个按钮(幂等:页已存在则跳过)。</summary>
         private static void CreateRibbon(UIControlledApplication application)
         {
-            // 幂等:页已存在则跳过(避免 AddInManager 热加载时重复建页)。
             try
             {
                 if (application.GetRibbonPanels(TabName).Count > 0) return;
@@ -48,66 +99,41 @@ namespace HVACIDA.Revit
 
             application.CreateRibbonTab(TabName);
 
-            RibbonPanel projectPanel = application.CreateRibbonPanel(TabName, "项目");
-            AddButton(projectPanel, "HVACIDA.ProjectInfo", "项目信息", "维护工程基本\n信息与气象参数",
-                typeof(Commands.ShowProjectInfoCommand));
-
-            // 大系统:一级大按钮(2026-09-11 评审决定)
-            RibbonPanel largePanel = application.CreateRibbonPanel(TabName, "大系统负荷计算");
-            AddButton(largePanel, "HVACIDA.LargeSystem", "大系统\n负荷计算", "地铁站厅/站台空调\n负荷、风量与选型",
-                typeof(Commands.ShowLargeSystemCommand));
-
-            // 小系统:六类系统各一个按钮,3 行 × 2 列堆叠(2026-09-11 评审决定:由选择对话框提升到 Ribbon)
-            RibbonPanel smallPanel = application.CreateRibbonPanel(TabName, "小系统负荷计算");
-            smallPanel.AddStackedItems(
-                NewSmallButton("HVACIDA.Small.AllAir", "全空气一次回风", "照明/人员/设备负荷、除热通风量、换气次数、新风量 → 柜式机组与回排风机选型",
-                    typeof(Commands.ShowSmallAllAirCommand)),
-                NewSmallButton("HVACIDA.Small.Vrf", "多联机+新风", "多联机 + 新风系统计算(待实现)",
-                    typeof(Commands.ShowSmallVrfCommand)),
-                NewSmallButton("HVACIDA.Small.Exhaust", "排风系统", "环控机房通风 / 卫生间排风(待实现)",
-                    typeof(Commands.ShowSmallExhaustCommand)));
-            smallPanel.AddStackedItems(
-                NewSmallButton("HVACIDA.Small.Smoke", "排烟系统", "防烟分区排烟量与风机选型(待实现)",
-                    typeof(Commands.ShowSmallSmokeCommand)),
-                NewSmallButton("HVACIDA.Small.SupplyExhaustSmoke", "送风排风排烟", "送/排/排烟共用系统(待实现)",
-                    typeof(Commands.ShowSmallSupplyExhaustSmokeCommand)),
-                NewSmallButton("HVACIDA.Small.Pressurization", "加压送风", "楼梯间/前室加压送风(待实现)",
-                    typeof(Commands.ShowSmallPressurizationCommand)));
-        }
-
-        /// <summary>构造小型堆叠按钮数据。</summary>
-        private static PushButtonData NewSmallButton(string name, string text, string description, Type commandType)
-        {
-            return new PushButtonData(name, text, commandType.Assembly.Location, commandType.FullName)
+            foreach (string panelName in ModuleCatalog.PanelOrder)
             {
-                ToolTip = description,
-                LongDescription = description
-            };
+                RibbonPanel panel = application.CreateRibbonPanel(TabName, panelName);
+
+                foreach (ModuleInfo module in ModuleCatalog.ByPanel(panelName))
+                {
+                    Type commandType;
+                    if (!CommandMap.TryGetValue(module.Key, out commandType))
+                    {
+                        // 目录里有、命令没实现 —— 不静默丢按钮,直接暴露出来
+                        throw new InvalidOperationException("模块「" + module.Key + "」缺少对应命令类型注册。");
+                    }
+
+                    AddButton(panel, module, commandType);
+                }
+            }
         }
 
-        private static void AddButton(
-            RibbonPanel panel,
-            string name,
-            string text,
-            string description,
-            Type commandType)
+        private static void AddButton(RibbonPanel panel, ModuleInfo module, Type commandType)
         {
             var data = new PushButtonData(
-                name,
-                text,
+                "HVACIDA." + module.Key,
+                module.Title,
                 commandType.Assembly.Location,
                 commandType.FullName)
             {
-                LongDescription = description,
-                ToolTip = description
+                ToolTip = module.Summary,
+                LongDescription = module.Summary + Environment.NewLine + "【状态】" + module.StatusText
             };
 
             PushButton button = panel.AddItem(data) as PushButton;
-            if (button != null)
-            {
-                button.ToolTip = description;
-                button.LongDescription = description;
-            }
+            if (button == null) return;
+
+            button.ToolTip = data.ToolTip;
+            button.LongDescription = data.LongDescription;
         }
     }
 }

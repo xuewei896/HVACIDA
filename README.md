@@ -48,9 +48,14 @@ dotnet build .\HVACIDA.sln
 ## 4. 部署到 Revit 2020
 
 1. 运行 `deploy\install.ps1`(需要管理员权限写 ProgramData)。
-2. 重启 Revit 2020 → Ribbon 出现 **HVACIDA** 页。**当前代码**为 3 个面板(项目信息 / 大系统负荷计算 / 小系统负荷计算 六键);
-   **评审定稿的目标结构是 7 面板 / 22 PushButton**(项目信息·大系统·小系统·水力计算·出图·AI问答·产品支持),详见 `docs/UI设计规范.md` §4.0 —— WPF 侧待按该表重建。
+2. 重启 Revit 2020 → Ribbon 出现 **HVACIDA** 页:**7 个面板 / 22 个 PushButton**(已按评审定稿实现)——
+   项目信息(工程信息·气象参数)/ 大系统(公共区参数·负荷计算·排烟计算·计算结果)/ 小系统(**7 键**:六类系统 + 计算结果)/
+   水力计算(风系统·水系统·计算结果)/ 出图(明细表·图框)/ AI问答(操作指南·规范知识库)/ 产品支持(问题反馈·帮助)。
+   面板名与按钮文字来自 `HVACIDA.Core.Services.ModuleCatalog`(单一数据源),详见 `docs/UI设计规范.md` §4.0。
 3. 卸载:删除 `C:\ProgramData\Autodesk\Revit\Addins\2020\HVACIDA.addin`。
+
+> ⚠️ 未实现的模块(排烟计算、水力计算 3 键、明细表、图框、问题反馈、小系统 5 类)点击后打开**待实现说明窗**,
+> 写清"已定口径 + 待补项",**不给假数据、不伪装可用**。
 
 > 若本机 2020 之外还要支持 2017/2018:改 `deploy\install.ps1 -RevitYear 2018`,并把各 csproj 的
 > RevitAPI HintPath 指向对应年份目录(API 差异需另行适配,本项目按需求仅锁 2020)。
@@ -59,13 +64,15 @@ dotnet build .\HVACIDA.sln
 
 | 需求章节 | 模块 | 现状 |
 |---|---|---|
-| 2.1 项目信息 | ProjectInfoModel/DesignConditionParams + 项目信息窗(保存 XML) | ✅ 骨架可用 |
-| 2.2.3.1 大系统负荷 | LargeSystemLoadCalculator(客流/照明/设备/送风/新风/排烟/选型) | ✅ 已按公式文档移植;北京站算例 30 项逐格一致 |
-| 2.2.3.2 小系统负荷 | SmallSystemLoadCalculator(全空气一次回风已实现,其余 6 类返回提示) | 🟡 仅一类实现 |
+| 2.1 项目信息 | 工程信息窗 + 气象参数窗(ProjectInfoModel/DesignConditionParams → project.xml) | ✅ 可用(Excel 模板导入、.rvt 全局参数待实现) |
+| 2.2.3.1 大系统负荷 | 公共区参数窗 + 负荷计算窗 + 计算结果窗(LargeSystemLoadCalculator) | ✅ 已按公式文档移植;北京站算例 30 项逐格一致 |
+| 2.2.3.2 小系统负荷 | 全空气一次回风窗 + 计算结果窗(SmallSystemLoadCalculator) | 🟡 仅一类实现,其余 5 类给待实现说明 |
+| 排烟计算(2.2.3.1) | — | ⬜ 待实现(需防烟分区几何) |
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | TextReportGenerator(文本计算书,`%AppData%\HVACIDA\Reports`) | 🟡 文本版 |
-| 存储 | IDataRepository → XmlProjectRepository(project.xml) | 🟡 待换 SQLite |
-| 2.3/2.4 水力、2.5 材料表、2.6 出图、2.7 AI 问答 | — | ⬜ 未开始 |
+| 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / small-system.xml) | 🟡 待换 SQLite |
+| 2.7 规范知识库 | DesignQaService(本地规则应答)+ 知识库窗口 | 🟡 规则版,待接 AI |
+| 2.3/2.4 水力、2.5 材料表、2.6 出图 | — | ⬜ 未开始(入口已就位,点击给口径说明) |
 
 ## 6. 关键 TODO(按技能规范)
 
@@ -75,7 +82,23 @@ dotnet build .\HVACIDA.sln
 4. Revit 读取:空间(Space)面积/体积/高度、墙长;参数回写;批量空间分区。
 5. 计算书升级 Excel(EPPlus/OpenXML)与 PDF;出图/标注/图例。
 6. 按钮图标(PushButtonData.Image/ImageLarge)、中英文界面、操作日志与撤销。
-7. 数值回归:Smoke 工程已含北京算例 30 项断言(tools/HVACIDA.Smoke);建议补 xUnit 工程并持续追加用例。
+7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、小系统)——
+   `tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe`。
+
+## 6b. 三项自检(不需要打开 Revit)
+
+```powershell
+# 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统)
+& ".\tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe"
+
+# 2) 窗口装载自检:11 个 WPF 窗口真构造 + Show + Close(抓 XAML/绑定致命错误)
+powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\window-smoke.ps1 `
+  -UiDir .\src\HVACIDA.UI\bin\Release\net48
+
+# 3) Ribbon 结构自检:反射检查 22 个命令注册 + [Transaction] 标注
+powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\ribbon-smoke.ps1 `
+  -BinDir .\src\HVACIDA.Revit\bin\Release\net48
+```
 
 ## 7. 与 AI 协作(DSH 技能)
 

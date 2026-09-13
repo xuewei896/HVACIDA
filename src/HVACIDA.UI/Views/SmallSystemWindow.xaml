@@ -31,9 +31,12 @@
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Button Content="计 算" Width="90" Height="30" Margin="0,0,8,0"
                             Command="{Binding CalculateCommand}" IsDefault="True"/>
-                    <Button Content="导出计算书" Width="110" Height="30"
+                    <Button Content="保 存 参 数" Width="110" Height="30"
+                            Command="{Binding SaveCommand}"/>
+                    <Button Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0"
                             Command="{Binding ExportCommand}"/>
                 </StackPanel>
+                <Button DockPanel.Dock="Right" Content="关 闭" Width="90" Height="30" IsCancel="True"/>
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
                            TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
             </DockPanel>
@@ -53,8 +56,8 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="系统类型"/>
                                 <TextBox Width="220" VerticalAlignment="Center" Margin="2,3,10,3" IsReadOnly="True"
-                                         Background="#F5F5F5" Text="{Binding SystemTypeName}"
-                                         ToolTip="系统类型由 Ribbon「小系统负荷计算」面板的六类按钮决定"/>
+                                         Background="#F5F5F5" Text="{Binding SystemTypeName, Mode=OneWay}"
+                                         ToolTip="系统类型由 Ribbon「小系统」面板的系统类型按钮决定(只读)"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="房间/区域名称"/>

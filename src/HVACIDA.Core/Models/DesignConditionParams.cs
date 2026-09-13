@@ -12,6 +12,7 @@ namespace HVACIDA.Core.Models
         public DesignConditionParams()
         {
             LargeSystemOutdoor = new OutdoorAirParams();
+            SmallSystemOutdoor = new SmallSystemOutdoorParams();
             Common = new CommonAirParams();
             LargeSystemIndoor = new LargeSystemIndoorParams();
             SmallSystemIndoor = new SmallSystemIndoorParams();
@@ -19,6 +20,9 @@ namespace HVACIDA.Core.Models
 
         /// <summary>大系统室外计算参数。</summary>
         public OutdoorAirParams LargeSystemOutdoor { get; set; }
+
+        /// <summary>小系统室外计算参数(需求 2.1.2:小系统室外仅夏季空调干球/湿球与夏季通风)。</summary>
+        public SmallSystemOutdoorParams SmallSystemOutdoor { get; set; }
 
         /// <summary>公共气象参数(大气压力/相对湿度)。</summary>
         public CommonAirParams Common { get; set; }
@@ -48,6 +52,20 @@ namespace HVACIDA.Core.Models
 
         /// <summary>冬季空调室外计算温度 ℃</summary>
         public double WinterACDryBulbC { get; set; }
+    }
+
+    /// <summary>小系统室外计算参数(需求 2.1.2;单位 ℃)。</summary>
+    [Serializable]
+    public class SmallSystemOutdoorParams
+    {
+        /// <summary>夏季空调室外计算干球温度 ℃</summary>
+        public double SummerACDryBulbC { get; set; }
+
+        /// <summary>夏季空调室外计算湿球温度 ℃</summary>
+        public double SummerACWetBulbC { get; set; }
+
+        /// <summary>夏季通风室外计算温度 ℃</summary>
+        public double SummerVentDryBulbC { get; set; }
     }
 
     /// <summary>公共气象参数。</summary>

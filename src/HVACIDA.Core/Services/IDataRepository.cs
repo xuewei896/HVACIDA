@@ -16,5 +16,20 @@ namespace HVACIDA.Core.Services
 
         /// <summary>保存工程信息。</summary>
         void SaveProject(ProjectInfoModel project);
+
+        /// <summary>
+        /// 读取大系统输入(Ribbon「大系统 → 公共区参数 / 负荷计算」共用同一份数据)。
+        /// 不存在时返回默认实例。
+        /// </summary>
+        LargeSystemInput LoadLargeSystem();
+
+        /// <summary>保存大系统输入(公共区参数窗与负荷计算窗都写这里)。</summary>
+        void SaveLargeSystem(LargeSystemInput input);
+
+        /// <summary>读取小系统输入(不存在时返回默认实例)。</summary>
+        SmallSystemInput LoadSmallSystem();
+
+        /// <summary>保存小系统输入。</summary>
+        void SaveSmallSystem(SmallSystemInput input);
     }
 }

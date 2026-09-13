@@ -1,0 +1,88 @@
+<Window x:Class="HVACIDA.UI.Views.PublicAreaWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="大系统 — 公共区参数 - HVACIDA"
+        Width="900" Height="600" MinWidth="760" MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Microsoft YaHei UI" FontSize="12"
+        UseLayoutRounding="True">
+    <Window.Resources>
+        <Style x:Key="FieldLabel" TargetType="{x:Type TextBlock}">
+            <Setter Property="Width" Value="205"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="6,3,2,3"/>
+        </Style>
+        <Style x:Key="FieldInput" TargetType="{x:Type TextBox}">
+            <Setter Property="Width" Value="150"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="2,3,10,3"/>
+            <Setter Property="HorizontalContentAlignment" Value="Right"/>
+        </Style>
+        <Style x:Key="GroupHeader" TargetType="{x:Type GroupBox}">
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
+            <TextBlock TextWrapping="Wrap"
+                       Text="需求 2.2.3.1 用户输入项:公共区几何(面积 D55/D56、层高 C13、长度 C14)+ 高峰客流(A27~F27)。保存后「大系统 → 负荷计算」读取同一份数据;客流必须手工输入,插件不从模型推断。"/>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
+            <DockPanel>
+                <Button DockPanel.Dock="Left" Content="恢复默认" Width="96" Height="30"
+                        Command="{Binding ResetCommand}"/>
+                <Button DockPanel.Dock="Right" Content="取 消" Width="96" Height="30" IsCancel="True"/>
+                <Button DockPanel.Dock="Right" Content="确 定" Width="100" Height="30" Margin="0,0,8,0"
+                        Command="{Binding SaveCommand}" IsDefault="True"/>
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
+                           TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
+            </DockPanel>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="10">
+                <GroupBox Header="二、公共区几何(由模型空间获取)" Style="{StaticResource GroupHeader}">
+                    <StackPanel>
+                        <UniformGrid Columns="2">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅公共区面积 m² (D55)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallAreaM2, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台公共区面积 m² (D56)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.PlatformAreaM2, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅公共区层高 m (C13)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallHeightM, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅公共区长度 m (C14)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallLengthM, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        </UniformGrid>
+                        <TextBlock Margin="6,6,0,0" Foreground="#5A5A5A" TextWrapping="Wrap"
+                                   Text="注:正式版由 Revit 空间(站厅层 / 站台层)自动读取面积与层高,此处可手工覆盖。"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="三、高峰客流资料(必填,A27~F27)" Style="{StaticResource GroupHeader}">
+                    <UniformGrid Columns="2">
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="上行线上客量 人次/h (A27)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.UpLineBoardCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="上行线下客量 人次/h (C27)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.UpLineAlightCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="下行线上客量 人次/h (B27)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.DownLineBoardCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="下行线下客量 人次/h (D27)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.DownLineAlightCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="换乘上客量 人次/h (E27)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.TransferBoardCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="换乘下客量 人次/h (F27)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.TransferAlightCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    </UniformGrid>
+                </GroupBox>
+
+                <GroupBox Header="四、停站时间与客流系数" Style="{StaticResource GroupHeader}">
+                    <UniformGrid Columns="2">
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅 上车停站 min"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallBoardStayMin, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅 下车停站 min"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallAlightStayMin, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅 换乘上车停站 min"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallTransferBoardStayMin, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅 换乘下车停站 min"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallTransferAlightStayMin, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台 上车停站 min"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.PlatformBoardStayMin, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台 下车停站 min"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.PlatformAlightStayMin, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台 换乘上车停站 min"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.PlatformTransferBoardStayMin, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台 换乘下车停站 min"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.PlatformTransferAlightStayMin, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="集群系数 (C37)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.ClusterFactor, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="超高峰小时系数 (F37)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.SuperPeakHourFactor, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    </UniformGrid>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>
