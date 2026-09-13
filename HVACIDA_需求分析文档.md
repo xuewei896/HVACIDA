@@ -1,5 +1,8 @@
 # HVACIDA - Revit插件需求分析文档
 
+> 交付件《通风空调智能设计助手.docx》的**正文 Markdown 副本**见 [`docs/需求源文档-通风空调智能设计助手.md`](docs/需求源文档-通风空调智能设计助手.md)
+> (由 `tools/docx2md/docx_to_markdown.py` 自动提取,便于 diff/检索);docx 仍是交付件,改正文以 docx 为准。
+
 ## 1. 项目概述
 
 ### 1.1 项目背景

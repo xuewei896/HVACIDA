@@ -20,6 +20,7 @@ D:\DSH
 ├─ docs
 │  ├─ 开发流程.md      开发流程/模块状态看板/每轮验证清单/口径决策记录
 │  ├─ UI设计规范.md    Revit 原生风格 UI 规范(窗口框架/线框/交互/文案/落地映射)
+│  ├─ 需求源文档-通风空调智能设计助手.md  交付 docx 的正文 Markdown 副本(diff 友好,由 tools/docx2md 生成)
 │  └─ ui-prototype/    HTML 可点击原型(双击 index.html;含流程/逻辑视图与深链接)
 ├─ src
 │  ├─ HVACIDA.Core     领域模型/计算/焓湿图/仓库/报告(无 Revit 依赖,可单测)
@@ -86,7 +87,6 @@ dotnet build .\HVACIDA.sln
    `tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe`。
 
 ## 6b. 三项自检(不需要打开 Revit)
-
 ```powershell
 # 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统)
 & ".\tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe"
@@ -99,6 +99,24 @@ powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smo
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\ribbon-smoke.ps1 `
   -BinDir .\src\HVACIDA.Revit\bin\Release\net48
 ```
+
+## 6c. docx → Markdown 正文副本(便于 diff)
+
+交付类 `.docx` 是二进制,Git 只能整体覆盖、无法合并。仓库把它们的正文抽成 Markdown 副本:
+
+```powershell
+# 重新生成(装了 python-docx 即可: pip install python-docx)
+python tools\docx2md\docx_to_markdown.py "通风空调智能设计助手.docx" `
+  "docs\需求源文档-通风空调智能设计助手.md" --auto-headings --toc
+```
+
+| 项 | 说明 |
+|---|---|
+| 生成物 | `docs/需求源文档-通风空调智能设计助手.md`(头部写入源文件 SHA256 与重生成命令) |
+| 提取规则 | 标题样式→`#`;项目符号→`- `;加粗/斜体→`**`/`*`;表格→管道表格(首行作表头);不提取图片/页眉页脚/批注 |
+| `--auto-headings` | 源文档没有标题样式时,把**标签式行**(短、以冒号结尾、不含分号句号)提升为 `###`,**正文一字不改** |
+| `--toc` | 开头生成目录 |
+| 约定 | **docx 是交付件、Markdown 是派生件**:改正文改 docx,然后重跑上面的命令;两边不要各改各的 |
 
 ## 7. 与 AI 协作(DSH 技能)
 
