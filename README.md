@@ -72,6 +72,8 @@ dotnet build .\HVACIDA.sln
 |---|---|---|
 | 2.1 项目信息 | 工程信息窗 + 气象参数窗(ProjectInfoModel/DesignConditionParams → project.xml) | ✅ 可用(Excel 模板导入、.rvt 全局参数待实现) |
 | 2.2.3.1 大系统负荷 | 公共区参数窗 + 负荷计算窗 + 计算结果窗(LargeSystemLoadCalculator) | ✅ 已按公式文档移植;北京站算例 30 项逐格一致 |
+| 2.1.2→2.2.3.1 气象联动 | `LargeSystemInputService` + `ProjectDesignSync`(C5/F4/F6 ← 项目信息) | ✅ 默认自动联动、可取消转手工;未填不覆盖 |
+| 2.2.1/2.2.3.1 模型取值 | `SpaceSnapshot` + `PublicAreaAggregator` + `RevitSpaceReader`(D55/D56/C13/C14) | 🟡 Core+UI+命令层就绪,Revit 实机待验 |
 | 2.2.3.2 小系统负荷 | 全空气一次回风窗 + 计算结果窗(SmallSystemLoadCalculator) | 🟡 仅一类实现,其余 5 类给待实现说明 |
 | 排烟计算(2.2.3.1) | — | ⬜ 待实现(需防烟分区几何) |
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
@@ -83,21 +85,23 @@ dotnet build .\HVACIDA.sln
 ## 6. 关键 TODO(按技能规范)
 
 1. **大系统公式核对**:主计算链完成(算例 30 项逐格一致,2026-09-04);待补:**排烟"防烟分区"选型口径**(计算风量=面积×60,选型=×1.2,需分区几何输入)。
-2. 大系统输入 F4/F6/C5(站厅/站台设计温度、室外湿球)改接 `DesignConditionParams`/项目信息自动回填(当前为模型默认值)。
+2. ~~大系统输入 F4/F6/C5 接项目信息~~ 已实现(`ProjectDesignSync`,默认联动+可手工覆盖);剩余:接**气象数据库查询**(现为内置典型值)。
 3. SQLite 化:实现 `IDataRepository` 的 SQLite 版(需求:数据库 SQLite)。
-4. Revit 读取:空间(Space)面积/体积/高度、墙长;参数回写;批量空间分区。
+4. Revit 读取:空间面积/体积/高度→D55/D56/C13/C14 **已实现**(含链接模型、自动识别+手动拾取,实机待验);
+   剩余:**墙长**(小系统"与土壤接触外墙长度")、**与土壤接触屋顶面积**、参数回写、批量空间分区。
 5. 计算书升级 Excel(EPPlus/OpenXML)与 PDF;出图/标注/图例。
 6. ~~按钮图标~~ 已实装(22 个图标 ×16/32px,`tools/HVACIDA.IconGen` 生成并内嵌 DLL,见 `docs/UI设计规范.md` §4.0.1);
    剩余:中英文界面、操作日志与撤销。
-7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、小系统)——
+7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、小系统、**空间聚合、气象联动**)——
    `tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe`。
 
 ## 6b. 四项自检(不需要打开 Revit)
 ```powershell
-# 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统)
+# 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统 + 空间聚合 + 气象联动)
 & ".\tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe"
 
-# 2) 窗口装载自检:11 个 WPF 窗口真构造 + Show + Close(抓 XAML/绑定致命错误)
+# 2) 窗口装载自检:12 个 WPF 窗口真构造 + Show + Close(抓 XAML/绑定致命错误)
+#    + 气象联动/计算结果窗同源 + 公共区自动识别与手动拾取回填
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\window-smoke.ps1 `
   -UiDir .\src\HVACIDA.UI\bin\Release\net48
 
