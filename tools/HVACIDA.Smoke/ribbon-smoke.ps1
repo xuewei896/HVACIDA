@@ -7,10 +7,70 @@
 
 param(
     [string]$RevitDir = 'C:\Program Files\Autodesk\Revit 2020',
-    [Parameter(Mandatory = $true)][string]$BinDir
+    [Parameter(Mandatory = $true)][string]$BinDir,
+    [switch]$Child,
+    [int]$TimeoutSeconds = 120
 )
 
 $ErrorActionPreference = 'Stop'
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+
+# =============================================================================
+# 父进程:只做"起子进程 + 读结论 + 给退出码",**本进程绝不加载 RevitAPI**
+#
+# 为什么必须拆两层:RevitAPIUI.dll 是混合模式(C++/CLI)程序集,实测在 Windows PowerShell 5.1 下
+# 只要加载它,进程在输出完所有结论后就**无法退出**(`exit`、`[Environment]::Exit()` 都无效 —— CLR 关闭挂起)。
+# 经逐步二分确认:只加载 RevitAPI+RevitAPIUI 就会挂(与本仓库任何代码无关),而 WPF 图像解码本身不挂。
+# 于是:子进程干脏活(允许它挂),父进程只收结论 —— 门禁的退出码因此始终干净可用。
+# =============================================================================
+if (-not $Child) {
+    if (-not (Test-Path -LiteralPath $BinDir)) {
+        Write-Host ('找不到 BinDir: ' + $BinDir)
+        exit 1
+    }
+
+    $self = $MyInvocation.MyCommand.Path
+    $stdout = [System.IO.Path]::GetTempFileName()
+    $stderr = [System.IO.Path]::GetTempFileName()
+    try {
+        # 路径含空格(如 C:\Program Files\...),Start-Process 不会自动加引号 → 必须显式带上
+        $childArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $self + '"'),
+                       '-Child', '-BinDir', ('"' + (Resolve-Path -LiteralPath $BinDir).Path + '"'),
+                       '-RevitDir', ('"' + $RevitDir + '"'))
+        $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $childArgs `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -NoNewWindow
+
+        if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
+            try { $proc.Kill() } catch { }
+            Write-Host ("子进程超时 {0}s,已终止。" -f $TimeoutSeconds)
+        }
+
+        $lines = @(Get-Content -LiteralPath $stdout -Encoding UTF8 -ErrorAction SilentlyContinue)
+        foreach ($l in $lines) { Write-Host $l }
+
+        $verdict = $lines | Where-Object { $_ -match '^GATE-RESULT:' } | Select-Object -Last 1
+        $failCount = @($lines | Where-Object { $_ -match '^FAIL' }).Count
+        $errText = ((Get-Content -LiteralPath $stderr -Encoding UTF8 -ErrorAction SilentlyContinue) -join "`n").Trim()
+
+        Write-Host '=================================================='
+        if ($verdict -match 'PASS' -and $failCount -eq 0) {
+            Write-Host 'Ribbon 结构自检全部通过'
+            exit 0
+        }
+
+        if ($verdict) { Write-Host ('Ribbon 结构自检失败 ' + $failCount + ' 项') }
+        else { Write-Host 'Ribbon 结构自检未产出结论(子进程异常/超时)' }
+        if ($errText) { Write-Host '---- 子进程 stderr ----'; Write-Host $errText }
+        exit 1
+    }
+    finally {
+        Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# =============================================================================
+# 子进程:真正加载 RevitAPI 做反射自检
+# =============================================================================
 
 $revitApi = Join-Path $RevitDir 'RevitAPI.dll'
 $revitUi = Join-Path $RevitDir 'RevitAPIUI.dll'
@@ -120,5 +180,10 @@ Write-Host '---- 键 → 命令 一览 ----'
 $rows | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 
 Write-Host '=================================================='
-if ($fail -eq 0) { Write-Host 'Ribbon 结构自检全部通过'; exit 0 }
-Write-Host ("Ribbon 结构自检失败 " + $fail + " 项"); exit 1
+if ($fail -eq 0) { Write-Host 'GATE-RESULT: PASS' }
+else { Write-Host ('GATE-RESULT: FAIL ' + $fail) }
+
+# 收尾:本进程已加载 RevitAPIUI(混合模式程序集),CLR 关闭会挂起 ——
+# `exit` / `[Environment]::Exit()` 在这里都无法结束进程(见文件头说明),故显式强制结束自身。
+# 结论已通过 GATE-RESULT 行交给父进程,退出码由父进程给出。
+[System.Diagnostics.Process]::GetCurrentProcess().Kill()
