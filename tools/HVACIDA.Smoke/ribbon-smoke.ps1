@@ -176,6 +176,35 @@ if ($badCoverage.Count -eq 0) {
 }
 Write-Host ("      内嵌图标资源共 {0} 个({1} 个模块 × 2 尺寸)" -f $resNames.Count, $map.Keys.Count)
 
+# ---- 5. Revit API 陷阱:Space 不在原生对象模型里 ----
+# 实测踩过:OfClass(typeof(Space)) 会在运行时抛
+#   ArgumentException: Input type(Space) is of an element type that exists in the API, but not in Revit's native object model
+# 正确做法:OfClass(typeof(SpatialElement)) 再 OfType<Space>() 过滤(见 RevitSpaceReader.CollectSpaces)。
+$spaceType = [Autodesk.Revit.DB.Mechanical.Space]
+if ($spaceType.BaseType.FullName -eq 'Autodesk.Revit.DB.SpatialElement') {
+    Pass '确认 Mechanical.Space 派生自 SpatialElement(故不可用 OfClass(typeof(Space)) 收集)'
+} else {
+    Fail ('Mechanical.Space 基类与预期不符: ' + $spaceType.BaseType.FullName)
+}
+
+# 静态扫描:禁止 OfClass(typeof(Space)) 写法回到源码里(注释行不算)
+$root = (Resolve-Path -LiteralPath $BinDir).Path
+for ($i = 0; $i -lt 5; $i++) { $root = Split-Path $root -Parent }
+$srcDir = Join-Path $root 'src'
+if (Test-Path -LiteralPath $srcDir) {
+    $csFiles = @(Get-ChildItem -LiteralPath $srcDir -Recurse -Filter *.cs -File)
+    $hits = @($csFiles | Select-String -Pattern 'OfClass\(\s*typeof\(\s*Space\s*\)' |
+              Where-Object { $_.Line -notmatch '^\s*(///|//|\*)' })
+    if ($hits.Count -eq 0) {
+        Pass ("源码无 OfClass(typeof(Space)) 写法(已扫描 {0} 个 .cs)" -f $csFiles.Count)
+    } else {
+        Fail ('禁止 OfClass(typeof(Space))(运行时会抛 ArgumentException): ' +
+              (($hits | ForEach-Object { (Split-Path $_.Path -Leaf) + ':' + $_.LineNumber }) -join ', '))
+    }
+} else {
+    Write-Host ('      跳过源码扫描(未找到 ' + $srcDir + ')')
+}
+
 Write-Host '---- 键 → 命令 一览 ----'
 $rows | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 

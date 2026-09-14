@@ -37,7 +37,7 @@ namespace HVACIDA.Revit.Services
             int linkCount = 0;
             int linkDocCount = 0;
 
-            foreach (var space in new FilteredElementCollector(doc).OfClass(typeof(Space)).Cast<Space>())
+            foreach (var space in CollectSpaces(doc))
             {
                 var snapshot = ToSnapshot(doc, space, Transform.Identity, false);
                 if (snapshot == null) continue;
@@ -62,7 +62,7 @@ namespace HVACIDA.Revit.Services
                 if (linkDoc == null) continue;
                 linkDocCount++;
 
-                foreach (var space in new FilteredElementCollector(linkDoc).OfClass(typeof(Space)).Cast<Space>())
+                foreach (var space in CollectSpaces(linkDoc))
                 {
                     var snapshot = ToSnapshot(linkDoc, space, transform, true);
                     if (snapshot == null) continue;
@@ -142,6 +142,27 @@ namespace HVACIDA.Revit.Services
         }
 
         // ------------------------------------------------------------------ 内部
+
+        /// <summary>
+        /// 收集文档中的全部空间(Space)。
+        /// <para>
+        /// <strong>不能用 <c>OfClass(typeof(Space))</c></strong>:<c>Mechanical.Space</c> 是"只存在于 API、
+        /// 不在 Revit 原生对象模型里"的类型,那样写会在运行时抛 ArgumentException
+        /// （"Input type(Autodesk.Revit.DB.Mechanical.Space) is of an element type that exists in the API,
+        /// but not in Revit's native object model"）。
+        /// Revit 自己的提示就是改用 <see cref="SpatialElement"/> 再后处理 —— 原生对象模型里空间/房间/面积
+        /// 都归 <c>SpatialElement</c>(<c>Space.BaseType</c> 即 <c>SpatialElement</c>),故按它收集,再用
+        /// <c>OfType&lt;Space&gt;</c> 过滤掉 Room/Area。
+        /// </para>
+        /// </summary>
+        private static IEnumerable<Space> CollectSpaces(Document doc)
+        {
+            if (doc == null) return new List<Space>();
+
+            return new FilteredElementCollector(doc)
+                .OfClass(typeof(SpatialElement))
+                .OfType<Space>();
+        }
 
         /// <summary>
         /// Space → 快照(英尺 → m)。
