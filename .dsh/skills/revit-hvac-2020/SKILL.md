@@ -50,6 +50,16 @@ metadata:
    避免窗口无主导致 alt-tab 失效;不要在非 UI 线程 new Window。
 8. **命名**:Revit 文件单元英尺/平方英尺,BIM 模型长度 = 英尺(Feet);UI 展示用 mm/m/℃,转换集中写 Utils(注意 `DisplayUnitType`/`ForgeTypeId` 仅 2021+ 才有,2020 用 DisplayUnitType)。
 9. **兼容**:只用 Revit 2020 存在的 API(ForgeTypeId、UnitUtils.Convert 重载等 2021+ API 禁用)。
+10. **原生对象模型(实机踩过,2026-09-14)**:`FilteredElementCollector.OfClass(typeof(T))` 只接受 Revit **原生**类。
+    `Autodesk.Revit.DB.Mechanical.Space` 属于"存在于 API、不在 Revit 原生对象模型里"的类型,
+    写 `OfClass(typeof(Space))` 编译能过、**一运行就抛**:
+    `ArgumentException: Input type(Autodesk.Revit.DB.Mechanical.Space) is of an element type that exists in the API,
+    but not in Revit's native object model. Try using Autodesk.Revit.DB.SpatialElement instead, and then postprocessing...`
+    正确写法:`.OfClass(typeof(SpatialElement)).OfType<Space>()`
+    (原生对象模型里空间/房间/面积都归 `SpatialElement` —— `Space.BaseType` 即 `SpatialElement`)。
+    遇到其它专业模块的类型报同类异常时,同样"先按原生基类收集再筛"。
+    > 已加门禁:`ribbon-smoke.ps1` 断言 `Space.BaseType == SpatialElement`,并静态扫描 `src/**.cs` 禁止该写法回到源码;
+    > 收集数量会显示在「公共区参数」窗的模型概况里(读到 0 个空间时肉眼可见,不会静默)。
 
 ## 4. 模块地图(源自需求文档,命名空间与文件应一一对应)
 
