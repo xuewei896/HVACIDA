@@ -15,7 +15,9 @@ namespace HVACIDA.Smoke
     /// 场景4:Ribbon 模块目录自检(7 面板 / 22 按钮,与 App.cs 的 CommandMap 键一一对应);
     /// 场景5:数据仓库(XML)往返 + 损坏文件回退;
     /// 场景6:规范知识库规则应答;
-    /// 场景7:小系统计算(骨架)自检。
+    /// 场景7:小系统计算(骨架)自检;
+    /// 场景8:空间分类/聚合(公共区几何由模型空间获取);
+    /// 场景9:气象参数联动(C5/F4/F6 ← 项目信息,含端到端复核北京算例)。
     /// 退出码 0 = 全部通过;1 = 存在偏差。
     /// </summary>
     internal static class Program
@@ -34,10 +36,12 @@ namespace HVACIDA.Smoke
             RunRepositoryChecks();
             RunQaChecks();
             RunSmallSystemChecks();
+            RunSpaceAggregatorChecks();
+            RunWeatherSyncChecks(calculator);
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统自检通过。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统/空间聚合/气象联动自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
@@ -186,6 +190,194 @@ namespace HVACIDA.Smoke
             CheckInt("实际通风量 >= 换气次数通风量", result.ActualVentilationM3H >= result.VentilationByACHM3H ? 1 : 0, 1);
             CheckInt("新风量 <= 实际通风量", result.FreshAirM3H <= result.ActualVentilationM3H + 1e-9 ? 1 : 0, 1);
             Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景8:空间分类与公共区几何聚合(需求 2.2.1 / 2.2.3.1 D55/D56/C13/C14)
+        // =====================================================================
+        private static void RunSpaceAggregatorChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景8:空间分类/聚合(公共区几何 ← 模型空间)");
+            Console.WriteLine("==================================================");
+
+            var spaces = new List<SpaceSnapshot>
+            {
+                Space("站厅层-公共区A", "101", "站厅层", 1200, 4.9, 0, 0, 100, 40),
+                Space("站厅层-公共区B", "102", "站厅层", 800, 4.9, 100, 0, 160, 40),
+                Space("站厅层-付费区", "103", "站厅层", 300, 4.9, 0, 0, 20, 20),
+                Space("站台层-公共区", "201", "站台层", 1620, 4.5, 0, 0, 140, 12),
+                Space("站台层-设备房", "202", "站台层", 50, 3.0, 200, 0, 205, 10),
+                Space("活塞风道", "301", "站厅层", 40, 4.0, 300, 0, 305, 8),
+                Space("环控机房", "302", "设备层", 80, 3.5, 0, 60, 10, 68),
+                Space("未放置空间", "401", "站厅层", 0, 0, 0, 0, 0, 0)
+            };
+
+            var c = PublicAreaAggregator.Classify(spaces);
+            Console.WriteLine("分类:" + c.Summary);
+            Console.WriteLine("聚合(站厅):" + PublicAreaAggregator.Aggregate(c.Hall, PublicAreaTarget.Hall).Summary);
+            Console.WriteLine("聚合(站台):" + PublicAreaAggregator.Aggregate(c.Platform, PublicAreaTarget.Platform).Summary);
+            Console.WriteLine("-- 自检 --");
+
+            CheckInt("站厅识别 2 个(「付费区」「活塞风道」被「公共区」口径筛掉)", c.Hall.Count, 2);
+            CheckInt("站厅按公共区筛选 = true", c.HallPublicAreaOnly ? 1 : 0, 1);
+            CheckInt("站厅被筛掉 2 个且列入明细", c.HallExcluded.Count, 2);
+            CheckInt("站台识别 1 个(「设备房」被筛掉)", c.Platform.Count, 1);
+            CheckInt("站台按公共区筛选 = true", c.PlatformPublicAreaOnly ? 1 : 0, 1);
+            CheckInt("站台被筛掉 1 个且列入明细", c.PlatformExcluded.Count, 1);
+            CheckInt("未识别 1 个(设备层环控机房)", c.Unclassified.Count, 1);
+            CheckInt("未放置空间被跳过", c.SkippedUnplaced, 1);
+
+            var hall = PublicAreaAggregator.Aggregate(c.Hall, PublicAreaTarget.Hall);
+            Check("站厅面积合计 = 2000 m²", hall.AreaM2, 2000);
+            Check("站厅层高 4.9 m", hall.HeightM, 4.9);
+            Check("站厅长度 = 包围盒长边 160 m", hall.LengthM, 160);
+            CheckInt("站厅参与合计空间数 = 2", hall.SpaceCount, 2);
+
+            var platform = PublicAreaAggregator.Aggregate(c.Platform, PublicAreaTarget.Platform);
+            Check("站台面积 = 1620 m²", platform.AreaM2, 1620);
+            Check("站台层高 4.5 m", platform.HeightM, 4.5);
+
+            // 手动拾取:目标已知,不做名称推断,也不做"公共区"筛选
+            var manual = PublicAreaAggregator.Aggregate(new[] { spaces[2], spaces[5] }, PublicAreaTarget.Hall);
+            Check("手动拾取按面积加权(300×4.9 + 40×4.0)/340", manual.HeightM, (300 * 4.9 + 40 * 4.0) / 340);
+            Check("手动拾取合计面积 340 m²", manual.AreaM2, 340);
+
+            var unplacedOnly = PublicAreaAggregator.Aggregate(
+                new[] { spaces.Find(s => s.Name == "未放置空间") }, PublicAreaTarget.Hall);
+            CheckInt("全部未放置时合计 0 个空间", unplacedOnly.SpaceCount, 0);
+            CheckInt("全部未放置时计入跳过数", unplacedOnly.SkippedCount, 1);
+
+            // 缺高度的空间:不参与层高加权,但要计数提示
+            var noHeight = new List<SpaceSnapshot>
+            {
+                Space("站厅层-公共区", "1", "站厅层", 100, 0, 0, 0, 10, 10),
+                Space("站厅层-公共区", "2", "站厅层", 100, 5.0, 10, 0, 20, 10)
+            };
+            var mixed = PublicAreaAggregator.Aggregate(noHeight, PublicAreaTarget.Hall);
+            Check("缺高度空间不参与加权(层高仍为 5.0)", mixed.HeightM, 5.0);
+            CheckInt("缺高度空间计数 = 1", mixed.HeightMissingCount, 1);
+            Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景9:气象参数联动(C5/F4/F6)与端到端复核
+        // =====================================================================
+        private static void RunWeatherSyncChecks(ILargeSystemLoadCalculator calculator)
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景9:气象参数联动(项目信息 → 大系统 C5/F4/F6)");
+            Console.WriteLine("==================================================");
+
+            // (1) 典型北京气象参数回填
+            var design = TypicalBeijingDesign();
+            var input = new LargeSystemInput();
+            var sync = ProjectDesignSync.ApplyWeather(design, input);
+            Console.WriteLine(sync.Note);
+            CheckInt("三格全部被回填", sync.AppliedCount, 3);
+            Check("C5 湿球 ← 室外", input.OutdoorWetBulbC, 25);
+            Check("F4 站厅干球 ← 室内", input.HallDesignTempC, 29);
+            Check("F6 站台干球 ← 室内", input.PlatformDesignTempC, 27);
+            CheckInt("无未填告警", sync.UnsetFields.Count, 0);
+            CheckText("告警文案为空", sync.Warning, "");
+
+            // (2) 端到端:北京算例其余格照抄,只靠联动补 C5/F4/F6 → 结果必须与手填逐格一致
+            var beijing = BuildBeijingSample();
+            beijing.OutdoorWetBulbC = 0;
+            beijing.HallDesignTempC = 0;
+            beijing.PlatformDesignTempC = 0;
+            var beijingSync = ProjectDesignSync.ApplyWeather(design, beijing);
+            CheckInt("北京算例三格由气象参数补入", beijingSync.AppliedCount, 3);
+            LargeSystemResult synced = calculator.Calculate(beijing);
+            Console.WriteLine("-- 端到端:E159 总制冷量(手填算例 = 381.598170929697)--");
+            Check("E159 总制冷量(联动后)", synced.TotalCoolingKw, 381.598170929697);
+            Check("C125 总送风量(联动后)", synced.TotalSupplyFlowM3H, 87767.9950526333);
+            Check("A165 单端机组风量(联动后)", synced.UnitSupplyFlowM3H, 43883.9975263166);
+            Check("B165 单端机组冷量(联动后)", synced.UnitCoolingKw, 190.799085464848);
+
+            // (3) 气象参数未填时不得覆盖用户已填值,只登记待补
+            //     注:DesignConditionParams 的室内干球默认 30/28 是"有值"的,故只有 C5 会判为未填
+            var blank = new DesignConditionParams();
+            var keep = new LargeSystemInput { OutdoorWetBulbC = 25.5 };
+            var blankSync = ProjectDesignSync.ApplyWeather(blank, keep);
+            CheckInt("未填时不产生回填", blankSync.AppliedCount, 0);
+            Check("未填时不覆盖已填的 C5", keep.OutdoorWetBulbC, 25.5);
+            CheckInt("未填项被登记(仅 C5)", blankSync.UnsetFields.Count, 1);
+            CheckInt("未填项文案指向 C5", blankSync.UnsetFields[0].StartsWith("C5") ? 1 : 0, 1);
+            CheckInt("未填时给出告警", blankSync.Warning.Length > 0 ? 1 : 0, 1);
+
+            // (4) 服务层:勾选/取消联动与落盘往返
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Weather-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var repo = new XmlProjectRepository(dir);
+                var project = repo.LoadProject();
+                project.Design = TypicalBeijingDesign();
+                repo.SaveProject(project);
+
+                var service = new LargeSystemInputService(repo);
+                var loaded = service.Load();
+                Check("服务层 Load 自动回填 C5", loaded.OutdoorWetBulbC, 25);
+                Check("服务层 Load 自动回填 F4", loaded.HallDesignTempC, 29);
+
+                loaded.WeatherManuallyOverridden = true;
+                loaded.OutdoorWetBulbC = 27.9;
+                service.Save(loaded);
+
+                var reloaded = service.Load();
+                Check("脱离联动后保留手工值", reloaded.OutdoorWetBulbC, 27.9);
+
+                reloaded.WeatherManuallyOverridden = false;
+                var back = service.Sync(reloaded);
+                CheckInt("重新联动恢复回填", back.AppliedCount, 1);
+                Check("恢复联动后 C5 回到项目信息值", reloaded.OutdoorWetBulbC, 25);
+
+                // 旧版 XML(没有 WeatherManuallyOverridden 元素)必须默认开启联动
+                File.WriteAllText(Path.Combine(dir, "large-system.xml"),
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?><LargeSystemInput><OutdoorWetBulbC>0</OutdoorWetBulbC>" +
+                    "<HallAreaM2>1500</HallAreaM2></LargeSystemInput>");
+                var legacy = new LargeSystemInputService(new XmlProjectRepository(dir)).Load();
+                Check("旧版 XML 缺元素 → 默认开启联动(C5 被回填)", legacy.OutdoorWetBulbC, 25);
+                Check("旧版 XML 其余字段保留", legacy.HallAreaM2, 1500);
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { /* 忽略清理失败 */ }
+            }
+
+            Console.WriteLine();
+        }
+
+        /// <summary>构造一个空间快照(测试数据;面积/层高/包围盒单位已是 m)。</summary>
+        private static SpaceSnapshot Space(string name, string number, string level, double areaM2, double heightM,
+            double minX, double minY, double maxX, double maxY)
+        {
+            return new SpaceSnapshot
+            {
+                ElementId = Math.Abs((name + number).GetHashCode() % 100000),
+                Name = name,
+                Number = number,
+                LevelName = level,
+                AreaM2 = areaM2,
+                VolumeM3 = areaM2 * heightM,
+                HeightM = heightM,
+                MinXM = minX,
+                MinYM = minY,
+                MaxXM = maxX,
+                MaxYM = maxY
+            };
+        }
+
+        /// <summary>典型北京气象参数(与「气象参数」窗【从气象数据库获取】内置值一致)。</summary>
+        private static DesignConditionParams TypicalBeijingDesign()
+        {
+            var d = new DesignConditionParams();
+            d.LargeSystemOutdoor.SummerACDryBulbC = 31.0;
+            d.LargeSystemOutdoor.SummerACWetBulbC = 25.0;
+            d.LargeSystemOutdoor.SummerVentDryBulbC = 26.4;
+            d.LargeSystemIndoor.HallDryBulbC = 29.0;
+            d.LargeSystemIndoor.PlatformDryBulbC = 27.0;
+            return d;
         }
 
         private static LargeSystemInput BuildBusyScenario()

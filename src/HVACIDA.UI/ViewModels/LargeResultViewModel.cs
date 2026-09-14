@@ -7,10 +7,12 @@ namespace HVACIDA.UI.ViewModels
     /// <summary>
     /// 大系统「计算结果」窗 ViewModel(Ribbon「大系统 → 计算结果」)。
     /// 读取「公共区参数 / 负荷计算」保存的同一份输入 → 计算 → 展示结果文本。
+    /// 走 <see cref="LargeSystemInputService"/>,与负荷计算窗共享同一套气象参数联动口径
+    /// (否则会出现"负荷计算窗按联动后的 C5 算、本窗按文件里的旧 C5 算"的分叉)。
     /// </summary>
     public class LargeResultViewModel : ViewModelBase
     {
-        private readonly IDataRepository _repository;
+        private readonly LargeSystemInputService _service;
         private readonly ILargeSystemLoadCalculator _calculator;
         private LargeSystemInput _input;
         private LargeSystemResult _lastResult;
@@ -24,9 +26,9 @@ namespace HVACIDA.UI.ViewModels
 
         public LargeResultViewModel(IDataRepository repository)
         {
-            _repository = repository ?? new XmlProjectRepository();
+            _service = new LargeSystemInputService(repository);
             _calculator = new LargeSystemLoadCalculator();
-            _input = _repository.LoadLargeSystem();
+            _input = _service.Load();
             CalculateCommand = new RelayCommand(Calculate);
             ExportCommand = new RelayCommand(Export, () => _lastResult != null);
         }
@@ -57,7 +59,7 @@ namespace HVACIDA.UI.ViewModels
         {
             try
             {
-                Input = _repository.LoadLargeSystem();   // 每次计算前重新读取,确保与其它窗口同步
+                Input = _service.Load();   // 每次计算前重新读取(含气象参数联动),确保与其它窗口同步
                 _lastResult = _calculator.Calculate(Input);
                 ResultText = ResultFormatter.FormatLarge(Input, _lastResult);
                 Status = "计算完成(与北京站算例同口径)。可导出计算书。";

@@ -6,7 +6,9 @@ namespace HVACIDA.Core.Models
     /// 大系统负荷计算输入(需求文档 2.2.3.1)。
     /// 字段 1:1 映射《大系统负荷计算公式.docx》参数表,默认值与公式文档完全一致;
     /// 单元格代号(如 D55、C39)在注释中保留,便于与 Excel 计算书逐格核对。
-    /// 默认值即公式文档初值;其中 F4/F6/C5 标注"从项目信息调取",暂用默认温度,待接 DesignConditionParams。
+    /// 默认值即公式文档初值;其中 F4/F6/C5 由 <see cref="Services.ProjectDesignSync"/> 从
+    /// 「项目信息 → 气象参数」自动回填,公共区几何(D55/D56/C13/C14)可由 Revit 空间自动取值
+    /// (见 <see cref="Services.PublicAreaAggregator"/>),两者都保留手工覆盖。
     /// </summary>
     [Serializable]
     public class LargeSystemInput
@@ -18,14 +20,26 @@ namespace HVACIDA.Core.Models
 
         // ---------- 一、基本参数 ----------
 
-        /// <summary>C5 夏季空调室外计算湿球温度 ℃(从项目信息调取,TODO:接 DesignConditionParams)</summary>
+        /// <summary>
+        /// C5 夏季空调室外计算湿球温度 ℃。默认联动「项目信息 → 气象参数」
+        /// (<see cref="Services.ProjectDesignSync"/>),联动手动关闭后由用户在「大系统 → 负荷计算」窗直接输入。
+        /// </summary>
         public double OutdoorWetBulbC { get; set; }
 
-        /// <summary>F4 站厅夏季空调计算干球温度 ℃(从项目信息调取)</summary>
+        /// <summary>F4 站厅夏季空调计算干球温度 ℃(同上,默认联动气象参数)。</summary>
         public double HallDesignTempC { get; set; }
 
-        /// <summary>F6 站台夏季空调计算干球温度 ℃(从项目信息调取)</summary>
+        /// <summary>F6 站台夏季空调计算干球温度 ℃(同上,默认联动气象参数)。</summary>
         public double PlatformDesignTempC { get; set; }
+
+        /// <summary>
+        /// 是否已脱离「项目信息 → 气象参数」的自动联动(C5/F4/F6)。
+        /// <para>
+        /// 取名"覆盖"而不是"自动",是为了旧数据兼容:XmlSerializer 反序列化时缺元素取默认值 false,
+        /// 即"未覆盖" = 自动联动开启 —— 老版本 large-system.xml 打开后能自动获得联动,不需要迁移。
+        /// </para>
+        /// </summary>
+        public bool WeatherManuallyOverridden { get; set; }
 
         /// <summary>C8 站厅公共区风温差 ℃(默认 10)。
         /// 领域确认(2026-09-04):站厅/站台送风温度必须一致,送风点由站厅送风温度统一确定(见 A118/A121)。</summary>
@@ -52,7 +66,7 @@ namespace HVACIDA.Core.Models
         /// <summary>B132 空调季新风量指标 m³/(h·人)(默认 20)</summary>
         public double FreshAirPerPersonM3H { get; set; }
 
-        // ---------- 车站几何(由模型空间获取,TODO Revit 读取) ----------
+        // ---------- 车站几何(可由模型空间获取,见 PublicAreaAggregator) ----------
         /// <summary>D55 站厅层公共区面积 m²</summary>
         public double HallAreaM2 { get; set; }
 
@@ -204,9 +218,12 @@ namespace HVACIDA.Core.Models
         /// <summary>依据《大系统负荷计算公式.docx》参数表设置默认值。</summary>
         private void SetDocumentDefaults()
         {
-            OutdoorWetBulbC = 0;          // TODO:从项目信息(气象参数)调取
-            HallDesignTempC = 30;          // TODO:从项目信息(室内设计参数)调取
+            // C5/F4/F6 为公式文档中标注"从项目信息调取"的三格,由 ProjectDesignSync 联动覆盖;
+            // 0 = 未填(气象参数未填时不会被联动冲掉,见 ProjectDesignSync.UnsetTemperatureC)。
+            OutdoorWetBulbC = 0;
+            HallDesignTempC = 30;
             PlatformDesignTempC = 28;
+            WeatherManuallyOverridden = false;
             SupplyTempDiffC = 10;
             DuctTempRiseC = 1.5;
             DewPointRelativeHumidityPercent = 95;

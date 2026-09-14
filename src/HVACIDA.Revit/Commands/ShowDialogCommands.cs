@@ -38,11 +38,10 @@ namespace HVACIDA.Revit.Commands
     {
     }
 
-    /// <summary>大系统 → 公共区参数(需求 2.2.3.1 用户输入:几何 + 高峰客流)。</summary>
-    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowPublicAreaCommand : ShowDialogCommandBase<UI.Views.PublicAreaWindow>
-    {
-    }
+    /// <summary>
+    /// 大系统 → 公共区参数(需求 2.2.3.1 用户输入:几何 + 高峰客流)。
+    /// 该命令需要"模型空间取值 + 拾取"闭环,见 <see cref="ShowPublicAreaCommand"/>。
+    /// </summary>
 
     /// <summary>大系统 → 负荷计算(需求 2.2.3.1)。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]

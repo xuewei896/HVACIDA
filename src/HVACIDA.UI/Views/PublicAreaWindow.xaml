@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="大系统 — 公共区参数 - HVACIDA"
-        Width="900" Height="600" MinWidth="760" MinHeight="460"
+        Width="1000" Height="660" MinWidth="820" MinHeight="520"
         WindowStartupLocation="CenterOwner"
         FontFamily="Microsoft YaHei UI" FontSize="12"
         UseLayoutRounding="True">
@@ -22,12 +22,23 @@
             <Setter Property="Padding" Value="8"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
         </Style>
+        <!-- 模型取值字段:锁定(只读)时灰底灰字,见 UI设计规范 §2.5 -->
+        <Style x:Key="GeometryField" TargetType="{x:Type TextBox}" BasedOn="{StaticResource FieldInput}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsGeometryLocked}" Value="True">
+                    <Setter Property="IsReadOnly" Value="True"/>
+                    <Setter Property="Background" Value="#F0F0F0"/>
+                    <Setter Property="Foreground" Value="#666666"/>
+                    <Setter Property="ToolTip" Value="由模型空间取值(D55/D56/C13/C14)。点【自动识别全模型空间】或【拾取…】填入;勾选【手工输入几何参数】可直接填写。"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
             <TextBlock TextWrapping="Wrap"
-                       Text="需求 2.2.3.1 用户输入项:公共区几何(面积 D55/D56、层高 C13、长度 C14)+ 高峰客流(A27~F27)。保存后「大系统 → 负荷计算」读取同一份数据;客流必须手工输入,插件不从模型推断。"/>
+                       Text="需求 2.2.3.1:公共区几何(D55/D56 面积、C13 层高、C14 长度)由模型空间取值 —— 可【自动识别全模型空间】或【拾取…】指定;高峰客流(A27~F27)必须手工输入,插件不从模型推断。保存后「大系统 → 负荷计算 / 计算结果」读取同一份数据。"/>
         </Border>
 
         <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
@@ -36,7 +47,8 @@
                         Command="{Binding ResetCommand}"/>
                 <Button DockPanel.Dock="Right" Content="取 消" Width="96" Height="30" IsCancel="True"/>
                 <Button DockPanel.Dock="Right" Content="确 定" Width="100" Height="30" Margin="0,0,8,0"
-                        Command="{Binding SaveCommand}" IsDefault="True"/>
+                        IsDefault="True" Click="OnConfirmClick"
+                        ToolTip="保存公共区参数到 large-system.xml 并关闭本窗(负荷计算/计算结果窗按此计算)"/>
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
                            TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
             </DockPanel>
@@ -44,16 +56,48 @@
 
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="10">
-                <GroupBox Header="二、公共区几何(由模型空间获取)" Style="{StaticResource GroupHeader}">
+                <GroupBox Header="二、公共区几何(可由模型空间获取)" Style="{StaticResource GroupHeader}">
                     <StackPanel>
+                        <WrapPanel Margin="4,0,0,6">
+                            <Button Content="自动识别全模型空间" Height="26" Padding="10,0" Margin="0,0,8,4"
+                                    Command="{Binding AutoDetectCommand}"
+                                    ToolTip="按空间名称/标高里的「站厅」「站台」关键词分类;同类空间中若存在名称含「公共区」者,只取这些(对齐 D55/D56 口径)"/>
+                            <Button Content="拾取站厅空间…" Height="26" Padding="10,0" Margin="0,0,8,4" Tag="hall"
+                                    Click="OnPickClick" IsEnabled="{Binding PickAvailable}"
+                                    ToolTip="关闭本窗后在模型中框选站厅层公共区空间(可多选,回车结束,Esc 取消),完成后自动回到本窗"/>
+                            <Button Content="拾取站台空间…" Height="26" Padding="10,0" Margin="0,0,8,4" Tag="platform"
+                                    Click="OnPickClick" IsEnabled="{Binding PickAvailable}"
+                                    ToolTip="关闭本窗后在模型中框选站台层公共区空间(可多选,回车结束,Esc 取消),完成后自动回到本窗"/>
+                            <CheckBox Content="手工输入几何参数" VerticalAlignment="Center" Margin="4,0,0,4"
+                                      IsChecked="{Binding ManualGeometry}"
+                                      ToolTip="勾选后 D55/D56/C13/C14 转为可手工填写(无模型或无空间时使用)"/>
+                        </WrapPanel>
+
+                        <TextBlock Text="{Binding ModelNote}" Margin="6,0,6,6" TextWrapping="Wrap" Foreground="#5A5A5A"/>
+
                         <UniformGrid Columns="2">
-                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅公共区面积 m² (D55)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallAreaM2, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台公共区面积 m² (D56)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.PlatformAreaM2, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅公共区层高 m (C13)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallHeightM, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅公共区长度 m (C14)"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.HallLengthM, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅公共区面积 m² (D55)"/><TextBox x:Name="HallAreaBox" Style="{StaticResource GeometryField}" Text="{Binding Input.HallAreaM2, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台公共区面积 m² (D56)"/><TextBox Style="{StaticResource GeometryField}" Text="{Binding Input.PlatformAreaM2, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅公共区层高 m (C13)"/><TextBox Style="{StaticResource GeometryField}" Text="{Binding Input.HallHeightM, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅公共区长度 m (C14)"/><TextBox Style="{StaticResource GeometryField}" Text="{Binding Input.HallLengthM, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                         </UniformGrid>
-                        <TextBlock Margin="6,6,0,0" Foreground="#5A5A5A" TextWrapping="Wrap"
-                                   Text="注:正式版由 Revit 空间(站厅层 / 站台层)自动读取面积与层高,此处可手工覆盖。"/>
+
+                        <Expander Header="模型取值明细" Margin="4,8,4,0" Foreground="#23486E">
+                            <ListView ItemsSource="{Binding SpaceRows}" Height="170" Margin="0,4,0,0"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="分类" Width="130" DisplayMemberBinding="{Binding Category}"/>
+                                        <GridViewColumn Header="编号" Width="80" DisplayMemberBinding="{Binding Number}"/>
+                                        <GridViewColumn Header="名称" Width="260" DisplayMemberBinding="{Binding Name}"/>
+                                        <GridViewColumn Header="标高" Width="140" DisplayMemberBinding="{Binding LevelName}"/>
+                                        <GridViewColumn Header="面积 m²" Width="90" DisplayMemberBinding="{Binding AreaText}"/>
+                                        <GridViewColumn Header="层高 m" Width="80" DisplayMemberBinding="{Binding HeightText}"/>
+                                        <GridViewColumn Header="来源" Width="90" DisplayMemberBinding="{Binding SourceText}"/>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </Expander>
                     </StackPanel>
                 </GroupBox>
 
