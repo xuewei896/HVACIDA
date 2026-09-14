@@ -99,6 +99,17 @@ namespace HVACIDA.Revit
 
             application.CreateRibbonTab(TabName);
 
+            // 图标自检:22 个模块的 16/32 图标必须齐全(内嵌资源)。缺失就一次报清楚,
+            // 避免"按钮在、图标空白"这种只能靠肉眼看出来的问题。
+            System.Collections.Generic.IList<string> missingIcons = ModuleIcons.FindMissing(ModuleCatalog.Keys);
+            if (missingIcons.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "以下模块缺少 Ribbon 图标(每个模块需要 16×16 与 32×32 两套):" + string.Join(", ", missingIcons) +
+                    Environment.NewLine +
+                    "请重新生成并编译:HVACIDA.IconGen.exe --out src\\HVACIDA.Revit\\Resources\\Icons");
+            }
+
             foreach (string panelName in ModuleCatalog.PanelOrder)
             {
                 RibbonPanel panel = application.CreateRibbonPanel(TabName, panelName);
@@ -126,7 +137,10 @@ namespace HVACIDA.Revit
                 commandType.FullName)
             {
                 ToolTip = module.Summary,
-                LongDescription = module.Summary + Environment.NewLine + "【状态】" + module.StatusText
+                LongDescription = module.Summary + Environment.NewLine + "【状态】" + module.StatusText,
+                // 图标:内嵌 PNG(16 供小图标位,32 供大按钮/高 DPI),见 ModuleIcons
+                Image = ModuleIcons.Get(module.Key, ModuleIcons.SmallSize),
+                LargeImage = ModuleIcons.Get(module.Key, ModuleIcons.LargeSize)
             };
 
             PushButton button = panel.AddItem(data) as PushButton;
@@ -134,6 +148,8 @@ namespace HVACIDA.Revit
 
             button.ToolTip = data.ToolTip;
             button.LongDescription = data.LongDescription;
+            if (data.Image != null) button.Image = data.Image;
+            if (data.LargeImage != null) button.LargeImage = data.LargeImage;
         }
     }
 }

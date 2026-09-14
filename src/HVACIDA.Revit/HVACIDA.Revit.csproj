@@ -31,4 +31,9 @@
     <ProjectReference Include="..\HVACIDA.UI\HVACIDA.UI.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Ribbon 按钮图标:内嵌进 DLL(16/32 两套),由 tools/HVACIDA.IconGen 生成 -->
+    <EmbeddedResource Include="Resources\Icons\*.png" />
+  </ItemGroup>
+
 </Project>

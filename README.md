@@ -23,9 +23,14 @@ D:\DSH
 │  ├─ 需求源文档-通风空调智能设计助手.md  交付 docx 的正文 Markdown 副本(diff 友好,由 tools/docx2md 生成)
 │  └─ ui-prototype/    HTML 可点击原型(双击 index.html;含流程/逻辑视图与深链接)
 ├─ src
-│  ├─ HVACIDA.Core     领域模型/计算/焓湿图/仓库/报告(无 Revit 依赖,可单测)
+│  ├─ HVACIDA.Core     领域模型/计算/焓湿图/仓库/报告/模块目录(无 Revit 依赖,可单测)
 │  ├─ HVACIDA.UI       WPF 窗口+MVVM(不引用 Revit API)
-│  └─ HVACIDA.Revit    ExternalApplication/Ribbon/Command(引用前两者+Revit 2020 API)
+│  └─ HVACIDA.Revit    ExternalApplication/Ribbon/Command + 内嵌图标(引用前两者+Revit 2020 API)
+│     └─ Resources/Icons/  22 个按钮图标 ×(16/32)px,由 tools/HVACIDA.IconGen 生成、内嵌进 DLL
+├─ tools
+│  ├─ HVACIDA.Smoke    数值+结构自检(北京算例 30 项、目录/仓库/知识库/小系统)+ 窗口/Ribbon/文档三项脚本
+│  ├─ HVACIDA.IconGen  Ribbon 图标生成器(矢量几何 → PNG,无需设计素材)
+│  └─ docx2md          交付 docx → Markdown 正文副本提取器与同步门禁
 ├─ deploy
 │  ├─ HVACIDA.addin     清单模板(占位路径)
 │  └─ install.ps1       编译 + 安装 .addin 到 C:\ProgramData\Autodesk\Revit\Addins\2020
@@ -82,7 +87,8 @@ dotnet build .\HVACIDA.sln
 3. SQLite 化:实现 `IDataRepository` 的 SQLite 版(需求:数据库 SQLite)。
 4. Revit 读取:空间(Space)面积/体积/高度、墙长;参数回写;批量空间分区。
 5. 计算书升级 Excel(EPPlus/OpenXML)与 PDF;出图/标注/图例。
-6. 按钮图标(PushButtonData.Image/ImageLarge)、中英文界面、操作日志与撤销。
+6. ~~按钮图标~~ 已实装(22 个图标 ×16/32px,`tools/HVACIDA.IconGen` 生成并内嵌 DLL,见 `docs/UI设计规范.md` §4.0.1);
+   剩余:中英文界面、操作日志与撤销。
 7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、小系统)——
    `tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe`。
 
@@ -95,7 +101,7 @@ dotnet build .\HVACIDA.sln
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\window-smoke.ps1 `
   -UiDir .\src\HVACIDA.UI\bin\Release\net48
 
-# 3) Ribbon 结构自检:反射检查 22 个命令注册 + [Transaction] 标注
+# 3) Ribbon 结构自检:22 个命令注册 + [Transaction] 标注 + 22×2 内嵌图标(齐全/尺寸/可解码/覆盖率)
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\ribbon-smoke.ps1 `
   -BinDir .\src\HVACIDA.Revit\bin\Release\net48
 

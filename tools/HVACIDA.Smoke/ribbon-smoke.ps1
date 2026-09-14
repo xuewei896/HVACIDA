@@ -69,6 +69,53 @@ foreach ($p in [HVACIDA.Core.Services.ModuleCatalog]::PanelOrder) {
     Write-Host ("      面板「{0}」按钮数 = {1}" -f $p, $n)
 }
 
+# ---- 4. 图标:每个模块必须有 16/32 两套内嵌 PNG,尺寸正确且能解码成已冻结的 ImageSource ----
+Add-Type -AssemblyName PresentationCore, WindowsBase
+$resNames = [HVACIDA.Revit.ModuleIcons].Assembly.GetManifestResourceNames()
+$missing16 = @(); $missing32 = @(); $badSize = @(); $undecodable = @(); $badCoverage = @(); $coverage = @()
+foreach ($k in ($map.Keys | Sort-Object)) {
+    if ($resNames -notcontains "HVACIDA.Revit.Resources.Icons.${k}_16.png") { $missing16 += $k }
+    if ($resNames -notcontains "HVACIDA.Revit.Resources.Icons.${k}_32.png") { $missing32 += $k }
+
+    foreach ($size in @(16, 32)) {
+        try {
+            $img = [HVACIDA.Revit.ModuleIcons]::Get($k, $size)
+            if ($null -eq $img) { $undecodable += "$k/$size(null)"; continue }
+            if ($img.PixelWidth -ne $size -or $img.PixelHeight -ne $size) {
+                $badSize += ("{0}/{1}({2}x{3})" -f $k, $size, $img.PixelWidth, $img.PixelHeight)
+            }
+            if (-not $img.IsFrozen) { $undecodable += "$k/$size(未冻结)" }
+
+            # 覆盖率:抓"整张全透明(图标空白)"与"整块实心(糊成一坨)"两种坏图
+            $conv = New-Object System.Windows.Media.Imaging.FormatConvertedBitmap(
+                $img, [System.Windows.Media.PixelFormats]::Bgra32, $null, 0)
+            $stride = $size * 4
+            $bytes = New-Object byte[] ($stride * $size)
+            $conv.CopyPixels($bytes, $stride, 0)
+            $inked = 0
+            for ($i = 3; $i -lt $bytes.Length; $i += 4) { if ($bytes[$i] -gt 8) { $inked++ } }
+            $pct = [math]::Round(100.0 * $inked / ($size * $size), 1)
+            $coverage += [pscustomobject]@{ Key = $k; Size = $size; Percent = $pct }
+            if ($pct -lt 5 -or $pct -gt 90) { $badCoverage += ("{0}/{1}={2}%" -f $k, $size, $pct) }
+        } catch {
+            $undecodable += "$k/$size($($_.Exception.Message))"
+        }
+    }
+}
+
+if ($missing16.Count -eq 0) { Pass '22 个模块均有 16×16 内嵌图标' } else { Fail ('缺 16×16 图标: ' + ($missing16 -join ',')) }
+if ($missing32.Count -eq 0) { Pass '22 个模块均有 32×32 内嵌图标' } else { Fail ('缺 32×32 图标: ' + ($missing32 -join ',')) }
+if ($badSize.Count -eq 0) { Pass '图标尺寸均为 16×16 / 32×32' } else { Fail ('尺寸不符: ' + ($badSize -join '; ')) }
+if ($undecodable.Count -eq 0) { Pass '图标可解码为已冻结的 ImageSource(可跨线程用于 Ribbon)' } else { Fail ('解码失败: ' + ($undecodable -join '; ')) }
+if ($badCoverage.Count -eq 0) {
+    $min = ($coverage | Measure-Object Percent -Minimum).Minimum
+    $max = ($coverage | Measure-Object Percent -Maximum).Maximum
+    Pass ("图标覆盖率正常(要求 5%~90%,实测 {0}%~{1}%)" -f $min, $max)
+} else {
+    Fail ('图标覆盖率异常(空白或糊成一坨): ' + ($badCoverage -join '; '))
+}
+Write-Host ("      内嵌图标资源共 {0} 个({1} 个模块 × 2 尺寸)" -f $resNames.Count, $map.Keys.Count)
+
 Write-Host '---- 键 → 命令 一览 ----'
 $rows | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 
