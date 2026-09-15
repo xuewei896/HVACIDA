@@ -60,6 +60,125 @@ try {
     $fail++
 }
 
+# =====================================================================
+# 静态绑定一致性门禁(开发流程 §5.2):窗口 XAML 里每个 {Binding 路径} 都必须能在
+# 「ViewModel + 其集合属性的元素类型」上反射解析出来 —— WPF 绑定失败是**静默**的
+# (只写调试跟踪、不抛异常),所以要把它变成硬断言,否则"标签在、数字空"会溜过去。
+# 元素类型(drill-down)是为了覆盖 DataGrid 列模板:那里的 DataContext 是行对象,不是 VM。
+# =====================================================================
+function Get-BindingCandidateTypes([System.Type]$root) {
+    $list = New-Object 'System.Collections.Generic.List[System.Type]'
+    $seen = New-Object 'System.Collections.Generic.HashSet[System.Type]'
+    $queue = New-Object 'System.Collections.Generic.Queue[System.Type]'
+    $queue.Enqueue($root)
+    $enumerableOf = [System.Collections.Generic.IEnumerable``1]
+    $flags = [System.Reflection.BindingFlags]::Public -bor [System.Reflection.BindingFlags]::Instance
+    while ($queue.Count -gt 0) {
+        $t = $queue.Dequeue()
+        if ($t -eq $null) { continue }
+        if (-not $seen.Add($t)) { continue }
+        $list.Add($t)
+        foreach ($p in $t.GetProperties($flags)) {
+            $pt = $p.PropertyType
+            if ($pt -eq [string] -or $pt.IsPrimitive -or $pt.IsEnum) { continue }
+            $elem = $null
+            if ($pt.IsArray) { $elem = $pt.GetElementType() }
+            else {
+                foreach ($i in $pt.GetInterfaces()) {
+                    if ($i.IsGenericType -and $i.GetGenericTypeDefinition() -eq $enumerableOf) {
+                        $elem = $i.GetGenericArguments()[0]; break
+                    }
+                }
+            }
+            # 集合属性 → 元素类型(DataGrid 列模板的 DataContext);嵌套对象属性 → 该类型本身
+            # (如 Coefficients.LocalLossItems 的元素类型要从 HydraulicCoefficients 再下一层才拿得到)
+            if ($elem -ne $null -and $elem.Namespace -ne $null -and $elem.Namespace.StartsWith('HVACIDA')) { $queue.Enqueue($elem) }
+            elseif ($elem -eq $null -and $pt.Namespace -ne $null -and $pt.Namespace.StartsWith('HVACIDA')) { $queue.Enqueue($pt) }
+        }
+    }
+    return $list
+}
+
+function Test-WindowBindings([string]$xamlFile, [string]$viewModelTypeName) {
+    $vmType = $uiAsm.GetType('HVACIDA.UI.ViewModels.' + $viewModelTypeName)
+    if ($vmType -eq $null) { Write-Host ("FAIL  绑定门禁:找不到 ViewModel " + $viewModelTypeName); $script:fail++; return }
+    $candidates = Get-BindingCandidateTypes $vmType
+
+    $text = Get-Content -LiteralPath $xamlFile -Raw
+    $paths = @()
+    $skipKeywords = @('Mode', 'StringFormat', 'UpdateSourceTrigger', 'Converter', 'ConverterParameter',
+                      'IsAsync', 'NotifyOnTargetUpdated', 'FallbackValue', 'TargetNullValue',
+                      'ValidatesOnExceptions', 'BindsDirectlyToSource', 'XPath', 'BindingGroupName', 'Delay')
+    foreach ($m in [regex]::Matches($text, '\{Binding([^}]*)\}')) {
+        $inner = $m.Groups[1].Value
+        # 自引用/元素名/显式源不指向 ViewModel,跳过(如 ToolTip 取自身 Text 的 Self 绑定)
+        if ($inner -match 'RelativeSource|ElementName|Source=') { continue }
+        $p = $null
+        if ($inner -match 'Path\s*=\s*([A-Za-z_][A-Za-z0-9_.]*)') { $p = $Matches[1] }
+        elseif ($inner -match '^\s*([A-Za-z_][A-Za-z0-9_.]*)') {
+            $head = $Matches[1]
+            if ($skipKeywords -notcontains $head) { $p = $head }
+        }
+        if ($p -ne $null -and -not ($paths -contains $p)) { $paths += $p }
+    }
+
+    $bad = @()
+    $flags = [System.Reflection.BindingFlags]::Public -bor [System.Reflection.BindingFlags]::Instance
+    foreach ($path in $paths) {
+        $resolved = $false
+        foreach ($candidate in $candidates) {
+            $cur = $candidate
+            $ok = $true
+            foreach ($part in $path.Split('.')) {
+                $prop = $cur.GetProperty($part, $flags)
+                if ($prop -eq $null) { $ok = $false; break }
+                $cur = $prop.PropertyType
+            }
+            if ($ok) { $resolved = $true; break }
+        }
+        if (-not $resolved) { $bad += $path }
+    }
+
+    $leaf = Split-Path $xamlFile -Leaf
+    if ($bad.Count -eq 0) {
+        Write-Host ("PASS  绑定一致性 {0}:{1} 条绑定路径全部命中 {2}" -f $leaf, $paths.Count, $viewModelTypeName)
+    } else {
+        Write-Host ("FAIL  绑定一致性 {0}:解析不到的路径 {1}" -f $leaf, ($bad -join ', '))
+        $script:fail++
+    }
+}
+
+try {
+    $uiAsm = [System.Reflection.Assembly]::LoadFrom($ui)
+    $uiRootForBindings = Split-Path (Split-Path (Split-Path (Split-Path (Resolve-Path -LiteralPath $UiDir).Path -Parent) -Parent) -Parent) -Parent
+    $viewDir = Join-Path $uiRootForBindings 'src\HVACIDA.UI\Views'
+    if (-not (Test-Path -LiteralPath $viewDir)) { $viewDir = Join-Path (Split-Path $uiRootForBindings -Parent) 'src\HVACIDA.UI\Views' }
+
+    # 窗口 XAML → 其 DataContext 的 ViewModel(ResultTableView.xaml 是 UserControl,绑定走 DP,不在本表)
+    $bindingMap = @(
+        @('ProjectInfoWindow.xaml', 'ProjectInfoViewModel'),
+        @('WeatherWindow.xaml', 'ProjectInfoViewModel'),
+        @('PublicAreaWindow.xaml', 'PublicAreaViewModel'),
+        @('LargeSystemWindow.xaml', 'LargeSystemViewModel'),
+        @('LargeSmokeWindow.xaml', 'LargeSmokeViewModel'),
+        @('LargeSystemResultWindow.xaml', 'LargeResultViewModel'),
+        @('SmallSystemWindow.xaml', 'SmallSystemViewModel'),
+        @('SmallSystemResultWindow.xaml', 'SmallResultViewModel'),
+        @('HydraulicSystemWindow.xaml', 'HydraulicSystemViewModel'),
+        @('HydraulicResultWindow.xaml', 'HydraulicResultViewModel'),
+        @('KnowledgeWindow.xaml', 'KnowledgeViewModel'),
+        @('InfoWindow.xaml', 'InfoViewModel')
+    )
+    foreach ($pair in $bindingMap) {
+        $file = Join-Path $viewDir $pair[0]
+        if (Test-Path -LiteralPath $file) { Test-WindowBindings $file $pair[1] }
+        else { Write-Host ("FAIL  绑定门禁:找不到 " + $pair[0]); $fail++ }
+    }
+} catch {
+    Write-Host ("FAIL  绑定一致性门禁  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
 Test-Window '工程信息 ProjectInfoWindow'      { New-Object "$uiNs.ProjectInfoWindow" }
 Test-Window '气象参数 WeatherWindow'          { New-Object "$uiNs.WeatherWindow" }
 Test-Window '公共区参数 PublicAreaWindow'      { New-Object "$uiNs.PublicAreaWindow" }
