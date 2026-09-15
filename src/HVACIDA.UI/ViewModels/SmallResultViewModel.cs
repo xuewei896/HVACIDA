@@ -16,6 +16,7 @@ namespace HVACIDA.UI.ViewModels
         private SmallSystemResult _lastResult;
         private string _resultText = "";
         private string _status = "";
+        private ResultTable _table;
 
         public SmallResultViewModel()
             : this(null)
@@ -47,6 +48,13 @@ namespace HVACIDA.UI.ViewModels
             private set => Set(ref _resultText, value);
         }
 
+        /// <summary>小系统计算结果表(界面按分区分组渲染;与导出计算书同源)。</summary>
+        public ResultTable Table
+        {
+            get => _table;
+            private set => Set(ref _table, value);
+        }
+
         public string Status
         {
             get => _status;
@@ -59,8 +67,9 @@ namespace HVACIDA.UI.ViewModels
             {
                 Input = _repository.LoadSmallSystem();
                 _lastResult = _calculator.Calculate(Input);
+                Table = ResultTable.ForSmallSystem(Input, _lastResult);
                 ResultText = ResultFormatter.FormatSmall(Input, _lastResult);
-                Status = "计算完成(骨架算法,公式待核对)。可导出计算书。";
+                Status = "计算完成(骨架算法,公式待核对)。结果已按分区列表格呈现,可导出计算书。";
             }
             catch (System.Exception ex)
             {

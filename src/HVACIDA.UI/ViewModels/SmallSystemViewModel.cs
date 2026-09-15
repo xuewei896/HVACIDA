@@ -1,4 +1,4 @@
-using System.Windows.Input;
+﻿using System.Windows.Input;
 using HVACIDA.Core.Models;
 using HVACIDA.Core.Services;
 
@@ -10,6 +10,7 @@ namespace HVACIDA.UI.ViewModels
         private readonly ISmallSystemLoadCalculator _calculator;
         private readonly IDataRepository _repository;
         private string _resultText = "";
+        private ResultTable _table;
         private string _status = "";
 
         public SmallSystemViewModel()
@@ -77,6 +78,13 @@ namespace HVACIDA.UI.ViewModels
             private set => Set(ref _resultText, value);
         }
 
+        /// <summary>计算结果表(界面右栏按分区分组渲染;与导出计算书同源)。</summary>
+        public ResultTable Table
+        {
+            get => _table;
+            private set => Set(ref _table, value);
+        }
+
         public string Status
         {
             get => _status;
@@ -88,6 +96,7 @@ namespace HVACIDA.UI.ViewModels
             try
             {
                 _lastResult = _calculator.Calculate(Input);
+                Table = ResultTable.ForSmallSystem(Input, _lastResult);
                 ResultText = ResultFormatter.FormatSmall(Input, _lastResult);
                 Status = "计算完成(骨架算法,公式待核对)。可导出计算书。";
             }

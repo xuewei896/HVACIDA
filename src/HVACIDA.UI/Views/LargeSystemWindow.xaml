@@ -1,6 +1,7 @@
 <Window x:Class="HVACIDA.UI.Views.LargeSystemWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:HVACIDA.UI.Views"
         Title="大系统负荷计算 - HVACIDA"
         Width="1500" Height="840"
         WindowStartupLocation="CenterScreen"
@@ -209,14 +210,11 @@
             <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center" VerticalAlignment="Stretch"
                           Background="#DDDDDD" ResizeBehavior="PreviousAndNext"/>
 
-            <!-- ================= 结果区 ================= -->
+            <!-- ================= 结果区:按分区分组的结果表格 ================= -->
             <Border Grid.Column="2" Margin="4" BorderBrush="#DDDDDD" BorderThickness="1" Background="#FAFAFA">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="计算结果(单元格见左侧标注)" FontWeight="Bold" Padding="8,6" Background="#EFEFEF"/>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <TextBlock Text="{Binding ResultText}" Padding="10" FontFamily="Consolas" FontSize="11"
-                                   TextWrapping="Wrap" VerticalAlignment="Top"/>
-                    </ScrollViewer>
+                    <TextBlock DockPanel.Dock="Top" Text="计算结果(按分区分组;行尾灰字为公式文档单元格代号)" FontWeight="Bold" Padding="8,6" Background="#EFEFEF"/>
+                    <views:ResultTableView x:Name="ResultTableHost" Margin="6,6,6,0" Table="{Binding Table}"/>
                 </DockPanel>
             </Border>
         </Grid>

@@ -21,6 +21,7 @@ namespace HVACIDA.UI.ViewModels
         private string _status = "";
         private string _weatherNote = "";
         private string _weatherWarning = "";
+        private ResultTable _table;
 
         public LargeSystemViewModel()
             : this(null)
@@ -128,11 +129,18 @@ namespace HVACIDA.UI.ViewModels
 
         private LargeSystemResult _lastResult;
 
-        /// <summary>结果文本。</summary>
+        /// <summary>结果文本(导出计算书用;界面用 <see cref="Table"/> 分组表格展示)。</summary>
         public string ResultText
         {
             get => _resultText;
             private set => Set(ref _resultText, value);
+        }
+
+        /// <summary>计算结果表(界面右栏按分区分组渲染;与导出计算书同源)。</summary>
+        public ResultTable Table
+        {
+            get => _table;
+            private set => Set(ref _table, value);
         }
 
         /// <summary>状态提示。</summary>
@@ -160,6 +168,7 @@ namespace HVACIDA.UI.ViewModels
             try
             {
                 _lastResult = _calculator.Calculate(Input);
+                Table = ResultTable.ForLargeSystem(Input, _lastResult);
                 ResultText = ResultFormatter.FormatLarge(Input, _lastResult);
                 Status = AutoSyncWeather
                     ? "计算完成(C5/F4/F6 取自项目信息气象参数,与北京站算例同口径)。可导出计算书。"
@@ -192,6 +201,7 @@ namespace HVACIDA.UI.ViewModels
         private void Reset()
         {
             Input = new LargeSystemInput();
+            Table = null;
             ApplyWeatherNotes(_service.Sync(Input));   // 恢复默认后仍按项目信息回填 C5/F4/F6
             OnPropertyChanged(nameof(AutoSyncWeather));
             OnPropertyChanged(nameof(WeatherLinked));

@@ -20,6 +20,7 @@ namespace HVACIDA.UI.ViewModels
         private LargeSystemInput _input;
         private LargeSystemResult _lastResult;
         private LargeSmokeResult _lastSmoke;
+        private ResultTable _table;
         private IList<LargeSmokeZoneRow> _smokeRows = new List<LargeSmokeZoneRow>();
         private string _smokeSummary = "";
         private string _smokeNote = "";
@@ -55,6 +56,13 @@ namespace HVACIDA.UI.ViewModels
         {
             get => _resultText;
             private set => Set(ref _resultText, value);
+        }
+
+        /// <summary>大系统负荷计算结果表(界面按分区分组渲染;与导出计算书同源)。</summary>
+        public ResultTable Table
+        {
+            get => _table;
+            private set => Set(ref _table, value);
         }
 
         /// <summary>排烟计算结果表(大系统 → 计算结果;与「排烟计算」窗同源)。</summary>
@@ -102,8 +110,9 @@ namespace HVACIDA.UI.ViewModels
                     _lastSmoke.UnitFlowPerFormulaDocM3H.ToString("N1") + " m³/h";
                 SmokeNote = _lastSmoke.Note + "  " + _lastSmoke.PendingNote;
 
+                Table = ResultTable.ForLargeSystem(Input, _lastResult);
                 ResultText = ResultFormatter.FormatLarge(Input, _lastResult);
-                Status = "计算完成(与北京站算例同口径)。可导出计算书。";
+                Status = "计算完成(与北京站算例同口径)。结果已按分区列表格呈现,可导出计算书。";
             }
             catch (System.Exception ex)
             {

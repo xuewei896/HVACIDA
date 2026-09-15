@@ -1,6 +1,7 @@
-<Window x:Class="HVACIDA.UI.Views.SmallSystemWindow"
+﻿<Window x:Class="HVACIDA.UI.Views.SmallSystemWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:HVACIDA.UI.Views"
         Title="小系统负荷计算 - HVACIDA"
         Width="1120" Height="720"
         WindowStartupLocation="CenterScreen"
@@ -94,11 +95,8 @@
 
             <Border Grid.Column="2" Margin="4" BorderBrush="#DDDDDD" BorderThickness="1" Background="#FAFAFA">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="计算结果" FontWeight="Bold" Padding="8,6" Background="#EFEFEF"/>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <TextBlock Text="{Binding ResultText}" Padding="10" FontFamily="Consolas"
-                                   TextWrapping="Wrap" VerticalAlignment="Top"/>
-                    </ScrollViewer>
+                    <TextBlock DockPanel.Dock="Top" Text="计算结果(按分区分组)" FontWeight="Bold" Padding="8,6" Background="#EFEFEF"/>
+                    <views:ResultTableView x:Name="ResultTableHost" Margin="6,6,6,0" Table="{Binding Table}"/>
                 </DockPanel>
             </Border>
         </Grid>

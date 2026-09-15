@@ -1,6 +1,7 @@
 <Window x:Class="HVACIDA.UI.Views.LargeSystemResultWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:HVACIDA.UI.Views"
         Title="大系统 — 计算结果 - HVACIDA"
         Width="1040" Height="760" MinWidth="820" MinHeight="560"
         WindowStartupLocation="CenterOwner"
@@ -36,7 +37,7 @@
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
             <TextBlock TextWrapping="Wrap"
-                       Text="读取「公共区参数 / 负荷计算 / 排烟计算」保存的参数后计算结果(需求 2.2.3.1)。负荷计算书口径与《大系统负荷计算公式.docx》一致(北京站算例 30 项逐格核对);排烟结果见下表。"/>
+                       Text="读取「公共区参数 / 负荷计算 / 排烟计算」保存的参数后计算结果(需求 2.2.3.1)。结果以表格分组呈现(客流 / 冷负荷 / 湿负荷 / 焓湿 / 风量与制冷 / 设备选型),口径与《大系统负荷计算公式.docx》一致(北京站算例 30 项逐格核对);排烟结果见下表。"/>
         </Border>
 
         <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
@@ -58,6 +59,7 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0" Margin="10,8,0,4" FontWeight="Bold"
@@ -110,13 +112,18 @@
                 <TextBlock Text="{Binding SmokeNote}" Foreground="#8A6100" TextWrapping="Wrap" Margin="0,2,0,0"/>
             </StackPanel>
 
-            <TextBlock Grid.Row="3" Margin="10,10,0,4" FontWeight="Bold" Text="二、大系统负荷计算书(全文)"/>
+            <TextBlock Grid.Row="3" Margin="10,10,0,4" FontWeight="Bold"
+                       Text="二、大系统负荷计算结果(按分区分组;数值列右对齐,行尾灰字为公式文档单元格代号,合计行加粗)"/>
 
-            <TextBox Grid.Row="4" Margin="10,0,10,10" Text="{Binding ResultText, Mode=OneWay}" IsReadOnly="True"
-                     FontFamily="Consolas" FontSize="12"
-                     Background="White" BorderBrush="#DDDDDD" BorderThickness="1"
-                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                     TextWrapping="NoWrap" Padding="8"/>
+            <views:ResultTableView x:Name="ResultTableHost" Grid.Row="4" Margin="10,0,10,0" Table="{Binding Table}"/>
+
+            <Expander Grid.Row="5" Margin="10,6,10,10" Header="计算书全文(文本,可导出)" Foreground="#23486E">
+                <TextBox Text="{Binding ResultText, Mode=OneWay}" IsReadOnly="True"
+                         FontFamily="Consolas" FontSize="12" Height="180"
+                         Background="White" BorderBrush="#DDDDDD" BorderThickness="1"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                         TextWrapping="NoWrap" Padding="8"/>
+            </Expander>
         </Grid>
     </DockPanel>
 </Window>
