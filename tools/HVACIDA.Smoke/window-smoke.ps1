@@ -140,6 +140,93 @@ try {
 }
 
 # =====================================================================
+# 计算结果表格化:大系统负荷 / 小系统 结果是否真的以"分组表格"渲染
+# =====================================================================
+try {
+    $tmp5 = Join-Path $env:TEMP ("HVACIDA-WinSmoke-" + [guid]::NewGuid().ToString('N'))
+    $repo5 = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmp5
+
+    # ---- 大系统负荷计算窗(右栏结果表)----
+    $blvm = New-Object "$vmNs.LargeSystemViewModel" -ArgumentList $repo5
+    $blvm.CalculateCommand.Execute($null)
+    if ($blvm.Table -ne $null -and $blvm.Table.Sections.Count -eq 7) {
+        $rows = ($blvm.Table.Sections | ForEach-Object { $_.Rows.Count } | Measure-Object -Sum).Sum
+        Write-Host ("PASS  大系统负荷结果表:{0} 个分区 / 共 {1} 行(客流/冷负荷/湿负荷/焓湿/风量与制冷/选型)" -f $blvm.Table.Sections.Count, $rows)
+    } else { Write-Host ("FAIL  大系统结果表分区数={0}" -f $blvm.Table.Sections.Count); $fail++ }
+
+    $allRows = @($blvm.Table.Sections | ForEach-Object { $_.Rows })
+    $cooling = $allRows | Where-Object { $_.Cell -eq 'E159' }
+    $supply = $allRows | Where-Object { $_.Cell -eq 'C125' }
+    if ($cooling -ne $null -and $cooling.IsTotal -eq $true -and $cooling.Value -gt 0 -and $cooling.Unit -eq 'kW') {
+        Write-Host ("PASS  合计行带标记与单元格代号:总制冷量 {0} kW ({1})" -f $cooling.Display, $cooling.Cell)
+    } else { Write-Host "FAIL  合计行(E159)缺失或未标记"; $fail++ }
+
+    if ($supply -ne $null -and $supply.Value -gt 1000 -and $supply.Display -match '^[0-9,]+[.][0-9]$') {
+        Write-Host ("PASS  大数值按千分位显示:总送风量 {0} m3/h" -f $supply.Display)
+    } else { Write-Host ("FAIL  数值格式: {0}" -f $supply.Display); $fail++ }
+
+    $bw = New-Object "$uiNs.LargeSystemWindow" -ArgumentList $blvm
+    $bw.Show(); $bw.UpdateLayout()
+    $tv = $bw.FindName('ResultTableHost')
+    if ($tv -ne $null -and $tv.Table -ne $null -and $tv.Table.Sections.Count -eq 7) {
+        Write-Host ("PASS  大系统负荷窗右栏结果表控件已绑定到数据(Table DP 解析出 {0} 个分区)" -f $tv.Table.Sections.Count)
+    } else { Write-Host "FAIL  右栏结果表控件未绑定到 Table"; $fail++ }
+    $bw.Close()
+
+    # ---- 小系统负荷计算窗(全空气一次回风:右栏结果表)----
+    $sload = New-Object "$vmNs.SmallSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn), $repo5
+    $sload.CalculateCommand.Execute($null)
+    if ($sload.Table -ne $null -and $sload.Table.Sections.Count -ge 4) {
+        Write-Host ("PASS  full-air window result table: {0} sections" -f $sload.Table.Sections.Count)
+    } else { Write-Host ("FAIL  full-air result table sections={0}" -f $sload.Table.Sections.Count); $fail++ }
+
+    $slw = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $sload
+    $slw.Show(); $slw.UpdateLayout()
+    if ($slw.FindName('ResultTableHost') -ne $null) { Write-Host "PASS  full-air window uses the shared result table view" }
+    else { Write-Host "FAIL  full-air window has no result table host"; $fail++ }
+    $slw.Close()
+
+    # ---- 大系统计算结果窗(表格 + 排烟表)----
+    $brvm = New-Object "$vmNs.LargeResultViewModel" -ArgumentList $repo5
+    $brvm.CalculateCommand.Execute($null)
+    $brw = New-Object "$uiNs.LargeSystemResultWindow" -ArgumentList $brvm
+    $brw.Show(); $brw.UpdateLayout()
+    if ($brw.FindName('ResultTableHost') -ne $null -and $brw.FindName('SmokeGrid') -ne $null -and
+        $brw.FindName('SmokeGrid').Columns.Count -eq 5) {
+        Write-Host "PASS  大系统计算结果窗:负荷结果表 + 排烟表(5 列)同窗呈现"
+    } else { Write-Host "FAIL  计算结果窗缺少结果表"; $fail++ }
+    $brw.Close()
+
+    # ---- 小系统计算结果窗 ----
+    $srvm = New-Object "$vmNs.SmallResultViewModel" -ArgumentList $repo5
+    $srvm.CalculateCommand.Execute($null)
+    if ($srvm.Table -ne $null -and $srvm.Table.Sections.Count -ge 4) {
+        $srows = ($srvm.Table.Sections | ForEach-Object { $_.Rows.Count } | Measure-Object -Sum).Sum
+        Write-Host ("PASS  小系统结果表:{0} 个分区 / 共 {1} 行" -f $srvm.Table.Sections.Count, $srows)
+    } else { Write-Host ("FAIL  小系统结果表分区数={0}" -f $srvm.Table.Sections.Count); $fail++ }
+
+    $sText = @($srvm.Table.Sections | ForEach-Object { $_.Rows }) | Where-Object { $_.IsText -eq $true }
+    if ($sText -ne $null -and $sText.Display.Length -gt 0) {
+        Write-Host ("PASS  table text row routed to text branch: {0}" -f $sText.Label)
+    } else { Write-Host "FAIL  small-system table has no text row"; $fail++ }
+
+    $srw = New-Object "$uiNs.SmallSystemResultWindow" -ArgumentList $srvm
+    $srw.Show(); $srw.UpdateLayout()
+    if ($srw.FindName('ResultTableHost') -ne $null) { Write-Host "PASS  小系统计算结果窗已换成结果表控件" }
+    else { Write-Host "FAIL  小系统窗未找到结果表控件"; $fail++ }
+    $srw.Close()
+
+    # ---- 文本计算书仍与表格同源(逐行抽查)----
+    if ($srvm.ResultText -match '四、设备选型' -and $blvm.ResultText -match 'D107' -and $blvm.ResultText -match 'E159') {
+        Write-Host "PASS  导出计算书与结果表同源(分区标题 + 单元格代号均在)"
+    } else { Write-Host "FAIL  计算书文本与表格不同源"; $fail++ }
+
+    try { Remove-Item $tmp5 -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  结果表格化自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
+# =====================================================================
 # 大系统排烟计算:参数 → 表格结果(不需要 Revit)
 # =====================================================================
 try {
