@@ -43,6 +43,7 @@ Test-Window '工程信息 ProjectInfoWindow'      { New-Object "$uiNs.ProjectInf
 Test-Window '气象参数 WeatherWindow'          { New-Object "$uiNs.WeatherWindow" }
 Test-Window '公共区参数 PublicAreaWindow'      { New-Object "$uiNs.PublicAreaWindow" }
 Test-Window '大系统负荷计算 LargeSystemWindow' { New-Object "$uiNs.LargeSystemWindow" }
+Test-Window '大系统排烟计算 LargeSmokeWindow'  { New-Object "$uiNs.LargeSmokeWindow" }
 Test-Window '大系统计算结果 LargeResultWindow' { New-Object "$uiNs.LargeSystemResultWindow" }
 Test-Window '小系统负荷计算 SmallSystemWindow' { New-Object "$uiNs.SmallSystemWindow" }
 Test-Window '小系统计算结果 SmallResultWindow' { New-Object "$uiNs.SmallSystemResultWindow" }
@@ -138,6 +139,83 @@ try {
     try { Remove-Item $tmp -Recurse -Force -ErrorAction Stop } catch { }
 }
 
+# =====================================================================
+# 大系统排烟计算:参数 → 表格结果(不需要 Revit)
+# =====================================================================
+try {
+    $tmp4 = Join-Path $env:TEMP ("HVACIDA-WinSmoke-" + [guid]::NewGuid().ToString('N'))
+    $repo4 = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmp4
+    $svm = New-Object "$vmNs.LargeSmokeViewModel" -ArgumentList $repo4
+
+    # 默认:面积取 LargeSystemInput 默认 1500/1200;参数 60 / 1.2 / 2 台
+    # 站厅 1500×60=90000 → ×1.2=108000 → /2=54000;站台 1200×60=72000 → 86400 → 43200
+    if ($svm.Rows.Count -eq 2 -and
+        $svm.Rows[0].CalculatedFlowM3H -eq 90000 -and $svm.Rows[0].SelectionFlowM3H -eq 108000 -and $svm.Rows[0].UnitFlowM3H -eq 54000 -and
+        $svm.Rows[1].CalculatedFlowM3H -eq 72000 -and $svm.Rows[1].SelectionFlowM3H -eq 86400 -and $svm.Rows[1].UnitFlowM3H -eq 43200) {
+        Write-Host "PASS  排烟计算表数值(面积×60 → 选型×1.2 → 2 台):90000/108000/54000 与 72000/86400/43200"
+    } else {
+        Write-Host ("FAIL  排烟表: {0}/{1}/{2} | {3}/{4}/{5}" -f $svm.Rows[0].CalculatedFlowM3H, $svm.Rows[0].SelectionFlowM3H,
+            $svm.Rows[0].UnitFlowM3H, $svm.Rows[1].CalculatedFlowM3H, $svm.Rows[1].SelectionFlowM3H, $svm.Rows[1].UnitFlowM3H)
+        $fail++
+    }
+
+    if ($svm.Rows[0].IsGoverning -eq $true -and $svm.Rows[1].IsGoverning -eq $false) {
+        Write-Host "PASS  风机选型基准区标记在站厅行(取大者)"
+    } else { Write-Host "FAIL  基准区标记不正确"; $fail++ }
+
+    if ($svm.PendingNote -match '防烟分区') {
+        Write-Host "PASS  过渡口径(防烟分区几何待补)在界面可见"
+    } else { Write-Host "FAIL  未显示过渡口径"; $fail++ }
+
+    # 改参数重算:单位面积 72、系数 1.0、4 台
+    $svm.Input.SmokeRateM3HPerM2 = 72
+    $svm.Input.SelectionFactor = 1.0
+    $svm.Input.FanUnitCount = 4
+    $svm.CalculateCommand.Execute($null)
+    if ($svm.Rows[0].CalculatedFlowM3H -eq 108000 -and $svm.Rows[0].SelectionFlowM3H -eq 108000 -and $svm.Rows[0].UnitFlowM3H -eq 27000) {
+        Write-Host "PASS  改参数(72 / ×1.0 / 4 台)后重算:108000 / 108000 / 27000"
+    } else {
+        Write-Host ("FAIL  重算: {0}/{1}/{2}" -f $svm.Rows[0].CalculatedFlowM3H, $svm.Rows[0].SelectionFlowM3H, $svm.Rows[0].UnitFlowM3H)
+        $fail++
+    }
+
+    $svm.ResetCommand.Execute($null)
+    if ($svm.Input.SmokeRateM3HPerM2 -eq 60 -and $svm.Input.SelectionFactor -eq 1.2 -and $svm.Input.FanUnitCount -eq 2) {
+        Write-Host "PASS  恢复默认参数(60 / 1.2 / 2 台)"
+    } else { Write-Host "FAIL  恢复默认未生效"; $fail++ }
+
+    # 表格是否真的以表格形式渲染:5 列 × 2 行
+    $sw = New-Object "$uiNs.LargeSmokeWindow" -ArgumentList $svm
+    $sw.Show(); $sw.UpdateLayout()
+    $grid = $sw.FindName('SmokeGrid')
+    if ($grid -ne $null -and $grid.Columns.Count -eq 5 -and $grid.Items.Count -eq 2) {
+        Write-Host ("PASS  排烟结果以表格呈现({0} 列 × {1} 行)" -f $grid.Columns.Count, $grid.Items.Count)
+    } else {
+        Write-Host ("FAIL  结果表: 列={0} 行={1}" -f $grid.Columns.Count, $grid.Items.Count)
+        $fail++
+    }
+    $sw.Close()
+
+    # 「大系统 → 计算结果」窗同样带排烟表格
+    $rvm = New-Object "$vmNs.LargeResultViewModel" -ArgumentList $repo4
+    $rvm.CalculateCommand.Execute($null)
+    if ($rvm.SmokeRows.Count -eq 2 -and $rvm.SmokeSummary -match '选型基准') {
+        Write-Host ("PASS  计算结果窗含排烟表({0} 行)+ 选型结论" -f $rvm.SmokeRows.Count)
+    } else { Write-Host "FAIL  计算结果窗排烟表缺失"; $fail++ }
+
+    $rw = New-Object "$uiNs.LargeSystemResultWindow" -ArgumentList $rvm
+    $rw.Show(); $rw.UpdateLayout()
+    $rgrid = $rw.FindName('SmokeGrid')
+    if ($rgrid -ne $null -and $rgrid.Columns.Count -eq 5 -and $rgrid.Items.Count -eq 2) {
+        Write-Host ("PASS  计算结果窗排烟表渲染({0} 列 × {1} 行)" -f $rgrid.Columns.Count, $rgrid.Items.Count)
+    } else { Write-Host ("FAIL  计算结果窗表格: 列={0} 行={1}" -f $rgrid.Columns.Count, $rgrid.Items.Count); $fail++ }
+    $rw.Close()
+
+    try { Remove-Item $tmp4 -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  排烟计算自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
 # =====================================================================
 # 省市气象数据库:省市级联 + 选市自动回填(不需要 Revit)
 # =====================================================================

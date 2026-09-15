@@ -19,7 +19,8 @@ namespace HVACIDA.Smoke
     /// 场景7:小系统计算(骨架)自检;
     /// 场景8:空间分类/聚合(公共区几何由模型空间获取);
     /// 场景9:气象参数联动(C5/F4/F6 ← 项目信息,含端到端复核北京算例);
-    /// 场景10:全国省市气象数据库(GB 50736-2012 附录A,294 台站)。
+    /// 场景10:全国省市气象数据库(GB 50736-2012 附录A,294 台站);
+    /// 场景11:大系统排烟计算(面积×60 / 选型×1.2 / 2 台 / 取大者)。
     /// 退出码 0 = 全部通过;1 = 存在偏差。
     /// </summary>
     internal static class Program
@@ -41,10 +42,11 @@ namespace HVACIDA.Smoke
             RunSpaceAggregatorChecks();
             RunWeatherSyncChecks(calculator);
             RunWeatherDatabaseChecks();
+            RunLargeSmokeChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统/空间聚合/气象联动/省市气象库自检通过。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统/空间聚合/气象联动/省市气象库/排烟计算自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
@@ -522,6 +524,88 @@ namespace HVACIDA.Smoke
             Console.WriteLine();
         }
 
+        // =====================================================================
+        // 场景11:大系统排烟计算(需求 2.2.3.1)
+        // =====================================================================
+        private static void RunLargeSmokeChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景11:大系统排烟计算(面积×60 → 选型×1.2 → 2 台取大者)");
+            Console.WriteLine("==================================================");
+
+            var areas = new LargeSystemInput { HallAreaM2 = 2000, PlatformAreaM2 = 1620 };  // 北京算例面积
+            var parameters = new LargeSmokeInput();                                        // 默认 60 / 1.2 / 2 台
+            var result = new LargeSmokeCalculator().Calculate(areas, parameters);
+            Console.WriteLine(ResultFormatter.FormatLargeSmoke(areas, parameters, result));
+            Console.WriteLine("-- 自检 --");
+
+            CheckInt("结果表行数 = 2(站厅/站台)", result.Zones.Count, 2);
+            CheckInt("默认参数 = 60 / 1.2 / 2 台",
+                parameters.SmokeRateM3HPerM2 == 60.0 && parameters.SelectionFactor == 1.2 && parameters.FanUnitCount == 2.0 ? 1 : 0, 1);
+
+            var hall = result.Zones[0];
+            var platform = result.Zones[1];
+
+            // 计算排烟量 = 面积 × 60(示例 C171 = D55×60、D171 = D56×60)
+            Check("C171 站厅计算排烟量 = 2000×60", hall.CalculatedFlowM3H, 120000);
+            Check("D171 站台计算排烟量 = 1620×60", platform.CalculatedFlowM3H, 97200);
+
+            // 选型排烟量 = 计算 × 1.2(2026-09-04 决策)
+            Check("站厅选型排烟量 = ×1.2", hall.SelectionFlowM3H, 144000);
+            Check("站台选型排烟量 = ×1.2", platform.SelectionFlowM3H, 116640);
+
+            // 风机 2 台:单台 = 选型 / 2
+            Check("站厅单台风机风量 = 选型/2", hall.UnitFlowM3H, 72000);
+            Check("站台单台风机风量 = 选型/2", platform.UnitFlowM3H, 58320);
+
+            // 取大者:站厅(120000 > 97200)
+            CheckText("选型基准区 = 站厅公共区(D55)", result.GoverningZoneName, "站厅公共区(D55)");
+            CheckInt("基准区标记唯一", result.Zones.FindAll(z => z.IsGoverning).Count, 1);
+            CheckInt("基准区是站厅", hall.IsGoverning ? 1 : 0, 1);
+            Check("基准区选型风量 = 144000", result.GoverningSelectionFlowM3H, 144000);
+            Check("单台选型风量 = 144000/2 = 72000", result.UnitSelectionFlowM3H, 72000);
+
+            // 公式文档口径参考值 E178 = MAX/2(不含选型系数),必须与 30 项回归口径一致
+            Check("参考 E178 = MAX(C171,D171)/2 = 60000", result.UnitFlowPerFormulaDocM3H, 60000);
+            Check("E178 与负荷计算器的同口径值一致(C171/D171/E178)",
+                Math.Abs(new LargeSystemLoadCalculator().Calculate(areas).UnitSmokeFlowM3H - result.UnitFlowPerFormulaDocM3H) < 1e-9 ? 1 : 0, 1);
+
+            // 站台面积更大时,基准区必须切换(防"写死站厅")
+            var swapped = new LargeSmokeCalculator().Calculate(
+                new LargeSystemInput { HallAreaM2 = 800, PlatformAreaM2 = 1620 }, parameters);
+            CheckText("站台面积更大时基准区 = 站台公共区(D56)", swapped.GoverningZoneName, "站台公共区(D56)");
+            Check("此时单台选型风量 = 1620×60×1.2/2", swapped.UnitSelectionFlowM3H, 58320);
+
+            // 台数/系数可调:4 台、系数 1.0
+            var custom = new LargeSmokeCalculator().Calculate(areas,
+                new LargeSmokeInput { SmokeRateM3HPerM2 = 72, SelectionFactor = 1.0, FanUnitCount = 4 });
+            Check("单位面积 72 时站厅计算排烟量 = 144000", custom.Zones[0].CalculatedFlowM3H, 144000);
+            Check("系数 1.0 时选型 = 计算", custom.Zones[0].SelectionFlowM3H, 144000);
+            Check("4 台时单台 = 选型/4", custom.Zones[0].UnitFlowM3H, 36000);
+
+            CheckInt("口径说明非空", result.Note.Length > 0 ? 1 : 0, 1);
+            CheckInt("过渡口径(防烟分区)必须写明", result.PendingNote.Contains("防烟分区") ? 1 : 0, 1);
+
+            // 数据仓库往返
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Smoke-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var repo = new XmlProjectRepository(dir);
+                var loaded = repo.LoadLargeSmoke();
+                Check("排烟参数默认值往返:60", loaded.SmokeRateM3HPerM2, 60);
+                loaded.SelectionFactor = 1.25;
+                repo.SaveLargeSmoke(loaded);
+                Check("排烟参数往返 选型系数", repo.LoadLargeSmoke().SelectionFactor, 1.25);
+                File.WriteAllText(Path.Combine(dir, "large-smoke.xml"), "<broken");
+                Check("排烟参数损坏文件回退默认", repo.LoadLargeSmoke().SelectionFactor, 1.2);
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { /* 忽略清理失败 */ }
+            }
+
+            Console.WriteLine();
+        }
         private static LargeSystemInput BuildBusyScenario()
         {
             return new LargeSystemInput
