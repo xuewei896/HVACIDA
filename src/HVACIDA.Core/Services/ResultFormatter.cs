@@ -49,5 +49,97 @@ namespace HVACIDA.Core.Services
             }
             return sb.ToString();
         }
+
+        /// <summary>
+        /// 水力计算书(风系统 / 水系统):系统与介质 + 最不利环路阻力 + 需求值 + 设备校核
+        /// (由 <see cref="ResultTable.ForHydraulic"/> 渲染),再附**逐段明细**、环路阻力项与本次用到的局部阻力系数。
+        /// </summary>
+        public static string FormatHydraulic(HydraulicInput input, HydraulicResult result, HydraulicCoefficients coefficients = null)
+        {
+            if (result == null) return "";
+            bool water = result.Kind == HydraulicKind.WaterPipe;
+
+            var sb = new StringBuilder();
+            sb.AppendLine(water ? "【水系统水力计算书】(需求 2.4)" : "【风系统水力计算书】(需求 2.3)");
+            if (input != null && !string.IsNullOrEmpty(input.SourceNote))
+            {
+                sb.AppendLine("数据来源:" + input.SourceNote);
+            }
+            sb.AppendLine();
+            sb.AppendLine(ResultTable.ForHydraulic(input, result).ToText());
+
+            sb.AppendLine();
+            sb.AppendLine("—— 管段明细(★ = 最不利环路上的管段) ——");
+            sb.AppendLine(Pad("  段名", 34) + Pad("断面", 18) + Pad("流量 m³/h", 12) + Pad("流速 m/s", 11) +
+                          Pad("λ", 10) + Pad("比摩阻 Pa/m", 13) + Pad("长度 m", 10) + Pad("沿程 Pa", 11) +
+                          Pad("Σζ", 8) + Pad("局部 Pa", 11) + "合计 Pa");
+            foreach (var row in result.Segments)
+            {
+                sb.AppendLine(Pad((row.OnCriticalPath ? "★ " : "  ") + row.Name, 34) +
+                              Pad(row.SectionText, 18) +
+                              Pad(row.FlowM3H.ToString("N0"), 12) +
+                              Pad(row.VelocityMs.ToString("N2"), 11) +
+                              Pad(row.FrictionFactor.ToString("0.0000"), 10) +
+                              Pad(row.SpecificFrictionPaPerM.ToString("N2"), 13) +
+                              Pad(row.LengthM.ToString("N2"), 10) +
+                              Pad(row.FrictionLossPa.ToString("N1"), 11) +
+                              Pad(row.LocalZetaSum.ToString("0.##"), 8) +
+                              Pad(row.LocalLossPa.ToString("N1"), 11) +
+                              row.TotalLossPa.ToString("N1"));
+                if (!string.IsNullOrEmpty(row.LocalNote)) sb.AppendLine("      管件:" + row.LocalNote);
+            }
+
+            if (result.Items.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("—— 环路阻力项(★ = 计入最不利环路) ——");
+                foreach (var item in result.Items)
+                {
+                    sb.AppendLine(Pad((item.OnCriticalPath ? "★ " : "  ") + item.KindText, 12) + Pad(item.Name, 34) +
+                                  Pad(item.ResistancePa.ToString("N1") + " Pa", 16) +
+                                  (string.IsNullOrEmpty(item.Source) ? "" : "(" + item.Source + ")"));
+                }
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("—— 本次局部阻力系数取值(表内逐项可改;来源见括号) ——");
+            foreach (var item in LocalLossItemsFor(coefficients, water))
+            {
+                sb.AppendLine("  " + Pad(item.Name, 26) + Pad("ζ=" + item.Zeta.ToString("0.##"), 12) + item.Source);
+            }
+
+            if (!string.IsNullOrEmpty(result.PendingNote))
+            {
+                sb.AppendLine();
+                sb.AppendLine("⚠ 待补 / 局限:" + result.PendingNote);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>本次介质用到的局部阻力系数表(优先取系数集里的表;没有则给默认表)。</summary>
+        private static System.Collections.Generic.IList<HydraulicLocalLossItem> LocalLossItemsFor(
+            HydraulicCoefficients coefficients, bool water)
+        {
+            if (coefficients != null && coefficients.LocalLossItems != null && coefficients.LocalLossItems.Count > 0)
+            {
+                var matched = new System.Collections.Generic.List<HydraulicLocalLossItem>();
+                string wanted = water ? "水管" : "风管";
+                foreach (var item in coefficients.LocalLossItems)
+                {
+                    if (item == null) continue;
+                    if (string.Equals(item.AppliesTo, wanted, System.StringComparison.Ordinal)) matched.Add(item);
+                }
+                if (matched.Count > 0) return matched;
+            }
+            return water ? HydraulicLocalLossTable.CreatePipeDefaults() : HydraulicLocalLossTable.CreateDuctDefaults();
+        }
+
+        private static string Pad(string text, int width)
+        {
+            text = text ?? "";
+            int w = 0;
+            foreach (char ch in text) w += ch > 0x2E80 ? 2 : 1;
+            return w >= width ? text + " " : text + new string(' ', width - w);
+        }
     }
 }

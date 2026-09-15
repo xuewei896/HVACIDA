@@ -44,10 +44,11 @@ namespace HVACIDA.Smoke
             RunWeatherDatabaseChecks();
             RunLargeSmokeChecks();
             RunSmallSystemChecks();
+            RunHydraulicChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算自检通过。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
@@ -964,6 +965,261 @@ namespace HVACIDA.Smoke
             finally
             {
                 try { Directory.Delete(dir7, true); } catch { }
+            }
+
+            Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景13:水力计算(风系统 / 水系统)—— 公式与数值得独立复算
+        //   期望值由公式**独立手算**(脚本另算一遍)：
+        //   ① 圆形风管 Φ0.5 m、L=10 m、Q=3600 m³/h、K=0.15 mm、Σζ=1.0、20 ℃:
+        //      A=πd²/4=0.1963495 m²,v=Q/3600/A=5.092958 m/s,Re=v·d/ν=168641.0,
+        //      λ=0.11(K/d+68/Re)^0.25=0.0179129,动压 ρv²/2=15.62778 Pa(ρ=1.205),
+        //      R=λ/d×动压=0.559878 Pa/m,沿程=5.598778 Pa,局部=1.0×动压=15.62778 Pa,段=21.22656 Pa。
+        //   ② 矩形风管 1.2×0.4、L=20 m、Q=7200 m³/h、Σζ=0.35:A=0.48,d=4A/U=0.6 m,
+        //      v=4.166667 m/s,Re=165562.9,λ=0.01763588,动压=10.46007 Pa,R=0.3074537,
+        //      沿程=6.149083 Pa,局部=3.661024 Pa,段=9.810107 Pa。
+        //   ③ 水管 Φ0.1 m、L=50 m、Q=36 m³/h、K=0.2 mm、Σζ=2.0、10 ℃(ρ=999.70、ν=1.306e-6):
+        //      v=1.273240 m/s,Re=97491.5,λ=0.0250688,动压=810.3263 Pa,R=203.1388 Pa/m,
+        //      沿程=10156.94 Pa,局部=1620.65 Pa,段=11777.59 Pa。
+        // =====================================================================
+        private static void RunHydraulicChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景13:水力计算(风系统 / 水系统)");
+            Console.WriteLine("==================================================");
+
+            var calc = new HydraulicCalculator();
+            var coefficients = HydraulicCoefficients.CreateDefault();
+
+            // ---------- 1) 圆形风管:单段,逐项复算 ----------
+            var air = new HydraulicInput
+            {
+                Kind = HydraulicKind.AirDuct,
+                SystemName = "机械送风 1",
+                SystemTypeName = "送风",
+                MediumTempC = 20,
+                FromModel = false
+            };
+            air.Segments.Add(new HydraulicSegment
+            {
+                Name = "送风主管",
+                ElementId = 0,
+                Shape = HydraulicShape.Round,
+                DiameterM = 0.5,
+                LengthM = 10,
+                FlowM3H = 3600,
+                LocalZetaSum = 1.0,
+                LocalNote = "90°弯头×2(0.25×2)",
+                OnCriticalPath = true
+            });
+            air.Terminals.Add(new HydraulicTerminal
+            {
+                Name = "散流器 1", Kind = HydraulicItemKind.Terminal, ResistancePa = 0,
+                Source = "示例不设末端阻力", OnCriticalPath = true
+            });
+
+            var airResult = calc.Calculate(air, coefficients);
+            Check("风管 ρ(20 ℃)", airResult.DensityKgM3, 1.205, 1e-9);
+            Check("风管 ν(20 ℃)", airResult.KinematicViscosityM2S, 1.51e-5, 1e-12);
+            Check("圆形风管 断面积 m²", airResult.Segments[0].AreaM2, 0.1963495, 1e-7);
+            Check("圆形风管 流速 m/s", airResult.Segments[0].VelocityMs, 5.092958, 1e-6);
+            Check("圆形风管 雷诺数", airResult.Segments[0].Reynolds, 168641.0, 1.0);
+            Check("圆形风管 摩擦系数 λ", airResult.Segments[0].FrictionFactor, 0.0179129, 1e-7);
+            Check("圆形风管 动压 Pa", airResult.Segments[0].DynamicPressurePa, 15.62778, 1e-4);
+            Check("圆形风管 比摩阻 Pa/m", airResult.Segments[0].SpecificFrictionPaPerM, 0.559878, 1e-5);
+            Check("圆形风管 沿程阻力 Pa", airResult.Segments[0].FrictionLossPa, 5.598778, 1e-4);
+            Check("圆形风管 局部阻力 Pa", airResult.Segments[0].LocalLossPa, 15.62778, 1e-4);
+            Check("圆形风管 段合计 Pa", airResult.Segments[0].TotalLossPa, 21.22656, 1e-4);
+            Check("圆形风管 实际粗糙度 K mm(未填 → 按介质默认)", airResult.Segments[0].RoughnessMm, 0.15, 1e-9);
+
+            // 出口动压:风系统开式出口,未指定出口段 → 按环路上动压最大段(此处唯一一段)取值
+            Check("出口动压 Pa(按最大动压段)", airResult.OutletDynamicPa, 15.62778, 1e-4);
+            Check("计算总阻力 Pa(段 + 出口动压)", airResult.TotalResistancePa, 36.85434, 1e-4);
+            Check("需求全压 Pa(× 富余 1.1)", airResult.RequiredPressurePa, 40.53977, 1e-4);
+            Check("需求扬程 m(风系统为 0)", airResult.RequiredHeadM, 0.0, 1e-12);
+            CheckText("未读到风机额定全压 → 不校核(不编额定值,MarginPct = NaN)",
+                double.IsNaN(airResult.MarginPct) ? "NaN" : airResult.MarginPct.ToString("0.#"), "NaN");
+            CheckText("校核结论写明未校核", airResult.CheckVerdict.Contains("未校核") ? "未校核" : airResult.CheckVerdict, "未校核");
+            CheckText("待补说明写明出口动压按最大动压段取",
+                airResult.PendingNote.Contains("动压最大") ? "有" : airResult.PendingNote, "有");
+
+            // 指定出口段后:出口动压按该段取,且不再提示"按最大动压段"
+            air.Segments[0].ElementId = 555;
+            air.OutletSegmentElementId = 555;
+            var airResult2 = calc.Calculate(air, coefficients);
+            Check("指定出口段 出口动压 Pa", airResult2.OutletDynamicPa, 15.62778, 1e-4);
+            CheckText("指定出口段后不再按最大动压段兜底",
+                airResult2.PendingNote.Contains("动压最大") ? "仍兜底" : "按指定段", "按指定段");
+
+            // 额定全压校核:给 50 Pa → 余量 (50-40.53977)/40.53977 = 23.34% → 满足
+            air.RatedPressurePa = 50;
+            var airResult3 = calc.Calculate(air, coefficients);
+            Check("风机额定 50 Pa 时余量 %", airResult3.MarginPct, 23.3357, 1e-3);
+            CheckText("校核结论 = 满足", airResult3.CheckVerdict.Contains("满足") ? "满足" : airResult3.CheckVerdict, "满足");
+
+            // 额压不足:给 30 Pa → 余量 -26.0% → 不足
+            air.RatedPressurePa = 30;
+            var airResult4 = calc.Calculate(air, coefficients);
+            Check("风机额定 30 Pa 时余量 %", airResult4.MarginPct, -25.9986, 1e-3);
+            CheckText("校核结论 = 不足", airResult4.CheckVerdict.Contains("不足") ? "不足" : airResult4.CheckVerdict, "不足");
+
+            // ---------- 2) 矩形风管:水力直径 = 流速当量直径 ----------
+            var rect = new HydraulicInput { Kind = HydraulicKind.AirDuct, MediumTempC = 20, SystemName = "机械排风 1" };
+            rect.Segments.Add(new HydraulicSegment
+            {
+                Shape = HydraulicShape.Rectangular, WidthM = 1.2, HeightM = 0.4,
+                LengthM = 20, FlowM3H = 7200, LocalZetaSum = 0.35, OnCriticalPath = true, Name = "排风管 1200×400"
+            });
+            rect.IncludeOutletDynamic = false;      // 闭式/不算出口动压的情形
+            var rectResult = calc.Calculate(rect, coefficients);
+            Check("矩形风管 断面积 m²", rectResult.Segments[0].AreaM2, 0.48, 1e-9);
+            Check("矩形风管 水力直径 m(= 2ab/(a+b))", rectResult.Segments[0].HydraulicDiameterM, 0.6, 1e-9);
+            Check("矩形风管 流速 m/s", rectResult.Segments[0].VelocityMs, 4.166667, 1e-6);
+            Check("矩形风管 雷诺数", rectResult.Segments[0].Reynolds, 165562.9, 1.0);
+            Check("矩形风管 摩擦系数 λ", rectResult.Segments[0].FrictionFactor, 0.01763588, 1e-7);
+            Check("矩形风管 动压 Pa", rectResult.Segments[0].DynamicPressurePa, 10.46007, 1e-4);
+            Check("矩形风管 比摩阻 Pa/m", rectResult.Segments[0].SpecificFrictionPaPerM, 0.3074537, 1e-6);
+            Check("矩形风管 沿程阻力 Pa", rectResult.Segments[0].FrictionLossPa, 6.149083, 1e-4);
+            Check("矩形风管 局部阻力 Pa(Σζ=0.35)", rectResult.Segments[0].LocalLossPa, 3.661024, 1e-4);
+            Check("矩形风管 段合计 Pa", rectResult.Segments[0].TotalLossPa, 9.810107, 1e-4);
+            Check("不计出口动压时 出口动压 = 0", rectResult.OutletDynamicPa, 0.0, 1e-12);
+
+            // ---------- 3) 水管:单段 + 末端 + 机组 + 校核 ----------
+            var water = new HydraulicInput
+            {
+                Kind = HydraulicKind.WaterPipe,
+                SystemName = "冷冻水供回水",
+                SystemTypeName = "冷冻水",
+                MediumTempC = 10,
+                StaticHeightM = 0,          // 闭式环路
+                ExtraFactor = 1.1
+            };
+            water.Segments.Add(new HydraulicSegment
+            {
+                Name = "供水干管", Shape = HydraulicShape.Round, DiameterM = 0.1,
+                LengthM = 50, FlowM3H = 36, LocalZetaSum = 2.0, OnCriticalPath = true,
+                LocalNote = "90°弯头×2(1.0×2)"
+            });
+            water.Terminals.Add(new HydraulicTerminal
+            {
+                Name = "空调机组 AHU-B101 盘管", Kind = HydraulicItemKind.Equipment,
+                ResistancePa = 30000, Source = "设备样本水阻 30 kPa", OnCriticalPath = true
+            });
+            water.Terminals.Add(new HydraulicTerminal
+            {
+                Name = "风机盘管末端", Kind = HydraulicItemKind.Terminal,
+                ResistancePa = 20000, Source = "样本 20 kPa", OnCriticalPath = true
+            });
+
+            var waterResult = calc.Calculate(water, coefficients);
+            Check("水管 ρ(10 ℃)", waterResult.DensityKgM3, 999.70, 1e-9);
+            Check("水管 ν(10 ℃)", waterResult.KinematicViscosityM2S, 1.306e-6, 1e-15);
+            Check("水管 流速 m/s", waterResult.Segments[0].VelocityMs, 1.273240, 1e-6);
+            Check("水管 雷诺数", waterResult.Segments[0].Reynolds, 97491.5, 1.0);
+            Check("水管 摩擦系数 λ", waterResult.Segments[0].FrictionFactor, 0.0250688, 1e-7);
+            Check("水管 动压 Pa", waterResult.Segments[0].DynamicPressurePa, 810.3263, 1e-3);
+            Check("水管 比摩阻 Pa/m", waterResult.Segments[0].SpecificFrictionPaPerM, 203.1388, 1e-3);
+            Check("水管 沿程阻力 Pa", waterResult.Segments[0].FrictionLossPa, 10156.94, 1e-2);
+            Check("水管 局部阻力 Pa(Σζ=2.0)", waterResult.Segments[0].LocalLossPa, 1620.65, 1e-2);
+            Check("水管 段合计 Pa", waterResult.Segments[0].TotalLossPa, 11777.59, 1e-2);
+            Check("水系统 实际粗糙度 K mm(未填 → 0.2)", waterResult.Segments[0].RoughnessMm, 0.2, 1e-9);
+            Check("水系统 静压 Pa(闭式 = 0)", waterResult.StaticPa, 0.0, 1e-9);
+            Check("水系统 出口动压不计(= 0)", waterResult.OutletDynamicPa, 0.0, 1e-9);
+            Check("水系统 计算总阻力 Pa", waterResult.TotalResistancePa, 61777.59, 1e-2);
+            Check("水系统 需求全压(换算值)Pa", waterResult.RequiredPressurePa, 67955.35, 1e-2);
+            Check("水系统 需求扬程 m", waterResult.RequiredHeadM, 6.929230, 1e-5);
+
+            // 静压高差:10 m → ρg·h = 999.70×9.81×10 = 98070.57 Pa,计入总阻力
+            water.StaticHeightM = 10;
+            var waterWithStatic = calc.Calculate(water, coefficients);
+            Check("静压高差 10 m → Pa", waterWithStatic.StaticPa, 999.70 * 9.81 * 10, 1e-6);
+
+            // 水泵额定扬程校核:8 m → 余量 (8 - 6.92923)/6.92923 = 15.45% → 满足
+            water.StaticHeightM = 0;
+            water.RatedHeadM = 8;
+            var waterRated = calc.Calculate(water, coefficients);
+            Check("水泵额定 8 m 时余量 %", waterRated.MarginPct, 15.4530, 1e-3);
+            CheckText("扬程校核结论 = 满足", waterRated.CheckVerdict.Contains("满足") ? "满足" : waterRated.CheckVerdict, "满足");
+
+            // ---------- 4) 公式边界:层流区 λ = 64/Re ----------
+            Check("层流 Re=1354 → λ = 64/Re", HydraulicCalculator.FrictionFactor(1354, 0.01), 64.0 / 1354.0, 1e-12);
+            Check("临界 Re=2320 → 走湍流式", HydraulicCalculator.FrictionFactor(2320, 0.01),
+                0.11 * Math.Pow(0.01 + 68.0 / 2320.0, 0.25), 1e-12);
+            Check("雷诺数 0 → λ = 0(不产生 NaN/Inf)", HydraulicCalculator.FrictionFactor(0, 0.01), 0.0, 1e-12);
+            Check("空气密度按温度插值(30 ℃)", HydraulicCalculator.Density(HydraulicKind.AirDuct, 30), 1.165, 1e-9);
+            Check("水密度按温度插值(45 ℃ = 中间插值)",
+                HydraulicCalculator.Density(HydraulicKind.WaterPipe, 45), (992.22 + 988.03) / 2.0, 1e-6);
+
+            // ---------- 5) 没有拓扑信息(手工录入)→ 全部按环路计,并在待补说明里写清 ----------
+            var manual = new HydraulicInput { Kind = HydraulicKind.AirDuct, MediumTempC = 20 };
+            manual.Segments.Add(new HydraulicSegment
+            {
+                Name = "手工段 1", Shape = HydraulicShape.Round, DiameterM = 0.5,
+                LengthM = 10, FlowM3H = 3600, LocalZetaSum = 1.0
+            });
+            var manualResult = calc.Calculate(manual, coefficients);
+            CheckInt("无拓扑标记 → 全部段计入环路", manualResult.CriticalSegmentCount, 1);
+            CheckText("无拓扑标记时明确写出保守口径",
+                manualResult.PendingNote.Contains("保守计入") ? "有" : manualResult.PendingNote, "有");
+
+            // ---------- 6) 空输入:不出数字,只给指引(没算过就不摆结果) ----------
+            var emptyResult = calc.Calculate(new HydraulicInput { Kind = HydraulicKind.AirDuct }, coefficients);
+            CheckInt("空输入 无管段", emptyResult.Segments.Count, 0);
+            Check("空输入 总阻力 = 0", emptyResult.TotalResistancePa, 0.0, 1e-12);
+            CheckText("空输入 给出「没读到任何管段」的指引",
+                emptyResult.PendingNote.Contains("没有读到任何管段") ? "有" : emptyResult.PendingNote, "有");
+
+            // ---------- 7) 结果表 / 计算书:与结构同源,且不出现公式文档单元格编号 ----------
+            var table = ResultTable.ForHydraulic(water, waterRated);
+            CheckInt("水力结果表 分区数 = 4", table.Sections.Count, 4);
+            CheckText("需求扬程行是合计行",
+                table.Sections[2].Rows[table.Sections[2].Rows.Count - 1].IsTotal ? "是" : "否", "是");
+            var report = ResultFormatter.FormatHydraulic(water, waterRated, coefficients);
+            CheckText("计算书含逐段明细", report.Contains("管段明细") ? "有" : report, "有");
+            CheckText("计算书含口径说明", report.Contains("阿尔特舒利") ? "有" : report, "有");
+            CheckText("计算书含局部阻力系数取值", report.Contains("局部阻力系数取值") ? "有" : report, "有");
+            CheckText("计算书不含单元格编号",
+                System.Text.RegularExpressions.Regex.IsMatch(report, @"(?<![-A-Z])\b[A-Z]{1,2}[0-9]{2,3}\b") ? "有" : "无", "无");
+
+            // ---------- 8) 落盘往返(系数集 + 两次读取的管网输入) ----------
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Hyd-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var repository = new XmlProjectRepository(dir);
+                var service = new HydraulicInputService(repository);
+                CheckText("未拾取过的介质返回 null(界面据此提示先去拾取)",
+                    service.Calculate(HydraulicKind.AirDuct) == null ? "null" : "非 null", "null");
+
+                var defaultProject = service.LoadProject();
+                CheckInt("默认系数集自带风管管件表(13 条)", HydraulicLocalLossTable.CreateDuctDefaults().Count, 13);
+                CheckInt("默认系数集自带水管管件表(12 条)", HydraulicLocalLossTable.CreatePipeDefaults().Count, 12);
+                CheckInt("首次读取即补齐管件表", defaultProject.Coefficients.LocalLossItems.Count, 25);
+                CheckText("管件表每条都写明取值来源",
+                    HydraulicLocalLossTable.ZetaOf(defaultProject.Coefficients.LocalLossItems, "90°弯头(圆形 R/D=1.0)") > 0
+                        && HydraulicLocalLossTable.CreateDuctDefaults()[0].Source.Length > 10 ? "有" : "缺", "有");
+                CheckText("查不到的管件返回 NaN(不当 0)",
+                    double.IsNaN(HydraulicLocalLossTable.ZetaOf(defaultProject.Coefficients.LocalLossItems, "不存在的管件"))
+                        ? "NaN" : "有值", "NaN");
+
+                service.Save(air);
+                service.Save(water);
+                var reloaded = service.LoadProject();
+                CheckInt("落盘往返:风系统管段数", reloaded.Air.Segments.Count, 1);
+                CheckText("落盘往返:风系统名称", reloaded.Air.SystemName, "机械送风 1");
+                CheckInt("落盘往返:水系统设备/末端项数", reloaded.Water.Terminals.Count, 2);
+                CheckText("落盘往返:水系统机组阻力来源", reloaded.Water.Terminals[0].Source, "设备样本水阻 30 kPa");
+                Check("落盘往返:需求扬程一致", service.Calculate(HydraulicKind.WaterPipe).RequiredHeadM,
+                    waterRated.RequiredHeadM, 1e-9);
+
+                service.Clear(HydraulicKind.AirDuct);
+                CheckInt("清空风系统后不再有风系统输入", service.Load(HydraulicKind.AirDuct) == null ? 0 : 1, 0);
+                CheckInt("清空风系统不影响水系统", service.Load(HydraulicKind.WaterPipe) == null ? 0 : 1, 1);
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
             }
 
             Console.WriteLine();

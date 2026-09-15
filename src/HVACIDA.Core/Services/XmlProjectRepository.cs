@@ -34,6 +34,8 @@ namespace HVACIDA.Core.Services
 
         private string SmallSystemsFilePath => Path.Combine(StorageDirectory, "small-systems.xml");
 
+        private string HydraulicFilePath => Path.Combine(StorageDirectory, "hydraulic.xml");
+
         /// <summary>旧版单系统文件(仅用于自动迁移)。</summary>
         private string LegacySmallSystemFilePath => Path.Combine(StorageDirectory, "small-system.xml");
 
@@ -105,6 +107,27 @@ namespace HVACIDA.Core.Services
             var project = LoadSmallSystems();
             project.Upsert(input);
             SaveSmallSystems(project);
+        }
+
+        /// <summary>
+        /// 读取水力计算数据(系数集 + 最近一次读到的风/水系统输入)。
+        /// 旧文件缺 LocalLossItems 时补默认管件表(否则界面上的 ζ 全成 0,计算结果会偏小)。
+        /// </summary>
+        public HydraulicProject LoadHydraulic()
+        {
+            var project = Load(HydraulicFilePath, () => new HydraulicProject());
+            if (project == null) project = new HydraulicProject();
+            if (project.Coefficients == null) project.Coefficients = HydraulicCoefficients.CreateDefault();
+            if (project.Coefficients.LocalLossItems == null || project.Coefficients.LocalLossItems.Count == 0)
+                project.Coefficients.LocalLossItems = HydraulicLocalLossTable.CreateDefaults();
+            return project;
+        }
+
+        /// <summary>保存水力计算数据。</summary>
+        public void SaveHydraulic(HydraulicProject project)
+        {
+            if (project == null) throw new ArgumentNullException(nameof(project));
+            Save(HydraulicFilePath, project);
         }
 
         /// <summary>反序列化;文件缺失或损坏时回退默认(不阻断启动,由上层提示)。</summary>

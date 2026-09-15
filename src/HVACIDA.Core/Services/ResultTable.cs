@@ -352,6 +352,70 @@ namespace HVACIDA.Core.Services
             return t;
         }
 
+        // ================================================================== 水力计算(风系统 / 水系统)
+
+        /// <summary>
+        /// 水力计算结果表(需求 2.3 风系统 / 2.4 水系统):系统与介质 → 最不利环路阻力汇总 → 需求值 → 设备校核。
+        /// <para>
+        /// 逐段明细(断面/流速/比摩阻/沿程/局部)不在这里 —— 那是"一段一行、多列数值",
+        /// 与排烟同理走专用表格(<see cref="HydraulicResult.Segments"/>),文本版见 <see cref="ResultFormatter.FormatHydraulic"/>。
+        /// </para>
+        /// </summary>
+        public static ResultTable ForHydraulic(HydraulicInput x, HydraulicResult r)
+        {
+            bool water = r.Kind == HydraulicKind.WaterPipe;
+            var t = new ResultTable
+            {
+                Title = water ? "水系统水力计算结果" : "风系统水力计算结果",
+                Note = r.Note
+            };
+
+            var system = t.Section("一、系统与介质");
+            system.AddText("系统名称", string.IsNullOrEmpty(r.SystemName) ? "(未命名)" : r.SystemName);
+            system.AddText("介质", water ? "水" : "空气");
+            system.Add("介质温度", "", x.MediumTempC, "℃");
+            system.Add("密度 ρ", "", r.DensityKgM3, "kg/m³", water ? 2 : 3);
+            system.AddText("运动粘度 ν", r.KinematicViscosityM2S.ToString("0.000e+0", CultureInfo.InvariantCulture) + " m²/s");
+            system.Add("最不利环路管段数", "", r.CriticalSegmentCount, "段", 0);
+            system.Add("富余系数", "", r.ExtraFactor, "", 2);
+
+            var path = t.Section("二、最不利环路阻力");
+            path.Add("沿程阻力合计", "", r.FrictionTotalPa, "Pa");
+            path.Add("局部阻力合计", "", r.LocalTotalPa, "Pa");
+            path.Add("末端阻力合计", "", r.TerminalTotalPa, "Pa");
+            path.Add("设备阻力合计", "", r.EquipmentTotalPa, "Pa");
+            if (!water) path.Add("出口动压损失", "", r.OutletDynamicPa, "Pa");
+            if (water) path.Add("静压(高差)", "", r.StaticPa, "Pa");
+            path.AddTotal("计算总阻力", "", r.TotalResistancePa, "Pa");
+
+            var required = t.Section(water ? "三、需求水泵扬程" : "三、需求风机全压");
+            if (water)
+            {
+                required.Add("计算总阻力", "", r.TotalResistancePa / 1000.0, "kPa", 2);
+                required.AddTotal("需求扬程(计算总阻力 × 富余 ÷ ρg)", "", r.RequiredHeadM, "m", 2);
+            }
+            else
+            {
+                required.AddTotal("需求全压(计算总阻力 × 富余系数)", "", r.RequiredPressurePa, "Pa", 1);
+            }
+
+            var check = t.Section("四、设备校核(模型参数)");
+            if (water)
+            {
+                check.Add("水泵额定扬程", "", r.RatedHeadM, "m", 2);
+                check.Add("需求扬程", "", r.RequiredHeadM, "m", 2);
+            }
+            else
+            {
+                check.Add("风机额定全压", "", r.RatedPressurePa, "Pa", 1);
+                check.Add("需求全压", "", r.RequiredPressurePa, "Pa", 1);
+            }
+            if (!double.IsNaN(r.MarginPct)) check.AddTotal("余量", "", r.MarginPct, "%", 1);
+            check.AddText("结论", r.CheckVerdict);
+
+            return t;
+        }
+
         private static string Num(double v)
         {
             return v.ToString("0.##", CultureInfo.InvariantCulture);

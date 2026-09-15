@@ -68,6 +68,11 @@ Test-Window '大系统排烟计算 LargeSmokeWindow'  { New-Object "$uiNs.LargeS
 Test-Window '大系统计算结果 LargeResultWindow' { New-Object "$uiNs.LargeSystemResultWindow" }
 Test-Window '小系统负荷计算 SmallSystemWindow' { New-Object "$uiNs.SmallSystemWindow" }
 Test-Window '小系统计算结果 SmallResultWindow' { New-Object "$uiNs.SmallSystemResultWindow" }
+Test-Window '水力计算 风系统 HydraulicSystemWindow' { New-Object "$uiNs.HydraulicSystemWindow" }
+Test-Window '水力计算 水系统 HydraulicSystemWindow(水)' {
+    New-Object "$uiNs.HydraulicSystemWindow" -ArgumentList (New-Object "$vmNs.HydraulicSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.HydraulicKind]::WaterPipe))
+}
+Test-Window '水力计算结果 HydraulicResultWindow' { New-Object "$uiNs.HydraulicResultWindow" }
 Test-Window '规范知识库 KnowledgeWindow'       { New-Object "$uiNs.KnowledgeWindow" }
 Test-Window '操作指南 InfoWindow(Guide)'      {
     $vm = [HVACIDA.UI.ViewModels.InfoViewModel]::Guide()
@@ -830,6 +835,184 @@ try {
     try { Remove-Item $tmp9 -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
     Write-Host ("FAIL  打开即算/计算即保存自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
+# =====================================================================
+# 水力计算(需求 2.3 / 2.4):窗口契约 + 打开即算 + 计算即保存 + 端到端
+#   Core 端的公式与数值已在 HVACIDA.Smoke 场景13 独立复算(手算期望值);
+#   这里验窗口/VM 契约:拾取协议、模型数据回填、按介质切换、「—」、落盘与端到端读数
+# =====================================================================
+try {
+    $tmpH = Join-Path $env:TEMP ("HVACIDA-Hyd-" + [guid]::NewGuid().ToString('N'))
+    $repoH = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmpH
+
+    # ---- 未拾取:录入窗不摆结果,只给指引 ----
+    $hAir = New-Object "$vmNs.HydraulicSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.HydraulicKind]::AirDuct), $repoH, $true
+    if ($hAir.IsAir -eq $true -and $hAir.IsPickAvailable -eq $true -and $hAir.Table -eq $null -and
+        $hAir.Segments.Count -eq 0 -and $hAir.Status -match '还没有管网数据') {
+        Write-Host "PASS  风系统水力窗(未拾取):不摆结果,只给「去拾取 / 加行」的指引"
+    } else {
+        Write-Host ("FAIL  空水力窗: table={0} status='{1}'" -f ($hAir.Table -ne $null), $hAir.Status)
+        $fail++
+    }
+
+    # ---- 拾取协议 ----
+    $hAir.RequestPick()
+    if ($hAir.PickRequested -eq $true) { Write-Host "PASS  请求读取系统 → 置标记(命令层据此拾取)" }
+    else { Write-Host "FAIL  PickRequested 未置位"; $fail++ }
+    $hAir.ClearPickRequest()
+    if ($hAir.PickRequested -eq $false) { Write-Host "PASS  拾取后清标记" }
+    else { Write-Host "FAIL  拾取标记未清"; $fail++ }
+
+    # ---- 注入「命令层从模型读到的」管网 → 立即出结果 ----
+    $airIn = New-Object HVACIDA.Core.Models.HydraulicInput
+    $airIn.Kind = [HVACIDA.Core.Models.HydraulicKind]::AirDuct
+    $airIn.SystemName = '机械送风 1'; $airIn.MediumTempC = 20; $airIn.FromModel = $true
+    $airIn.SourceNote = '数据来自模型:自检注入'; $airIn.CriticalPathName = '散流器 1'
+    $airSeg = New-Object HVACIDA.Core.Models.HydraulicSegment
+    $airSeg.Name = '送风主管 #101'; $airSeg.ElementId = 101
+    $airSeg.Shape = [HVACIDA.Core.Models.HydraulicShape]::Round
+    $airSeg.DiameterM = 0.5; $airSeg.LengthM = 10; $airSeg.FlowM3H = 3600
+    $airSeg.LocalZetaSum = 1.0; $airSeg.LocalNote = '90°弯头(ζ=0.25)'; $airSeg.OnCriticalPath = $true
+    $airIn.Segments.Add($airSeg)
+    $airTerm = New-Object HVACIDA.Core.Models.HydraulicTerminal
+    $airTerm.Name = '散流器 1'; $airTerm.Kind = [HVACIDA.Core.Models.HydraulicItemKind]::Terminal
+    $airTerm.ResistancePa = 0; $airTerm.Source = 'ζ=2.0 × 动压'; $airTerm.OnCriticalPath = $true
+    $airIn.Terminals.Add($airTerm)
+    $hAir.ApplyPickedSystem($airIn, '已从模型读入 1 段风管')
+    if ($hAir.Table -ne $null -and $hAir.Segments.Count -eq 1 -and $hAir.SegmentRows.Count -eq 1 -and
+        $hAir.Summary -match '需求全压' -and $hAir.Summary -match '最不利环路 1 段') {
+        Write-Host ("PASS  读入模型数据后立即出结果:{0}" -f $hAir.Summary)
+    } else {
+        Write-Host ("FAIL  模型数据回填后未出结果: table={0} summary='{1}'" -f ($hAir.Table -ne $null), $hAir.Summary)
+        $fail++
+    }
+
+    # ---- 窗口渲染:管段表 11 列 / 系数表 25 条 / 结果表已绑定 ----
+    $hAirW = New-Object "$uiNs.HydraulicSystemWindow" -ArgumentList $hAir
+    $hAirW.Show(); $hAirW.UpdateLayout()
+    $segGridH = $hAirW.FindName('SegmentGrid')
+    $lossGridH = $hAirW.FindName('LossGrid')
+    $tableHostH = $hAirW.FindName('ResultTableHost')
+    if ($segGridH -ne $null -and $segGridH.Columns.Count -eq 11 -and $lossGridH -ne $null -and
+        $lossGridH.Columns.Count -eq 4 -and $tableHostH -ne $null -and $tableHostH.Table -ne $null -and
+        $hAir.Coefficients.LocalLossItems.Count -eq 25) {
+        Write-Host ("PASS  水力录入窗渲染:管段表 {0} 列 / 系数表 {1} 列(共 {2} 条管件)/ 结果表已绑定" -f `
+            $segGridH.Columns.Count, $lossGridH.Columns.Count, $hAir.Coefficients.LocalLossItems.Count)
+    } else {
+        Write-Host "FAIL  水力录入窗控件/绑定不符"; $fail++
+    }
+    $hAirW.Close()
+
+    # ---- 计算即保存:点【计算并保存】→ 重开窗仍是同一份 ----
+    $hAir.CalculateCommand.Execute($null)
+    $hAirReload = New-Object "$vmNs.HydraulicSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.HydraulicKind]::AirDuct), $repoH
+    if ($hAirReload.Segments.Count -eq 1 -and $hAir.Status -match '已同时保存' -and
+        [math]::Abs($hAirReload.Segments[0].FlowM3H - 3600) -lt 1e-9) {
+        Write-Host "PASS  风系统点【计算并保存】已落盘(重开窗读到 1 段、流量 3600 m³/h)"
+    } else {
+        Write-Host ("FAIL  计算即保存: reload={0} status='{1}'" -f $hAirReload.Segments.Count, $hAir.Status)
+        $fail++
+    }
+
+    # ---- 水系统:静压高差 + 额定扬程校核 ----
+    $hWater = New-Object "$vmNs.HydraulicSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.HydraulicKind]::WaterPipe), $repoH, $true
+    $waterIn = New-Object HVACIDA.Core.Models.HydraulicInput
+    $waterIn.Kind = [HVACIDA.Core.Models.HydraulicKind]::WaterPipe
+    $waterIn.SystemName = '冷冻水供回水'; $waterIn.MediumTempC = 10; $waterIn.FromModel = $true
+    $waterIn.RatedHeadM = 8; $waterIn.CriticalPathName = '风机盘管末端'
+    $waterSeg = New-Object HVACIDA.Core.Models.HydraulicSegment
+    $waterSeg.Name = '供水干管 #201'; $waterSeg.ElementId = 201
+    $waterSeg.Shape = [HVACIDA.Core.Models.HydraulicShape]::Round
+    $waterSeg.DiameterM = 0.1; $waterSeg.LengthM = 50; $waterSeg.FlowM3H = 36
+    $waterSeg.LocalZetaSum = 2.0; $waterSeg.OnCriticalPath = $true
+    $waterIn.Segments.Add($waterSeg)
+    $chiller = New-Object HVACIDA.Core.Models.HydraulicTerminal
+    $chiller.Name = '空调机组盘管'; $chiller.Kind = [HVACIDA.Core.Models.HydraulicItemKind]::Equipment
+    $chiller.ResistancePa = 30000; $chiller.Source = '设备样本 30 kPa'; $chiller.OnCriticalPath = $true
+    $waterIn.Terminals.Add($chiller)
+    $fanCoil = New-Object HVACIDA.Core.Models.HydraulicTerminal
+    $fanCoil.Name = '风机盘管末端'; $fanCoil.Kind = [HVACIDA.Core.Models.HydraulicItemKind]::Terminal
+    $fanCoil.ResistancePa = 20000; $fanCoil.Source = '样本 20 kPa'; $fanCoil.OnCriticalPath = $true
+    $waterIn.Terminals.Add($fanCoil)
+    $hWater.ApplyPickedSystem($waterIn, '已从模型读入 1 段水管')
+    if ($hWater.IsWater -eq $true -and $hWater.Summary -match '需求扬程 6\.93' -and
+        $hWater.CheckVerdict -match '满足' -and $hWater.Table.Sections.Count -eq 4) {
+        Write-Host ("PASS  水系统读数:{0};校核:{1}" -f $hWater.Summary, $hWater.CheckVerdict)
+    } else {
+        Write-Host ("FAIL  水系统读数: summary='{0}' verdict='{1}'" -f $hWater.Summary, $hWater.CheckVerdict)
+        $fail++
+    }
+    $hWater.CalculateCommand.Execute($null)
+
+    # ---- 计算结果窗:打开即算 / 两行汇总 / 「—」 / 选中行刷新 ----
+    $hr = New-Object "$vmNs.HydraulicResultViewModel" -ArgumentList $repoH
+    if ($hr.Rows.Count -eq 2 -and $hr.Table -ne $null -and $hr.Table.Sections.Count -eq 4 -and
+        $hr.SegmentRows.Count -ge 1 -and $hr.SummaryTitle -match '已拾取 2 个系统') {
+        Write-Host ("PASS  水力计算结果窗打开即出结果:{0}" -f $hr.SummaryTitle)
+    } else {
+        Write-Host ("FAIL  水力结果窗: rows={0} table={1}" -f $hr.Rows.Count, ($hr.Table -ne $null))
+        $fail++
+    }
+
+    $airRowH = $hr.Rows | Where-Object { $_.KindName -eq '风系统' } | Select-Object -First 1
+    $waterRowH = $hr.Rows | Where-Object { $_.KindName -eq '水系统' } | Select-Object -First 1
+    if ($airRowH -ne $null -and $waterRowH -ne $null -and $airRowH.StaticText -eq '—' -and
+        $waterRowH.OutletText -eq '—' -and $airRowH.RequiredText -match 'Pa$' -and
+        $waterRowH.RequiredText -match 'm$' -and $waterRowH.MarginText -match '%') {
+        Write-Host ("PASS  不涉及的量显示「—」且单位按介质切换:风 需求={0} 静压={1};水 需求={2} 出口动压={3} 余量={4}" -f `
+            $airRowH.RequiredText, $airRowH.StaticText, $waterRowH.RequiredText, $waterRowH.OutletText, $waterRowH.MarginText)
+    } else {
+        Write-Host "FAIL  介质单位/「—」显示不符"; $fail++
+    }
+
+    $hr.SelectedRow = $waterRowH
+    if ($hr.DetailTitle -match '水系统' -and $hr.SegmentRows.Count -eq 1 -and $hr.ItemRows.Count -eq 2 -and
+        $hr.ResultText -match '需求扬程' -and $hr.ResultText -match '管段明细') {
+        Write-Host "PASS  选中水系统行 → 逐段明细 / 阻力项 / 计算书同步刷新"
+    } else {
+        Write-Host ("FAIL  选中行刷新: title='{0}' segs={1} items={2}" -f $hr.DetailTitle, $hr.SegmentRows.Count, $hr.ItemRows.Count)
+        $fail++
+    }
+
+    $hrW = New-Object "$uiNs.HydraulicResultWindow" -ArgumentList $hr
+    $hrW.Show(); $hrW.UpdateLayout()
+    $sumGridH = $hrW.FindName('SummaryGrid')
+    $segGridR = $hrW.FindName('SegmentGrid')
+    $itemGridH = $hrW.FindName('ItemGrid')
+    if ($sumGridH -ne $null -and $sumGridH.Columns.Count -eq 14 -and $sumGridH.Items.Count -eq 2 -and
+        $segGridR -ne $null -and $segGridR.Columns.Count -eq 14 -and
+        $itemGridH -ne $null -and $itemGridH.Columns.Count -eq 5) {
+        Write-Host ("PASS  水力结果窗渲染:汇总 {0} 列 × {1} 行 / 逐段 {2} 列 / 阻力项 {3} 列" -f `
+            $sumGridH.Columns.Count, $sumGridH.Items.Count, $segGridR.Columns.Count, $itemGridH.Columns.Count)
+    } else {
+        Write-Host "FAIL  水力结果窗控件/绑定不符"; $fail++
+    }
+    $hrW.Close()
+
+    # ---- 空工程:汇总窗不摆结果;空系统不落盘 ----
+    $tmpH2 = Join-Path $env:TEMP ("HVACIDA-Hyd-" + [guid]::NewGuid().ToString('N'))
+    $repoH2 = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmpH2
+    $hrEmpty = New-Object "$vmNs.HydraulicResultViewModel" -ArgumentList $repoH2
+    if ($hrEmpty.Rows.Count -eq 0 -and $hrEmpty.Table -eq $null -and $hrEmpty.Status -match '还没有从模型拾取过') {
+        Write-Host "PASS  水力计算结果窗(空工程):汇总表为空、不摆结果、只给去拾取的指引"
+    } else {
+        Write-Host ("FAIL  空工程水力结果窗: rows={0}" -f $hrEmpty.Rows.Count); $fail++
+    }
+
+    $hEmpty = New-Object "$vmNs.HydraulicSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.HydraulicKind]::AirDuct), $repoH2, $true
+    $hEmpty.CalculateCommand.Execute($null)
+    if (-not (Test-Path (Join-Path $tmpH2 'hydraulic.xml')) -and $hEmpty.Status -match '未保存') {
+        Write-Host "PASS  没有管段时点【计算并保存】只算不存(不会在结果窗里留空系统)"
+    } else {
+        Write-Host "FAIL  空系统被落盘"; $fail++
+    }
+
+    try { Remove-Item $tmpH -Recurse -Force -ErrorAction Stop } catch { }
+    try { Remove-Item $tmpH2 -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  水力计算窗口自检  {0}" -f $_.Exception.Message)
     $fail++
 }
 

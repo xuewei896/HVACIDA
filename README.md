@@ -85,9 +85,10 @@ dotnet build .\HVACIDA.sln
 | 结果获取时机 | **打开即算 + 计算即保存**(UI设计规范 §4.9) | ✅ 「计算结果」窗**打开就有结果**,不需要再点一次【计 算】;录入窗点【计 算】= 先落盘再算,故结果窗读到的必然是刚算的那一份;只是打开窗不写盘、空系统不落盘 |
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | TextReportGenerator(文本计算书,`%AppData%\HVACIDA\Reports`) | 🟡 文本版 |
-| 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml**) | 🟡 待换 SQLite(旧 small-system.xml 首次读取自动迁移) |
+| 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml** / **hydraulic.xml**) | 🟡 待换 SQLite(旧 small-system.xml 首次读取自动迁移) |
 | 2.7 规范知识库 | DesignQaService(本地规则应答)+ 知识库窗口 | 🟡 规则版,待接 AI |
-| 2.3/2.4 水力、2.5 材料表、2.6 出图 | — | ⬜ 未开始(入口已就位,点击给口径说明) |
+| 2.3/2.4 水力计算 | 风系统 / 水系统录入窗 + 计算结果窗(`HydraulicCalculator` / `RevitHydraulicReader`) | ✅ 已实装:模型里选系统 → 读管网 → 连接件拓扑求**最不利环路** → 需求全压(Pa)/ 扬程(m)+ 设备校核;系数(ζ 表/粗糙度/富余)全部可见可改(§4.10) |
+| 2.5 材料表、2.6 出图 | — | ⬜ 未开始(入口已就位,点击给口径说明) |
 
 ## 6. 关键 TODO(按技能规范)
 
@@ -102,17 +103,23 @@ dotnet build .\HVACIDA.sln
 5. 计算书升级 Excel(EPPlus/OpenXML)与 PDF;出图/标注/图例。
 6. ~~按钮图标~~ 已实装(22 个图标 ×16/32px,`tools/HVACIDA.IconGen` 生成并内嵌 DLL,见 `docs/UI设计规范.md` §4.0.1);
    剩余:中英文界面、操作日志与撤销。
-7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、小系统、**空间聚合、气象联动**)——
+7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、小系统、**空间聚合、气象联动**)、**水力计算(风/水,手算复算)**——
    `tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe`。
+8. 水力计算待补(需求 2.3 / 2.4 已能算,下面几条要按项目补):
+   ① **局部阻力系数取的是手册常用值**(不是唯一值),项目应按手册图表或**设备样本**替换 `HydraulicLocalLossTable` 的取值;
+   ② 模型里若没给风机「全压」/ 水泵「扬程」参数,需手工填额定值才能校核;
+   ③ 三通未区分直通/分流,管件族名**匹配不到的管件不计局部阻力**(界面逐条提示,可手工加到管段 Σζ);
+   ④ 尚未做**环路水力平衡**(调节阀选型、并联环路平衡)与风机/水泵**工况点选型**。
 
 ## 6b. 四项自检(不需要打开 Revit)
 ```powershell
-# 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统 + 空间聚合 + 气象联动)
+# 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统 + 空间聚合 + 气象联动 + 水力计算)
 & ".\tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe"
 
-# 2) 窗口装载自检:12 个 WPF 窗口真构造 + Show + Close(抓 XAML/绑定致命错误)
+# 2) 窗口装载自检:15 个 WPF 窗口真构造 + Show + Close(抓 XAML/绑定致命错误)
 #    + 气象联动/计算结果窗同源 + 公共区自动识别与手动拾取回填
 #    + 打开即算 / 计算即保存(打开就出结果、只是打开不写盘、点计算即落盘、空系统不落盘)
+#    + 水力计算窗(风/水两介质、管段表/系数表、汇总窗两行、「—」、端到端读数)
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\window-smoke.ps1 `
   -UiDir .\src\HVACIDA.UI\bin\Release\net48
 

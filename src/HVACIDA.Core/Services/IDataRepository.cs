@@ -52,5 +52,14 @@ namespace HVACIDA.Core.Services
 
         /// <summary>保存小系统输入(单系统;**兼容入口**,按"类型 + 编号"upsert 进小系统工程)。</summary>
         void SaveSmallSystem(SmallSystemInput input);
+
+        /// <summary>
+        /// 读取水力计算数据(需求 2.3 / 2.4):系数集 + 最近一次从模型读到的风系统 / 水系统输入。
+        /// 结果不落盘 —— 「计算结果」窗按输入现算(与其它模块一致)。不存在时返回默认实例。
+        /// </summary>
+        HydraulicProject LoadHydraulic();
+
+        /// <summary>保存水力计算数据(系数集与两次读取的管网输入)。</summary>
+        void SaveHydraulic(HydraulicProject project);
     }
 }

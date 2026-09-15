@@ -21,27 +21,6 @@ namespace HVACIDA.Revit.Commands
         }
     }
 
-    /// <summary>水力计算 → 风系统(待实现)。</summary>
-    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowAirHydraulicCommand : ModuleInfoCommandBase
-    {
-        protected override string ModuleKey => "hyd-air";
-    }
-
-    /// <summary>水力计算 → 水系统(待实现)。</summary>
-    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowWaterHydraulicCommand : ModuleInfoCommandBase
-    {
-        protected override string ModuleKey => "hyd-water";
-    }
-
-    /// <summary>水力计算 → 计算结果(待实现)。</summary>
-    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowHydraulicResultCommand : ModuleInfoCommandBase
-    {
-        protected override string ModuleKey => "hyd-result";
-    }
-
     /// <summary>出图 → 明细表 / 材料表统计(待实现)。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class ShowScheduleCommand : ModuleInfoCommandBase

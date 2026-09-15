@@ -142,5 +142,31 @@ namespace HVACIDA.Core.Utils
 
         /// <summary>余压阀漏风系数(R388=0.083×O388×P388)</summary>
         public const double ReliefValveLeakageFactor = 0.083;
+
+        // =====================================================================
+        // 水力计算(需求 2.3 / 2.4)系数与物性
+        // 口径来源:用户 2026-09-15 明确「没有具体计算公式,由你实现该功能」——
+        // 因此这里采用**暖通/流体力学的通用公式与常用取值**,并把每一个系数的来源写清:
+        //   · 公式:沿程 Darcy-Weisbach(λ 用阿尔特舒利显式式)、局部 ζ·ρv²/2、水系统 H = ΣΔP/(ρg);
+        //   · 物性:空气/水的常用物性表(按温度插值),算完在结果里显示实际取值;
+        //   · 系数:粗糙度 / 富余系数 / 局部阻力 ζ 表,全部集中在 HydraulicCoefficients 里**可见可改**,
+        //           并在计算书末尾逐项列出本次实际取值 —— 不藏在代码里。
+        // 待项目确认项见 HydraulicLocalLossTable 每条取值的来源说明。
+        // =====================================================================
+
+        /// <summary>重力加速度 m/s²(水系统静压与扬程换算)</summary>
+        public const double GravityM2S = 9.81;
+
+        /// <summary>风管绝对粗糙度 K mm(镀锌钢板风管常用值)</summary>
+        public const double DuctRoughnessMm = 0.15;
+
+        /// <summary>水管绝对粗糙度 K mm(焊接钢管常用值;不锈钢/铜管更小,可在界面改)</summary>
+        public const double PipeRoughnessMm = 0.2;
+
+        /// <summary>风系统 / 水系统富余系数(需求全压/扬程 = 计算总阻力 × 1.1)</summary>
+        public const double HydraulicExtraFactor = 1.1;
+
+        /// <summary>层流临界雷诺数(Re 低于它按 λ = 64/Re;之上按湍流式)</summary>
+        public const double LaminarReynoldsLimit = 2320.0;
     }
 }
