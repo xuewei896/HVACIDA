@@ -43,7 +43,7 @@ namespace HVACIDA.UI.ViewModels
             _input = _repository.LoadLargeSmoke();
             _areas = _largeService.Load();          // 与公共区参数/负荷计算同一份(含气象联动)
 
-            CalculateCommand = new RelayCommand(Calculate);
+            CalculateCommand = new RelayCommand(CalculateAndPersist);
             SaveCommand = new RelayCommand(Save);
             ExportCommand = new RelayCommand(Export, () => _result != null);
             ResetCommand = new RelayCommand(Reset);
@@ -116,6 +116,32 @@ namespace HVACIDA.UI.ViewModels
             private set => Set(ref _status, value);
         }
 
+        /// <summary>
+        /// 【计 算】按钮入口:**先把排烟参数落盘,再计算**。
+        /// <para>
+        /// large-smoke.xml 是「排烟计算」窗与「大系统 → 计算结果」窗共用的排烟参数源;只算不存会让
+        /// 「计算结果」窗里的排烟结果仍按上一次保存的参数。重新取面积(<see cref="ReloadAreas"/>)、
+        /// 恢复默认等内部重算走 <see cref="Calculate()"/>(不写盘)。
+        /// </para>
+        /// </summary>
+        private void CalculateAndPersist()
+        {
+            string saveNote;
+            try
+            {
+                _repository.SaveLargeSmoke(_input);
+                saveNote = "本次计算已同时保存到 large-smoke.xml。";
+            }
+            catch (Exception ex)
+            {
+                saveNote = "⚠ 排烟参数保存失败(" + ex.Message + "),本次结果仅存在于本窗。";
+            }
+
+            Calculate();
+            Status = saveNote + " " + Status;
+        }
+
+        /// <summary>内部重算(不写盘):构造函数、重新取面积、恢复默认走这里。</summary>
         private void Calculate()
         {
             try

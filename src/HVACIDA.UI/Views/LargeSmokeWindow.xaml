@@ -62,7 +62,8 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Button Content="计 算" Width="90" Height="30" Margin="0,0,8,0"
-                            Command="{Binding CalculateCommand}" IsDefault="True"/>
+                            Command="{Binding CalculateCommand}" IsDefault="True"
+                            ToolTip="计算并把排烟参数保存到 large-smoke.xml(「大系统 → 计算结果」窗里的排烟表读的就是这份参数)"/>
                     <Button Content="重取面积" Width="96" Height="30" Click="OnReloadAreasClick"
                             ToolTip="从「大系统 → 公共区参数」重新读取 D55/D56 并重算"/>
                     <Button Content="保 存 参 数" Width="110" Height="30" Margin="8,0,0,0"

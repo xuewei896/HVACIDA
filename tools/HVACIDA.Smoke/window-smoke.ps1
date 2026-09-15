@@ -715,6 +715,124 @@ try {
     $fail++
 }
 
+# =====================================================================
+# 「计算结果」窗打开即算 + 录入窗"计算即保存"
+# (2026-09-15 用户口径:计算完成后结果直接出现在「计算结果」窗,不需要再点一次计算)
+#   ① 每个「计算结果」窗 / 负荷计算窗:构造出来(打开)就已有结果,且只是打开不写盘;
+#   ② 录入窗点【计 算】= 先落盘再计算,故「计算结果」窗读到的必然是刚算的那一份;
+#   ③ 小系统没有房间行时点【计 算】只算不存(避免汇总里留一套空系统)。
+# =====================================================================
+try {
+    $tmp8 = Join-Path $env:TEMP ("HVACIDA-AutoCalc-" + [guid]::NewGuid().ToString('N'))
+    $repo8 = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmp8
+
+    # ---- 大系统负荷计算窗:打开即算 ----
+    $aLoad = New-Object "$vmNs.LargeSystemViewModel" -ArgumentList $repo8
+    if ($aLoad.Table -ne $null -and $aLoad.Table.Sections.Count -eq 7 -and
+        $aLoad.ResultText -match '总制冷量' -and $aLoad.Status -ne '') {
+        Write-Host ("PASS  大系统负荷计算窗打开即出结果:结果表 {0} 个分区 + 计算书已生成" -f $aLoad.Table.Sections.Count)
+    } else {
+        Write-Host ("FAIL  大系统负荷计算窗打开未出结果: table={0} text={1}" -f ($aLoad.Table -ne $null), ($aLoad.ResultText -ne ''))
+        $fail++
+    }
+    if (-not (Test-Path (Join-Path $tmp8 'large-system.xml'))) {
+        Write-Host "PASS  只是打开窗不写盘(内部重算不落盘,不会覆盖已保存参数)"
+    } else { Write-Host "FAIL  打开窗就写了 large-system.xml"; $fail++ }
+
+    # ---- 大系统计算结果窗:打开即算(此前必须进来再点一次【计 算】才出结果)----
+    $aResult = New-Object "$vmNs.LargeResultViewModel" -ArgumentList $repo8
+    if ($aResult.Table -ne $null -and $aResult.Table.Sections.Count -eq 7 -and
+        $aResult.SmokeRows.Count -eq 2 -and $aResult.ResultText -match '总制冷量' -and
+        $aResult.SmokeSummary -match '选型基准') {
+        Write-Host ("PASS  大系统计算结果窗打开即出结果:负荷表 {0} 个分区 + 排烟表 {1} 行,无需再点【计 算】" -f `
+            $aResult.Table.Sections.Count, $aResult.SmokeRows.Count)
+    } else {
+        Write-Host ("FAIL  大系统计算结果窗打开未出结果: table={0} smoke={1}" -f ($aResult.Table -ne $null), $aResult.SmokeRows.Count)
+        $fail++
+    }
+
+    # ---- 负荷计算窗点【计 算】= 计算 + 落盘 ----
+    $aLoad.Input.HallAreaM2 = 1888
+    $aLoad.CalculateCommand.Execute($null)
+    $reload8 = (New-Object HVACIDA.Core.Services.LargeSystemInputService -ArgumentList $repo8).Load()
+    if ($reload8.HallAreaM2 -eq 1888 -and $aLoad.Status -match '已同时保存') {
+        Write-Host "PASS  大系统负荷计算窗点【计 算】已把本次输入落盘(D55 = 1888 已写入 large-system.xml)"
+    } else {
+        Write-Host ("FAIL  计算后未落盘: HallAreaM2 = {0} / status='{1}'" -f $reload8.HallAreaM2, $aLoad.Status)
+        $fail++
+    }
+
+    # 紧接着打开「计算结果」窗:读到的就是刚算的那一份(1888×60 = 113280)
+    $aAfter = New-Object "$vmNs.LargeResultViewModel" -ArgumentList $repo8
+    if ($aAfter.Input.HallAreaM2 -eq 1888 -and $aAfter.SmokeRows[0].CalculatedFlowM3H -eq 113280) {
+        Write-Host "PASS  紧接着打开计算结果窗:读到的就是刚算的参数(站厅计算排烟量 1888×60 = 113280 m³/h)"
+    } else {
+        Write-Host ("FAIL  计算结果窗未读到刚算的参数: D55={0} 排烟量={1}" -f `
+            $aAfter.Input.HallAreaM2, $aAfter.SmokeRows[0].CalculatedFlowM3H)
+        $fail++
+    }
+
+    # ---- 排烟计算窗点【计 算】= 计算 + 落盘 → 计算结果窗排烟表同步 ----
+    $aSmoke = New-Object "$vmNs.LargeSmokeViewModel" -ArgumentList $repo8
+    $aSmoke.Input.SmokeRateM3HPerM2 = 72
+    $aSmoke.CalculateCommand.Execute($null)
+    $saved8 = $repo8.LoadLargeSmoke()
+    $aR2 = New-Object "$vmNs.LargeResultViewModel" -ArgumentList $repo8
+    if ($saved8.SmokeRateM3HPerM2 -eq 72 -and $aR2.SmokeRows[0].CalculatedFlowM3H -eq 135936) {
+        Write-Host "PASS  排烟计算窗点【计 算】已落盘(72 m³/(m²·h)):计算结果窗排烟表同步为 1888×72 = 135936 m³/h"
+    } else {
+        Write-Host ("FAIL  排烟参数未同步: saved={0} 计算结果窗={1}" -f `
+            $saved8.SmokeRateM3HPerM2, $aR2.SmokeRows[0].CalculatedFlowM3H)
+        $fail++
+    }
+
+    try { Remove-Item $tmp8 -Recurse -Force -ErrorAction Stop } catch { }
+
+    # ---- 小系统:打开即算 / 计算即保存 / 空房间不落盘 ----
+    $tmp9 = Join-Path $env:TEMP ("HVACIDA-AutoCalcSmall-" + [guid]::NewGuid().ToString('N'))
+    $repo9 = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmp9
+    $sAir = New-Object "$vmNs.SmallSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn), $repo9
+    if ($sAir.Table -ne $null -and $sAir.Table.Sections.Count -ge 4) {
+        Write-Host ("PASS  小系统录入窗打开即出结果:结果表 {0} 个分区" -f $sAir.Table.Sections.Count)
+    } else { Write-Host "FAIL  小系统录入窗打开未出结果"; $fail++ }
+    if (-not (Test-Path (Join-Path $tmp9 'small-systems.xml'))) {
+        Write-Host "PASS  只是打开小系统窗不写盘(不会在汇总里留下空系统)"
+    } else { Write-Host "FAIL  打开小系统窗就写了 small-systems.xml"; $fail++ }
+
+    $sAir.CalculateCommand.Execute($null)
+    $proj9Empty = $repo9.LoadSmallSystems()
+    if ($proj9Empty.Systems.Count -eq 0 -and $sAir.Status -match '未保存') {
+        Write-Host "PASS  没有房间行时点【计 算】只算不存(状态栏说明原因)"
+    } else {
+        Write-Host ("FAIL  空系统被落盘: {0} 套 / status='{1}'" -f $proj9Empty.Systems.Count, $sAir.Status)
+        $fail++
+    }
+
+    $sAir.Input.SystemCode = 'AHU-B101'
+    $sAir.Rooms.Add([HVACIDA.Core.Models.SmallRoomInput]::Create('信号设备室', 32.18, 5.9)) | Out-Null
+    $sAir.CalculateCommand.Execute($null)
+    $saved9 = $repo9.LoadSmallSystems().Find([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn, 'AHU-B101')
+    if ($saved9 -ne $null -and $saved9.Rooms.Count -eq 1 -and $sAir.Status -match '已同时保存') {
+        Write-Host "PASS  小系统点【计 算】已同时保存(按「类型 + 编号」落盘 AHU-B101,1 个房间)"
+    } else {
+        Write-Host ("FAIL  小系统计算后未落盘: found={0}" -f ($saved9 -ne $null)); $fail++
+    }
+
+    # 端到端:刚算完就打开汇总窗,该系统已在表里(不需要再点保存、也不需要再点计算)
+    $sum9 = New-Object "$vmNs.SmallResultViewModel" -ArgumentList $repo9
+    $row9 = $sum9.SummaryRows | Where-Object { $_.SystemCode -eq 'AHU-B101' } | Select-Object -First 1
+    if ($sum9.Summary.SystemCount -eq 1 -and $row9 -ne $null -and $sum9.Summary.TotalCoolingKw -gt 0) {
+        Write-Host ("PASS  端到端:录入窗算完 → 打开汇总窗即有该系统(冷负荷合计 {0:N2} kW)" -f $sum9.Summary.TotalCoolingKw)
+    } else {
+        Write-Host ("FAIL  汇总窗未出现刚算的系统: count={0} row={1}" -f $sum9.Summary.SystemCount, ($row9 -ne $null)); $fail++
+    }
+
+    try { Remove-Item $tmp9 -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  打开即算/计算即保存自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
 # 待实现模块遍历:22 个模块都应能生成说明窗
 try {
     $n = 0

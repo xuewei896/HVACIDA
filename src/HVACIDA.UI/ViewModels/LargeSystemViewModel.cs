@@ -39,7 +39,7 @@ namespace HVACIDA.UI.ViewModels
             _input = _service.Load();
             ApplyWeatherNotes(_service.LastWeatherSync);
 
-            CalculateCommand = new RelayCommand(Calculate, () => true);
+            CalculateCommand = new RelayCommand(CalculateAndPersist, () => true);
             ExportCommand = new RelayCommand(ExportReport, () => _lastResult != null);
             ResetCommand = new RelayCommand(Reset);
             SaveCommand = new RelayCommand(Save);
@@ -49,6 +49,10 @@ namespace HVACIDA.UI.ViewModels
                 OnPropertyChanged(nameof(Input));
                 Status = "已按当前「项目信息 → 气象参数」重新同步 C5/F4/F6。";
             });
+
+            // 打开即算:本窗右侧就是结果区,打开就该看到结果(不该先进来点一次【计 算】)。
+            // Calculate 只读输入并算,不写盘、不动模型,放构造函数里没有副作用。
+            Calculate();
         }
 
         /// <summary>输入参数(绑定路径 Input.*)。</summary>
@@ -163,6 +167,32 @@ namespace HVACIDA.UI.ViewModels
             WeatherWarning = sync.Warning;
         }
 
+        /// <summary>
+        /// 【计 算】按钮入口:**先把当前输入落盘,再计算**。
+        /// <para>
+        /// large-system.xml 是「公共区参数 / 负荷计算 / 计算结果」三个窗唯一的输入源。只算不存,
+        /// 用户点完【计 算】再打开「计算结果」窗,那边读到的是**上一次保存**的参数 —— 同一份输入两个数。
+        /// 打开窗、恢复默认等**内部重算**走 <see cref="Calculate()"/>(不写盘)。
+        /// </para>
+        /// </summary>
+        private void CalculateAndPersist()
+        {
+            string saveNote;
+            try
+            {
+                _service.Save(Input);
+                saveNote = "本次计算已同时保存到 large-system.xml。";
+            }
+            catch (System.Exception ex)
+            {
+                saveNote = "⚠ 参数保存失败(" + ex.Message + "),本次结果仅存在于本窗。";
+            }
+
+            Calculate();
+            Status = saveNote + " " + Status;
+        }
+
+        /// <summary>内部重算(不写盘):构造函数、恢复默认走这里。</summary>
         private void Calculate()
         {
             try

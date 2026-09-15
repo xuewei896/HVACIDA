@@ -8,7 +8,9 @@ namespace HVACIDA.Core.Services
     /// —— 公式文档明确 E4/E5"直接从项目信息中获取"。
     /// <para>
     /// 与 <see cref="LargeSystemInputService"/> 同一套路:房间参数与工程参数都只在这里进出,
-    /// 保证「小系统各窗」读到的是一致的一份;是否落盘仍由用户点【保存】决定。
+    /// 保证「小系统各窗」读到的是一致的一份。
+    /// 落盘时机有两个:录入窗点【计 算】(算前先存 —— 否则「计算结果」窗汇总到的还是上一次保存的参数)
+    /// 或点【保 存 参 数】;打开窗、拾取回填等内部重算不写盘。
     /// </para>
     /// </summary>
     public class SmallSystemInputService

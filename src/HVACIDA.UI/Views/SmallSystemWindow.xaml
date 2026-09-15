@@ -59,7 +59,8 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Button Content="计 算" Width="90" Height="30" Margin="0,0,8,0"
-                            Command="{Binding CalculateCommand}" IsDefault="True"/>
+                            Command="{Binding CalculateCommand}" IsDefault="True"
+                            ToolTip="计算本次输入,并按「系统类型 + 系统编号」保存到 small-systems.xml —— 「小系统 → 计算结果」窗汇总读的就是这份数据,所以那边打开即能看到本系统"/>
                     <Button Content="保 存 参 数" Width="104" Height="30"
                             Command="{Binding SaveCommand}"/>
                     <Button Content="导出计算书" Width="104" Height="30" Margin="8,0,0,0"

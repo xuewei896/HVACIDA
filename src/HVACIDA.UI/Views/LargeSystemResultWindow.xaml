@@ -43,7 +43,8 @@
         <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
             <DockPanel>
                 <Button DockPanel.Dock="Left" Content="计 算" Width="100" Height="30"
-                        Command="{Binding CalculateCommand}" IsDefault="True"/>
+                        Command="{Binding CalculateCommand}" IsDefault="True"
+                        ToolTip="重新读取已保存的参数并计算(本窗打开时已自动算过一次;点它用于别处又改了参数后刷新)"/>
                 <Button DockPanel.Dock="Left" Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0"
                         Command="{Binding ExportCommand}"/>
                 <Button DockPanel.Dock="Right" Content="关 闭" Width="96" Height="30" IsCancel="True"/>

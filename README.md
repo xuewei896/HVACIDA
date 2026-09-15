@@ -82,6 +82,7 @@ dotnet build .\HVACIDA.sln
 | 2.2.1/2.2.3.1 模型取值 | `SpaceSnapshot` + `PublicAreaAggregator` + `RevitSpaceReader`(D55/D56/C13/C14) | 🟡 Core+UI+命令层就绪,Revit 实机待验 |
 | 2.2.3.2 小系统负荷 | 六类系统计算窗 + **全站多系统汇总窗**(SmallSystemLoadCalculator / SmallSystemSummaryService) | ✅ **六类全部实装**(全空气一次回风 / 多联机+新风 / 排风 / 送风排风排烟 / 加压送风 / 排烟);公式源《小系统空调负荷、送排风、排烟计算公式.docx》(**口径:按公式计算,示例仅用于理解公式**);结果按「系统结果 + 房间明细 + 设备选型」三张表呈现;**多系统按类型+编号 upsert 汇总**(§4.6);模型拾取:拾取空间建房间列表 / 拾取墙体求外墙总长 |
 | 排烟计算(2.2.3.1) | 排烟计算窗(`LargeSmokeCalculator`)+ 计算结果表格 | ✅ 已实现(计算 ×60 / 选型 ×1.2 / 2 台取大者;防烟分区口径待接入) |
+| 结果获取时机 | **打开即算 + 计算即保存**(UI设计规范 §4.9) | ✅ 「计算结果」窗**打开就有结果**,不需要再点一次【计 算】;录入窗点【计 算】= 先落盘再算,故结果窗读到的必然是刚算的那一份;只是打开窗不写盘、空系统不落盘 |
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | TextReportGenerator(文本计算书,`%AppData%\HVACIDA\Reports`) | 🟡 文本版 |
 | 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml**) | 🟡 待换 SQLite(旧 small-system.xml 首次读取自动迁移) |
@@ -111,6 +112,7 @@ dotnet build .\HVACIDA.sln
 
 # 2) 窗口装载自检:12 个 WPF 窗口真构造 + Show + Close(抓 XAML/绑定致命错误)
 #    + 气象联动/计算结果窗同源 + 公共区自动识别与手动拾取回填
+#    + 打开即算 / 计算即保存(打开就出结果、只是打开不写盘、点计算即落盘、空系统不落盘)
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\window-smoke.ps1 `
   -UiDir .\src\HVACIDA.UI\bin\Release\net48
 

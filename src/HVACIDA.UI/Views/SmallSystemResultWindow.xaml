@@ -47,7 +47,7 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Button Content="计 算" Width="100" Height="30" Command="{Binding CalculateCommand}" IsDefault="True"
-                            ToolTip="重新读取整个小系统工程并逐系统汇总(其它窗保存过新系统后点它刷新)"/>
+                            ToolTip="重新读取整个小系统工程并逐系统汇总(本窗打开时已自动汇总过一次;点它用于别处又保存了新系统后刷新)"/>
                     <Button Content="导出全站汇总计算书" Width="164" Height="30" Margin="8,0,0,0" Command="{Binding ExportCommand}"
                             ToolTip="导出汇总表 + 每一套小系统各自的完整计算书(文本)"/>
                 </StackPanel>

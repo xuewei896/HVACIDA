@@ -40,6 +40,11 @@ namespace HVACIDA.UI.ViewModels
             _input = _service.Load();
             CalculateCommand = new RelayCommand(Calculate);
             ExportCommand = new RelayCommand(Export, () => _lastResult != null);
+
+            // 打开即算:本窗名为「计算结果」,打开就该有结果,不该让用户进来再点一次【计 算】。
+            // Calculate 只读 large-system.xml / large-smoke.xml(不写盘、不动模型),放在构造函数里没有副作用;
+            // 界面上仍保留【计 算】,用于"别的窗改完参数后刷新本窗"。
+            Calculate();
         }
 
         public LargeSystemInput Input

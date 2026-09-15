@@ -49,7 +49,8 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Button Content="计 算" Width="90" Height="30" Margin="0,0,8,0"
-                            Command="{Binding CalculateCommand}" IsDefault="True"/>
+                            Command="{Binding CalculateCommand}" IsDefault="True"
+                            ToolTip="计算并把本次输入保存到 large-system.xml(「大系统 → 计算结果」窗读的就是这份参数,故那边打开即有结果;界面右侧结果区本窗打开时也已自动算过)"/>
                     <Button Content="保 存 参 数" Width="110" Height="30"
                             Command="{Binding SaveCommand}"/>
                     <Button Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0"

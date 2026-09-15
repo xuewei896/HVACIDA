@@ -86,7 +86,7 @@ namespace HVACIDA.UI.ViewModels
 
             AddRoomCommand = new RelayCommand(AddRoom, () => !IsPressurization);
             RemoveRoomCommand = new RelayCommand(RemoveRoom, () => _selectedRoom != null);
-            CalculateCommand = new RelayCommand(Calculate);
+            CalculateCommand = new RelayCommand(CalculateAndPersist);
             SaveCommand = new RelayCommand(Save);
             ExportCommand = new RelayCommand(Export, () => _lastResult != null);
             ResetCommand = new RelayCommand(Reset);
@@ -331,7 +331,7 @@ namespace HVACIDA.UI.ViewModels
                 Calculate();
                 Status = "已从模型拾取空间:新增 " + added + " 个、跳过 " + skipped + " 个同名" +
                          (string.IsNullOrEmpty(note) ? "" : "(" + note + ")") +
-                         ";面积 / 层高 / 屋顶面积已按空间填入,请核对后点【保 存 参 数】。";
+                         ";面积 / 层高 / 屋顶面积已按空间填入,请核对后点【计 算】(会同时保存)或【保 存 参 数】。";
             }
             catch (Exception ex)
             {
@@ -360,7 +360,7 @@ namespace HVACIDA.UI.ViewModels
                 Status = "已把房间「" + name + "」的与土壤接触外墙长度设为 " +
                          lengthM.ToString("0.##") + " m(所选墙体长度之和)" +
                          (string.IsNullOrEmpty(note) ? "" : "(" + note + ")") +
-                         ";请核对后点【保 存 参 数】。";
+                         ";请核对后点【计 算】(会同时保存)或【保 存 参 数】。";
             }
             catch (Exception ex)
             {
@@ -413,6 +413,46 @@ namespace HVACIDA.UI.ViewModels
             }
         }
 
+        /// <summary>
+        /// 【计 算】按钮入口:**先按「系统类型 + 系统编号」落盘,再计算**。
+        /// <para>
+        /// 为什么"计算"要顺带保存:small-systems.xml 是各录入窗与「小系统 → 计算结果」窗**唯一**的数据源。
+        /// 只算不存,用户点完【计 算】再打开「计算结果」窗,那边汇总到的仍是**上一次保存**的参数 ——
+        /// 同一份输入出现两个数(正是本工程一直在消除的口径分叉)。故按钮入口一律"算前先存"。
+        /// </para>
+        /// <para>
+        /// 打开窗、拾取回填、恢复默认等**内部重算**仍走 <see cref="Calculate()"/>(不写盘):
+        /// 只是打开看一眼、或拾取后还没核对,不会覆盖已保存的系统。
+        /// </para>
+        /// </summary>
+        private void CalculateAndPersist()
+        {
+            SyncRoomsToInput();
+            string saveNote;
+            try
+            {
+                if (!IsPressurization && _rooms.Count == 0)
+                {
+                    // 没有房间/分区行就没有可汇总的内容;此时落盘只会在「计算结果」窗里留一套空系统,
+                    // 故只算不存(补全房间行后再点【计 算】就会一并保存)。加压送风没有房间行,照常保存。
+                    saveNote = "本次没有房间/分区行,未保存(避免在「计算结果」窗里留一套空系统);补全后点【计 算】会一并保存。";
+                }
+                else
+                {
+                    int systemCount = _inputService.Save(_input);
+                    saveNote = "本次计算已同时保存(当前工程共 " + systemCount + " 套小系统)。";
+                }
+            }
+            catch (Exception ex)
+            {
+                saveNote = "⚠ 参数保存失败(" + ex.Message + "),本次结果仅存在于本窗。";
+            }
+
+            Calculate();
+            Status = saveNote + " " + Status;
+        }
+
+        /// <summary>内部重算(不写盘):构造函数、拾取回填、恢复默认走这里。</summary>
         private void Calculate()
         {
             try
