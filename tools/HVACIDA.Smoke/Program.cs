@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using HVACIDA.Core.Models;
 using HVACIDA.Core.Services;
+using HVACIDA.Core.Utils;
 
 namespace HVACIDA.Smoke
 {
@@ -16,11 +17,11 @@ namespace HVACIDA.Smoke
     /// 场景4:Ribbon 模块目录自检(7 面板 / 22 按钮,与 App.cs 的 CommandMap 键一一对应);
     /// 场景5:数据仓库(XML)往返 + 损坏文件回退;
     /// 场景6:规范知识库规则应答;
-    /// 场景7:小系统计算(骨架)自检;
     /// 场景8:空间分类/聚合(公共区几何由模型空间获取);
     /// 场景9:气象参数联动(C5/F4/F6 ← 项目信息,含端到端复核北京算例);
     /// 场景10:全国省市气象数据库(GB 50736-2012 附录A,294 台站);
-    /// 场景11:大系统排烟计算(面积×60 / 选型×1.2 / 2 台 / 取大者)。
+    /// 场景11:大系统排烟计算(面积×60 / 选型×1.2 / 2 台 / 取大者);
+    /// 场景12:小系统六类系统 —— 按《小系统空调负荷、送排风、排烟计算公式.docx》示例逐格复算。
     /// 退出码 0 = 全部通过;1 = 存在偏差。
     /// </summary>
     internal static class Program
@@ -38,15 +39,15 @@ namespace HVACIDA.Smoke
             RunCatalogChecks();
             RunRepositoryChecks();
             RunQaChecks();
-            RunSmallSystemChecks();
             RunSpaceAggregatorChecks();
             RunWeatherSyncChecks(calculator);
             RunWeatherDatabaseChecks();
             RunLargeSmokeChecks();
+            RunSmallSystemChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统/空间聚合/气象联动/省市气象库/排烟计算自检通过。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
@@ -134,11 +135,11 @@ namespace HVACIDA.Smoke
                 Check("大系统输入往返 上行上客量", large2.UpLineBoardCount, 777);
 
                 var small = repo.LoadSmallSystem();
-                small.AreaM2 = 88.5;
+                small.Rooms.Add(SmallRoomInput.Create("烟测房间", 88.5, 4.5));
                 small.SystemType = SmallSystemType.AllAirOnceReturn;
                 repo.SaveSmallSystem(small);
                 var small2 = repo.LoadSmallSystem();
-                Check("小系统输入往返 面积", small2.AreaM2, 88.5);
+                Check("小系统输入往返 房间面积", small2.Rooms[0].AreaM2, 88.5);
                 CheckText("小系统输入往返 类型", small2.SystemType.ToString(), SmallSystemType.AllAirOnceReturn.ToString());
 
                 // 损坏文件必须回退默认而不是抛异常(插件不能因数据文件坏掉而打不开窗口)
@@ -175,25 +176,6 @@ namespace HVACIDA.Smoke
             string a4 = qa.Answer("今天天气怎么样");
             CheckInt("未覆盖问题给出知识范围", a4.Contains("知识库") ? 1 : 0, 1);
             CheckInt("常用问题数量 >= 5", qa.SampleQuestions.Count >= 5 ? 1 : 0, 1);
-            Console.WriteLine();
-        }
-
-        // =====================================================================
-        // 场景7:小系统计算(骨架)
-        // =====================================================================
-        private static void RunSmallSystemChecks()
-        {
-            Console.WriteLine("==================================================");
-            Console.WriteLine("场景7:小系统计算(骨架)自检");
-            Console.WriteLine("==================================================");
-
-            var input = new SmallSystemInput();
-            var result = new SmallSystemLoadCalculator().Calculate(input);
-            Console.WriteLine(ResultFormatter.FormatSmall(input, result));
-            Console.WriteLine("-- 自检 --");
-            CheckInt("总冷负荷 > 0", result.TotalCoolingW > 0 ? 1 : 0, 1);
-            CheckInt("实际通风量 >= 换气次数通风量", result.ActualVentilationM3H >= result.VentilationByACHM3H ? 1 : 0, 1);
-            CheckInt("新风量 <= 实际通风量", result.FreshAirM3H <= result.ActualVentilationM3H + 1e-9 ? 1 : 0, 1);
             Console.WriteLine();
         }
 
@@ -620,6 +602,260 @@ namespace HVACIDA.Smoke
 
             Console.WriteLine();
         }
+        // =====================================================================
+        // 场景12:小系统六类系统(《小系统空调负荷、送排风、排烟计算公式.docx》示例复算)
+        // =====================================================================
+        private static void RunSmallSystemChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景12:小系统六类系统(按公式文档示例复算)");
+            Console.WriteLine("==================================================");
+
+            var calc = new SmallSystemLoadCalculator();
+
+            // ---------- 1) 全空气一次回风:文档「弱电房间 AHU-A101」21 个房间示例 ----------
+            var allAir = new SmallSystemInput
+            {
+                SystemType = SmallSystemType.AllAirOnceReturn,
+                SystemCode = "AHU-A101",
+                IndoorTempC = 27, SupplyTempDiffC = 10, DuctTempRiseC = 1.5,
+                LightingIndexWm2 = 20,      // 示例工程用 20 W/m²(文档默认 8)
+                WallMoistureEmission = 2,
+                OutdoorWetBulbC = 28.2      // 示例"新风状态点焓 91.60"对应的室外湿球温度
+            };
+            // 房间数据直接取自文档示例表(面积/层高/外墙长/屋顶面积/设备冷负荷)
+            double[,] rooms =
+            {
+                {75.76,5.9,0.00,75.76,8400},{24.37,5.9,6.10,60.36,1000},{26.25,5.9,0.00,26.25,800},
+                {13.66,5.9,0.00,13.66,1000},{24.40,5.9,4.00,24.40,2400},{53.56,5.9,8.56,53.56,30000},
+                {54.25,5.9,8.75,54.25,6000},{45.31,5.9,7.25,45.31,8000},{7.81,5.9,1.45,7.81,1000},
+                {32.18,5.9,4.95,32.18,3000},{19.69,5.9,3.15,19.69,2000},{30.62,5.9,8.10,30.62,6000},
+                {42.25,5.9,6.80,42.25,6000},{20.30,5.9,0.00,20.30,7000},{11.12,4.55,0.00,0.00,1000},
+                {26.03,4.55,0.00,0.00,1800},{21.17,4.55,0.00,0.00,2400},{25.53,4.55,0.00,0.00,1800},
+                {14.50,4.55,0.00,0.00,1000},{9.76,4.55,0.00,0.00,1000},{12.24,4.55,0.00,0.00,1000}
+            };
+            for (int i = 0; i < rooms.GetLength(0); i++)
+            {
+                var room = SmallRoomInput.Create("房间" + (i + 1), rooms[i, 0], rooms[i, 1]);
+                room.WallLengthM = rooms[i, 2];
+                room.RoofAreaM2 = rooms[i, 3];
+                room.EquipmentCoolingW = rooms[i, 4];
+                room.AirChangePerHour = 6;      // 文档默认
+                allAir.Rooms.Add(room);
+            }
+            var allAirResult = calc.Calculate(allAir);
+            Console.WriteLine("—— 全空气一次回风(文档示例:21 房间,合计 面积 590.76 / 冷负荷 104.42 / 湿负荷 0.475083 / 送风 32539 / 冷量 157.6)——");
+
+            Check("总面积 = 590.76 m²", allAirResult.TotalAreaM2, 590.76);
+            Check("冷负荷合计 M37 = 104.42 kW", allAirResult.TotalCoolingKw, 104.42, 0.02);
+            Check("湿负荷合计 N37 = 0.475083 g/s", allAirResult.TotalMoistureGps, 0.475083, 1e-5);
+            Check("热湿比 C39 = 219783 kJ/kg", allAirResult.HeatHumidityRatio, 219783, 1.0);
+            Check("送风点焓 B47 ≈ 43.90 kJ/kg(文档各点参数四舍五入)", allAirResult.SupplyEnthalpy, 43.90, 0.15);
+            Check("露点焓 C50 ≈ 42.30 kJ/kg", allAirResult.DewPointEnthalpy, 42.30, 0.20);
+            Check("室内状态点焓 C53 ≈ 54.30 kJ/kg", allAirResult.IndoorEnthalpy, 54.30, 0.15);
+            Check("总送风量 R37 ≈ 32539 m³/h", allAirResult.TotalSupplyM3H, 32539, 30.0);
+            Check("总回风量 W37 ≈ 29285 m³/h(新风比 10%)", allAirResult.TotalReturnM3H, 29285, 30.0);
+            Check("新风比 E39 = 0.10", allAirResult.FreshAirRatio, 0.10, 1e-6);
+            Check("单房间校验:1 号房间实际通风量 ≈ 2985 m³/h", allAirResult.Rooms[0].ActualVentilationM3H, 2985, 3.0);
+            Check("单房间校验:2 号房间实际通风量 = 863 m³/h(换气风量占优)", allAirResult.Rooms[1].ActualVentilationM3H, 863, 1.0);
+            Check("设备选型 AHU 风量 ≈ 35792 m³/h(32539×1.1)", allAirResult.Equipments[0].FlowM3H, 35792, 33.0);
+            Check("设备选型 RAF 风量 ≈ 32213 m³/h(29285×1.1)", allAirResult.Equipments[1].FlowM3H, 32213, 33.0);
+            Check("设备选型 AHU 冷量(V37×1.1)", allAirResult.Equipments[0].CoolingKw, allAirResult.TotalUnitCoolingKw * 1.1, 1e-9);
+
+            // ⚠ 口径存疑(必须显式记录、不静默):
+            // 文档公式写 V27=R27×(C52−C50)×1.15/3600(用"实际通风量"R27),示例合计 157.6;
+            // 但示例中 2/5/10/16/19 号房间的值只有用"消除余热通风量 O27"才算得出来
+            // (例:2 号房间 448×15.7×1.15/3600 = 2.25 ≈ 表列 2.2;用 R27=863 得 4.33)。
+            Check("按文档公式 R27 复算 V37 ≈ 162.2 kW(示例为 157.6,差 2.9%,已记录待确认)",
+                allAirResult.TotalUnitCoolingKw, 162.2, 0.6);
+            Console.WriteLine("     ⚠ V37 口径存疑:公式文字用 R27(得 162.2),而示例 2/5/10/16/19 号房间" +
+                              "只有用 O27 才算得出表列值(合计 157.6);请确认以哪个为准。");
+
+            // ---------- 2) 多联机+新风:文档「人员房间 VRV」11 个房间示例 ----------
+            var vrf = new SmallSystemInput
+            {
+                SystemType = SmallSystemType.VrfWithFreshAir,
+                SystemCode = "VRV-1",
+                IndoorTempC = 27, TransitionOutdoorC = 14,
+                LightingIndexWm2 = 20, WallMoistureEmission = 2, IndoorRhPct = 50
+            };
+            double[,] vrfRooms =
+            {
+                {8.49,3.5,6,1000,3},{9.26,3.5,6,1000,3},{10.12,3.5,6,1000,3},{20.01,3.5,6,1000,3},
+                {15.47,3.5,6,1000,3},{28.12,3.5,6,1000,20},{14.95,3.5,6,1000,2},{22.08,3.5,6,1000,3},
+                {25.36,3.5,6,1000,3},{17.79,3.5,6,1000,4},{15.36,3.5,6,1000,4}
+            };
+            for (int i = 0; i < vrfRooms.GetLength(0); i++)
+            {
+                var room = SmallRoomInput.Create("房间" + (i + 1), vrfRooms[i, 0], vrfRooms[i, 1]);
+                room.AirChangePerHour = vrfRooms[i, 2];
+                room.EquipmentCoolingW = vrfRooms[i, 3];
+                room.Occupants = vrfRooms[i, 4];
+                vrf.Rooms.Add(room);
+            }
+            var vrfResult = calc.Calculate(vrf);
+            Console.WriteLine("—— 多联机+新风(文档示例:11 房间,合计 面积 187.01 / 冷负荷 21.57 / 湿负荷 0.001733 / 人员新风 1560)——");
+            Check("总面积 = 187.01 m²", vrfResult.TotalAreaM2, 187.01, 0.01);
+            Check("冷负荷合计 I79 = 21.57 kW", vrfResult.TotalCoolingKw, 21.57, 0.01);
+            Check("湿负荷合计 = 0.001733 kg/s", vrfResult.TotalMoistureGps, 1.733, 0.005);
+            Check("人员新风量合计(本夹具 11 房间 51 人)= 1530 m³/h", vrfResult.TotalFreshAirM3H, 1530, 0.01);
+            Console.WriteLine("     ⚠ 文档 M79=1560 含「保洁清扫间」(12 房间 52 人),而 I79=21.57 只含 11 房间,两表口径不同。");
+            Check("热湿比 ≈ 12448 kJ/kg", vrfResult.HeatHumidityRatio, 12448.61, 5.0);
+            Check("设备选型 PEU 风量 = 1530×1.1 = 1683 m³/h", vrfResult.Equipments[0].FlowM3H, 1683, 0.01);
+            Check("设备选型 FAF 风量 = 实际通风量合计×1.1", vrfResult.Equipments[1].FlowM3H,
+                vrfResult.TotalSupplyM3H * 1.1, 1e-9);
+
+            // ---------- 3) 排风系统:文档「卫生间、泵房等通风」8 行示例 ----------
+            var exhaust = new SmallSystemInput { SystemType = SmallSystemType.ExhaustVentilation, SystemCode = "EAF-A601" };
+            double[,] exhaustRooms = { {5.83,5.90,20},{6.82,5.90,20},{4.23,4.55,10},{4.40,4.55,10},
+                                       {11.46,4.55,20},{15.62,4.55,20},{7.87,4.55,20},{17.62,4.55,4} };
+            for (int i = 0; i < exhaustRooms.GetLength(0); i++)
+            {
+                var room = SmallRoomInput.Create("房间" + (i + 1), exhaustRooms[i, 0], exhaustRooms[i, 1]);
+                room.AirChangePerHour = exhaustRooms[i, 2];
+                exhaust.Rooms.Add(room);
+            }
+            var exhaustResult = calc.Calculate(exhaust);
+            Console.WriteLine("—— 排风系统(文档示例:8 房间,合计排风量 5386 m³/h,EAF-A601 ×1.3 = 7002)——");
+            Check("计算排风量合计 = 5386 m³/h", exhaustResult.TotalExhaustM3H, 5386, 1.0);
+            Check("单房间校验:男卫 = 5.83×5.9×20 = 688 m³/h", exhaustResult.Rooms[0].ExhaustM3H, 688, 1.0);
+            Check("默认系数 1.1 时选型风量(文档文字口径)", exhaustResult.Equipments[0].FlowM3H, 5386 * 1.1, 1.1);
+            exhaust.SelectionFactor = HvacConstants.ExhaustSelectionFactorInSample;   // 1.3(示例口径)
+            var exhaustSample = calc.Calculate(exhaust);
+            Check("示例系数 1.3 时选型风量 = 7002 m³/h(与文档示例一致)", exhaustSample.Equipments[0].FlowM3H, 7002, 1.0);
+            Console.WriteLine("     ⚠ 排风选型系数口径存疑:文档文字 1.1、示例 1.3(已记录待确认)。");
+
+            // ---------- 4) 排烟系统:文档「走道排烟及补风」2 个防烟分区示例 ----------
+            var smoke = new SmallSystemInput { SystemType = SmallSystemType.SmokeExhaust, SystemCode = "SEF-A501" };
+            var z1 = SmallRoomInput.Create("防烟分区2", 300, 0); z1.IsSmokeZone = true;
+            var z2 = SmallRoomInput.Create("防烟分区3", 277, 0); z2.IsSmokeZone = true;
+            smoke.Rooms.Add(z1); smoke.Rooms.Add(z2);
+            var smokeResult = calc.Calculate(smoke);
+            Console.WriteLine("—— 排烟系统(文档示例:2 分区,排烟 18000+16620 = 34620,补风 10800+9972 = 20772)——");
+            Check("计算排烟量 = 300×60 = 18000 m³/h", smokeResult.Rooms[0].SmokeM3H, 18000, 0.01);
+            Check("计算排烟量 = 277×60 = 16620 m³/h", smokeResult.Rooms[1].SmokeM3H, 16620, 0.01);
+            Check("计算排烟量合计 = 34620 m³/h", smokeResult.TotalSmokeM3H, 34620, 0.01);
+            Check("计算补风量 = 18000×0.6 = 10800 m³/h", smokeResult.Rooms[0].MakeupAirM3H, 10800, 0.01);
+            Check("计算补风量合计 = 20772 m³/h", smokeResult.TotalMakeupAirM3H, 20772, 0.01);
+            Check("排烟风机 SEF = 34620×1.2 = 41544 m³/h", smokeResult.Equipments[0].FlowM3H, 41544, 0.5);
+            Check("补风机 FAF = 20772×1.1 = 22849 m³/h", smokeResult.Equipments[1].FlowM3H, 22849.2, 0.5);
+
+            // ---------- 5) 送风排风排烟系统:文档「环控机房 + 气瓶间」5 行示例 ----------
+            var ses = new SmallSystemInput { SystemType = SmallSystemType.SupplyExhaustSmoke, SystemCode = "FAF-A401" };
+            var machine = SmallRoomInput.Create("通风空调机房", 517, 5.9); machine.AirChangePerHour = 6;
+            machine.RoomType = "环控机房"; machine.IsSmokeZone = true;
+            ses.Rooms.Add(machine);
+            double[,] other = { {36.56,5.9},{9.38,5.9},{18.35,5.9},{26.82,4.55} };
+            for (int i = 0; i < other.GetLength(0); i++)
+            {
+                var room = SmallRoomInput.Create("房间" + (i + 1), other[i, 0], other[i, 1]);
+                room.AirChangePerHour = 4;
+                ses.Rooms.Add(room);
+            }
+            var sesResult = calc.Calculate(ses);
+            Console.WriteLine("—— 送风排风排烟(文档示例:排风 20307 / 送风 18302 / 排烟 31020 / 补风 18612)——");
+            Check("计算排风量合计 = 20307 m³/h", sesResult.TotalExhaustM3H, 20307, 1.0);
+            Check("环控机房计算排风量 = 517×5.9×6 = 18302 m³/h", sesResult.Rooms[0].ExhaustM3H, 18302, 1.0);
+            Check("环控机房计算排烟量 = 517×60 = 31020 m³/h", sesResult.Rooms[0].SmokeM3H, 31020, 0.01);
+            Check("环控机房计算补风量 = 31020×0.6 = 18612 m³/h", sesResult.Rooms[0].MakeupAirM3H, 18612, 0.01);
+            Check("排风机 EAF = 20307×1.1 = 22338 m³/h", sesResult.Equipments[0].FlowM3H, 22338, 0.5);
+            Check("排烟风机 SEF = 31020×1.2 = 37224 m³/h", sesResult.Equipments[1].FlowM3H, 37224, 0.5);
+            Check("补风机/送风机 FAF = 18612×1.1 = 20473 m³/h(取送风与补风之大者)",
+                sesResult.Equipments[2].FlowM3H, 20473, 0.5);
+
+            // ---------- 6) 加压送风系统:文档公式(无示例,按默认门参数自洽校验) ----------
+            var press = new SmallSystemInput { SystemType = SmallSystemType.PressurizationSupply, SystemCode = "SAF-1" };
+            var pressResult = calc.Calculate(press);
+            Console.WriteLine("—— 加压送风(文档公式,默认门参数 1.5×2.1 / 风速 1 / ΔP 12 / 余压阀 0.5×2)——");
+            Check("门面积 D388 = 1.5×2.1 = 3.15 m²", pressResult.DoorAreaM2, 3.15, 1e-9);
+            Check("门开启风量 G388 = 3.15×1×1 = 3.15 m³/s → 11340 m³/h", pressResult.DoorOpenFlowM3H, 11340, 0.01);
+            Check("单门有效漏风面积 I388 = (1.5+2.1)×2×0.004 = 0.0288 m²",
+                (1.5 + 2.1) * 2 * HvacConstants.DoorGapWidthFactor, 0.0288, 1e-9);
+            Check("门缝漏风 N388 = 0.827×0.0288×√12×1.25×1 = 0.10312 m³/s → 371.2 m³/h",
+                pressResult.DoorLeakFlowM3H, 371.23, 0.5);
+            Check("余压阀漏风 R388 = 0.083×0.5×2 = 0.083 m³/s → 298.8 m³/h",
+                pressResult.ReliefValveLeakFlowM3H, 298.8, 0.02);
+            Check("楼梯间加压送风量 S388 = (3.15+0.10312+0.083)×3600 = 12010 m³/h",
+                pressResult.PressurizationFlowM3H, 12010, 0.5);
+            Check("加压送风机 D392 = S388×1.2 = 14412 m³/h", pressResult.Equipments[0].FlowM3H, 14412.4, 0.5);
+
+            // ---------- 7) 行业口径:房间类型默认换气次数 + 结果表/明细表结构 ----------
+            CheckInt("卫生间默认换气次数 = 20", (int)SmallSystemInput.DefaultAirChangePerHour("男卫生间"), 20);
+            CheckInt("淋浴间默认换气次数 = 10", (int)SmallSystemInput.DefaultAirChangePerHour("淋浴间"), 10);
+            CheckInt("环控机房默认换气次数 = 6", (int)SmallSystemInput.DefaultAirChangePerHour("环控机房"), 6);
+            CheckInt("气瓶间默认换气次数 = 4", (int)SmallSystemInput.DefaultAirChangePerHour("气瓶间"), 4);
+            CheckInt("未识别类型默认换气次数 = 4", (int)SmallSystemInput.DefaultAirChangePerHour("其他房间"), 4);
+
+            CheckInt("全空气结果表分区数 >= 4", ResultTable.ForSmallSystem(allAir, allAirResult).Sections.Count >= 4 ? 1 : 0, 1);
+            CheckInt("排烟系统房间明细列数 = 5(序号/分区/面积/排烟量/补风量)",
+                SmallRoomTable.ColumnsFor(SmallSystemType.SmokeExhaust).Count, 5);
+            CheckInt("全空气房间明细列数 = 17", SmallRoomTable.ColumnsFor(SmallSystemType.AllAirOnceReturn).Count, 17);
+            CheckInt("计算书含房间明细表", ResultFormatter.FormatSmall(allAir, allAirResult).Contains("房间明细") ? 1 : 0, 1);
+            CheckInt("计算书含设备选型表", ResultFormatter.FormatSmall(allAir, allAirResult).Contains("设备选型") ? 1 : 0, 1);
+
+            // ---------- 8) 六类系统的口径/计算书文案都不得出现公式文档单元格编号 ----------
+            // (2026-09-15 评审:插件界面与交付计算书都不体现单元格编号;编号只保留在代码 XML 注释与 ToText(true) 核对视图里)
+            var codePattern = new System.Text.RegularExpressions.Regex(@"(?<![-A-Z])\b[A-Z]{1,2}[0-9]{2,3}\b");
+            var codeOffenders = new List<string>();
+            foreach (SmallSystemType type in System.Enum.GetValues(typeof(SmallSystemType)))
+            {
+                var probe = new SmallSystemInput { SystemType = type, SystemCode = "X-1" };
+                if (type != SmallSystemType.PressurizationSupply)
+                {
+                    var room = SmallRoomInput.Create("探针房间", 100, 4.5);
+                    room.Occupants = 2; room.EquipmentCoolingW = 3000; room.AirChangePerHour = 6;
+                    room.RoomType = "卫生间"; room.IsSmokeZone = true;
+                    probe.Rooms.Add(room);
+                }
+                var probeResult = calc.Calculate(probe);
+                string text = ResultFormatter.FormatSmall(probe, probeResult);
+                foreach (System.Text.RegularExpressions.Match m in codePattern.Matches(text))
+                {
+                    codeOffenders.Add(type + ":" + m.Value);
+                }
+            }
+            CheckInt("六类系统的计算书正文与口径说明均不含单元格编号(0 = 正常," +
+                     string.Join(",", codeOffenders.Distinct().ToArray()) + ")",
+                codeOffenders.Count, 0);
+
+            // ---------- 8) 室外参数回填(项目信息 → 小系统 E4/E5) ----------
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Small-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var repo = new XmlProjectRepository(dir);
+                var project = repo.LoadProject();
+                project.Design.LargeSystemOutdoor.SummerACDryBulbC = 34.2;
+                project.Design.LargeSystemOutdoor.SummerACWetBulbC = 27.8;
+                repo.SaveProject(project);
+
+                var service = new SmallSystemInputService(repo);
+                var loaded = service.Load();
+                Check("室外干球回填 E4 = 34.2 ℃", loaded.OutdoorDryBulbC, 34.2, 1e-9);
+                Check("室外湿球回填 E5 = 27.8 ℃", loaded.OutdoorWetBulbC, 27.8, 1e-9);
+                CheckInt("回填状态可用", service.WeatherApplied ? 1 : 0, 1);
+
+                loaded.WeatherManuallyOverridden = true;
+                loaded.OutdoorDryBulbC = 35.0;
+                service.Save(loaded);
+                Check("脱离联动后保留手工值", service.Load().OutdoorDryBulbC, 35.0, 1e-9);
+
+                var roundTrip = repo.LoadSmallSystem();
+                roundTrip.SystemType = SmallSystemType.SmokeExhaust;
+                roundTrip.Rooms.Add(SmallRoomInput.Create("防烟分区1", 300, 0));
+                repo.SaveSmallSystem(roundTrip);
+                var back = repo.LoadSmallSystem();
+                CheckInt("房间列表往返 房间数", back.Rooms.Count, 1);
+                Check("房间列表往返 面积", back.Rooms[0].AreaM2, 300, 1e-9);
+                CheckText("系统类型往返", back.SystemType.ToString(), SmallSystemType.SmokeExhaust.ToString());
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+
+            Console.WriteLine();
+        }
+
         private static LargeSystemInput BuildBusyScenario()
         {
             return new LargeSystemInput
@@ -752,7 +988,13 @@ namespace HVACIDA.Smoke
 
         private static void Check(string name, double actual, double expected)
         {
-            double tolerance = Math.Max(1e-6, Math.Abs(expected) * 1e-6);
+            Check(name, actual, expected, 0);
+        }
+
+        /// <summary>带绝对容差的断言(公式文档示例含四舍五入,需容差)。</summary>
+        private static void Check(string name, double actual, double expected, double absTolerance)
+        {
+            double tolerance = Math.Max(absTolerance, Math.Max(1e-6, Math.Abs(expected) * 1e-6));
             bool pass = Math.Abs(actual - expected) <= tolerance;
             Console.WriteLine((pass ? "PASS  " : "FAIL  ") + name +
                               "  actual=" + actual.ToString("R") + "  expected=" + expected.ToString("R"));

@@ -161,6 +161,105 @@ try {
 }
 
 # =====================================================================
+# 小系统六类:多房间录入 + 三张结果表(系统结果 / 房间明细 / 设备选型)
+# =====================================================================
+function New-SmallVm([string]$typeName, $repo) {
+    $t = [HVACIDA.Core.Models.SmallSystemType]::$typeName
+    return New-Object "$vmNs.SmallSystemViewModel" -ArgumentList $t, $repo
+}
+function Clear-Rooms($vm) { while ($vm.Rooms.Count -gt 0) { $vm.Rooms.RemoveAt(0) } }
+function Add-Room($vm, [string]$name, [double]$area, [double]$height, [double]$equip, [double]$people, [double]$ach, [string]$roomType) {
+    $r = [HVACIDA.Core.Models.SmallRoomInput]::Create($name, $area, $height)
+    $r.EquipmentCoolingW = $equip
+    $r.Occupants = $people
+    $r.AirChangePerHour = $ach
+    $r.RoomType = $roomType
+    $vm.Rooms.Add($r)
+    return $r
+}
+
+try {
+    $tmp6 = Join-Path $env:TEMP ("HVACIDA-SmallWin-" + [guid]::NewGuid().ToString('N'))
+    $repo6 = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmp6
+
+    # ---- 全空气一次回风:2 房间 ----
+    $air = New-SmallVm 'AllAirOnceReturn' $repo6
+    Clear-Rooms $air
+    Add-Room $air '弱电间1' 50 5.9 5000 0 6 '' | Out-Null
+    Add-Room $air '弱电间2' 30 5.9 3000 0 6 '' | Out-Null
+    $air.CalculateCommand.Execute($null)
+    if ($air.RoomRows.Count -eq 2 -and $air.EquipmentRows.Count -eq 2 -and $air.Table.Sections.Count -ge 4) {
+        Write-Host ("PASS  全空气一次回风:{0} 房间 → 结果表 {1} 分区 / 明细 {2} 行 / 设备 {3} 台" -f `
+            $air.Rooms.Count, $air.Table.Sections.Count, $air.RoomRows.Count, $air.EquipmentRows.Count)
+    } else {
+        Write-Host ("FAIL  全空气: rooms={0} table={1} rows={2} equip={3}" -f $air.Rooms.Count, $air.Table.Sections.Count, $air.RoomRows.Count, $air.EquipmentRows.Count)
+        $fail++
+    }
+    $airW = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $air
+    $airW.Show(); $airW.UpdateLayout()
+    $ig = $airW.FindName('InputGrid')
+    $rd = $airW.FindName('RoomDetailGrid')
+    $eg = $airW.FindName('EquipmentGrid')
+    $rt = $airW.FindName('ResultTableHost')
+    $expectIn = [HVACIDA.Core.Services.SmallRoomTable]::InputColumnsFor([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn).Count
+    $expectOut = [HVACIDA.Core.Services.SmallRoomTable]::ColumnsFor([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn).Count
+    if ($ig -ne $null -and $ig.Columns.Count -eq $expectIn -and $rd -ne $null -and $rd.Columns.Count -eq $expectOut -and
+        $eg -ne $null -and $eg.Columns.Count -eq 5 -and $rt -ne $null -and $rt.Table -ne $null) {
+        Write-Host ("PASS  小系统窗表格渲染:录入 {0} 列 / 明细 {1} 列 / 设备 5 列,结果表已绑定" -f $ig.Columns.Count, $rd.Columns.Count)
+    } else {
+        Write-Host ("FAIL  小系统窗表格: in={0} out={1} equip={2} host={3}" -f $ig.Columns.Count, $rd.Columns.Count, $eg.Columns.Count, ($rt -ne $null))
+        $fail++
+    }
+    $airW.Close()
+
+    # ---- 排烟系统:2 个防烟分区(文档示例口径) ----
+    $smoke = New-SmallVm 'SmokeExhaust' $repo6
+    Clear-Rooms $smoke
+    Add-Room $smoke '防烟分区2' 300 0 0 0 0 '' | Out-Null
+    Add-Room $smoke '防烟分区3' 277 0 0 0 0 '' | Out-Null
+    $smoke.CalculateCommand.Execute($null)
+    if ($smoke.RoomRows.Count -eq 2 -and [math]::Abs($smoke.EquipmentRows[0].FlowM3H - 41544) -lt 0.5 -and
+        [math]::Abs($smoke.EquipmentRows[1].FlowM3H - 22849.2) -lt 0.5) {
+        Write-Host ("PASS  排烟系统:排烟风机 {0:N0} / 补风机 {1:N0} m³/h(文档示例口径)" -f `
+            $smoke.EquipmentRows[0].FlowM3H, $smoke.EquipmentRows[1].FlowM3H)
+    } else { Write-Host "FAIL  排烟系统选型"; $fail++ }
+
+    # ---- 排风系统:8 房间(文档示例合计 5386) ----
+    $ex = New-SmallVm 'ExhaustVentilation' $repo6
+    Clear-Rooms $ex
+    $exRooms = @(@(5.83,5.90,'男卫'),@(6.82,5.90,'女卫'),@(4.23,4.55,'淋浴间'),@(4.40,4.55,'淋浴间'),
+                  @(11.46,4.55,'男卫生间'),@(15.62,4.55,'女卫生间'),@(7.87,4.55,'无障碍卫生间'),@(17.62,4.55,'污水泵房'))
+    foreach ($row in $exRooms) {
+        $ach = [HVACIDA.Core.Models.SmallSystemInput]::DefaultAirChangePerHour($row[2])
+        Add-Room $ex $row[2] $row[0] $row[1] 0 0 $ach $row[2] | Out-Null
+    }
+    $ex.CalculateCommand.Execute($null)
+    $exTotal = 0.0
+    foreach ($r in $ex.RoomRows) { $exTotal += $r.ExhaustM3H }
+    if ([math]::Abs($exTotal - 5386) -lt 1.0) {
+        Write-Host ("PASS  排风系统:按房间类型默认换气次数算得排风量合计 {0:N0} m³/h(文档示例 5386)" -f $exTotal)
+    } else { Write-Host ("FAIL  排风系统合计 = {0}" -f $exTotal); $fail++ }
+
+    # ---- 加压送风:无房间行,按门参数算 ----
+    $pr = New-SmallVm 'PressurizationSupply' $repo6
+    $pr.CalculateCommand.Execute($null)
+    if ($pr.IsPressurization -eq $true -and $pr.Table.Sections.Count -ge 3 -and
+        $pr.EquipmentRows.Count -eq 1 -and [math]::Abs($pr.EquipmentRows[0].FlowM3H - 14412.4) -lt 1.0) {
+        Write-Host ("PASS  加压送风:无房间行,加压送风机 {0:N0} m³/h(默认门参数)" -f $pr.EquipmentRows[0].FlowM3H)
+    } else { Write-Host ("FAIL  加压送风: isPress={0} equip={1}" -f $pr.IsPressurization, $pr.EquipmentRows.Count); $fail++ }
+    $prW = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $pr
+    $prW.Show(); $prW.UpdateLayout()
+    if ($prW.FindName('ResultTableHost') -ne $null) { Write-Host "PASS  加压送风窗可正常构造并显示结果表" }
+    else { Write-Host "FAIL  加压送风窗缺结果表"; $fail++ }
+    $prW.Close()
+
+    try { Remove-Item $tmp6 -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  小系统六类窗口自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
+# =====================================================================
 # 计算结果表格化:大系统负荷 / 小系统 结果是否真的以"分组表格"渲染
 # =====================================================================
 try {
@@ -243,7 +342,7 @@ try {
     } else { Write-Host "FAIL  计算书文本与表格不同源"; $fail++ }
 
     # 计算结果**不体现公式文档单元格编号**(2026-09-15 评审):界面表格列与计算书正文都不含
-    $codePattern = '\b[A-Z]{1,2}[0-9]{2,3}\b'
+    $codePattern = '(?<![-A-Z])\b[A-Z]{1,2}[0-9]{2,3}\b'   # 排除 EAF-A601 这类设备编号
     $textHit = [regex]::IsMatch($blvm.ResultText, $codePattern) -or [regex]::IsMatch($srvm.ResultText, $codePattern)
     $rowHit = $false
     foreach ($r in $allRows) { if ($r.Label -match $codePattern -or $r.Display -match $codePattern) { $rowHit = $true } }
