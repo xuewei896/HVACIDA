@@ -11,4 +11,11 @@
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- 全国省市气象参数库(GB 50736-2012 附录A):生成物,内嵌进 DLL,免外部文件与联网。
+         重新生成:python tools\weatherdb\build_weather_db.py
+         一致性门禁:tools\weatherdb\check-weather-db-sync.ps1 -->
+    <EmbeddedResource Include="Resources\weather-db.csv" />
+  </ItemGroup>
+
 </Project>
