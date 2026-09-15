@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
@@ -95,15 +95,24 @@ namespace HVACIDA.Revit.Services
         /// </remarks>
         public static IList<SpaceSnapshot> PickMany(Autodesk.Revit.UI.UIDocument uidoc, PublicAreaTarget target, out string note)
         {
+            string label = target == PublicAreaTarget.Hall ? "站厅" : "站台";
+            return PickSpaces(uidoc, "请选择【" + label + "公共区】空间(可多选,回车结束,Esc 取消)", label, out note);
+        }
+
+        /// <summary>
+        /// 手动拾取空间(通用,不限站厅/站台) —— 小系统"由用户依次选取模型空间"建房间列表用(需求 2.2.3.2)。
+        /// <para>必须在没有模态窗口的 IExternalCommand 上下文里调用(见 PublicAreaWindow 注释)。</para>
+        /// </summary>
+        /// <returns>拾取到的空间快照;Esc 取消返回 null。</returns>
+        public static IList<SpaceSnapshot> PickSpaces(Autodesk.Revit.UI.UIDocument uidoc, string prompt,
+            string label, out string note)
+        {
             note = "";
             if (uidoc == null)
             {
                 note = "没有活动文档,无法拾取。";
                 return null;
             }
-
-            string label = target == PublicAreaTarget.Hall ? "站厅" : "站台";
-            string prompt = "请选择【" + label + "公共区】空间(可多选,回车结束,Esc 取消)";
 
             IList<Reference> references;
             try

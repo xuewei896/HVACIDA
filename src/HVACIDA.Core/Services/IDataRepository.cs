@@ -35,10 +35,22 @@ namespace HVACIDA.Core.Services
         /// <summary>保存大系统排烟计算参数。</summary>
         void SaveLargeSmoke(LargeSmokeInput input);
 
-        /// <summary>读取小系统输入(不存在时返回默认实例)。</summary>
+        /// <summary>
+        /// 读取小系统工程(**多系统**;需求 2.2.3.2:全站多套小系统)。
+        /// 若只有旧版单系统文件 small-system.xml,会自动迁移为本容器(见实现)。
+        /// </summary>
+        SmallSystemProject LoadSmallSystems();
+
+        /// <summary>保存小系统工程(全部小系统)。</summary>
+        void SaveSmallSystems(SmallSystemProject project);
+
+        /// <summary>
+        /// 读取小系统输入(单系统;**兼容入口**,语义 = 取容器里<strong>第一套</strong>系统,不是「刚保存的那套」)。
+        /// 新代码请用 <see cref="LoadSmallSystems"/> + <see cref="SmallSystemProject.Find"/>。
+        /// </summary>
         SmallSystemInput LoadSmallSystem();
 
-        /// <summary>保存小系统输入。</summary>
+        /// <summary>保存小系统输入(单系统;**兼容入口**,按"类型 + 编号"upsert 进小系统工程)。</summary>
         void SaveSmallSystem(SmallSystemInput input);
     }
 }

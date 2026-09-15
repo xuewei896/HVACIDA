@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows.Controls;
 using System.Windows.Data;
 using HVACIDA.Core.Models;
@@ -74,6 +74,27 @@ namespace HVACIDA.UI.Views
         private static string NumberFormat(int decimals)
         {
             return decimals <= 0 ? "{0:N0}" : "{0:N" + decimals.ToString() + "}";
+        }
+
+        /// <summary>
+        /// 全站汇总表列(逐系统一行;列由 Core 的 <c>SmallRoomTable.SummaryColumns</c> 生成 = 13 列)。
+        /// 数据源是显示用行对象(<c>SmallSummaryRowView</c>),数值列已由它把 0 转成「—」,
+        /// 故这里不再设 StringFormat(否则千分位与「—」会互相打架)。
+        /// </summary>
+        internal static void BuildSummary(DataGrid grid)
+        {
+            if (grid == null) return;
+            grid.Columns.Clear();
+
+            foreach (var column in SmallRoomTable.SummaryColumns())
+            {
+                grid.Columns.Add(new DataGridTextColumn
+                {
+                    Header = column.Header,
+                    Width = column.Width,
+                    Binding = new Binding(column.Property) { Mode = BindingMode.OneWay }
+                });
+            }
         }
     }
 }

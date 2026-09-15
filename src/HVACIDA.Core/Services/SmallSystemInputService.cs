@@ -1,4 +1,4 @@
-using HVACIDA.Core.Models;
+﻿using HVACIDA.Core.Models;
 
 namespace HVACIDA.Core.Services
 {
@@ -34,12 +34,31 @@ namespace HVACIDA.Core.Services
         /// <summary>室外参数是否已回填(项目信息里有值)。</summary>
         public bool WeatherApplied { get; private set; }
 
-        /// <summary>读取小系统输入(含室外参数回填)。</summary>
+        /// <summary>读取小系统输入(单系统,含室外参数回填)。</summary>
         public SmallSystemInput Load()
         {
             var input = _repository.LoadSmallSystem();
             Sync(input);
             return input;
+        }
+
+        /// <summary>读取**某类型 + 编号**的系统(不存在时新建一个该类型的默认系统,便于首次录入)。</summary>
+        public SmallSystemInput Load(SmallSystemType type, string systemCode)
+        {
+            var project = _repository.LoadSmallSystems();
+            var input = project.Find(type, systemCode) ?? new SmallSystemInput { SystemType = type, SystemCode = systemCode ?? "" };
+            input.SystemType = type;
+            if (!string.IsNullOrEmpty(systemCode)) input.SystemCode = systemCode;
+            Sync(input);
+            return input;
+        }
+
+        /// <summary>读取整个小系统工程(多系统,含室外参数回填)。</summary>
+        public SmallSystemProject LoadProject()
+        {
+            var project = _repository.LoadSmallSystems();
+            foreach (var system in project.Systems) Sync(system);
+            return project;
         }
 
         /// <summary>按当前 project.xml 的气象参数回填室外干球/湿球温度(未填则不覆盖)。</summary>
@@ -81,10 +100,22 @@ namespace HVACIDA.Core.Services
                 : "⚠ 项目信息里未填夏季空调室外计算干球/湿球温度,请在「项目信息 → 气象参数」选择城市或手工填写。";
         }
 
-        /// <summary>保存小系统输入(房间列表 + 系统参数)。</summary>
-        public void Save(SmallSystemInput input)
+        /// <summary>
+        /// 保存小系统输入(房间列表 + 系统参数):按"系统类型 + 系统编号"**新增或覆盖**到小系统工程里,
+        /// 不覆盖其它系统。返回该工程当前共有多少套系统。
+        /// </summary>
+        public int Save(SmallSystemInput input)
         {
-            _repository.SaveSmallSystem(input);
+            var project = _repository.LoadSmallSystems();
+            project.Upsert(input);
+            _repository.SaveSmallSystems(project);
+            return project.Systems.Count;
+        }
+
+        /// <summary>保存整个小系统工程(多系统;删除系统时用)。</summary>
+        public void SaveProject(SmallSystemProject project)
+        {
+            _repository.SaveSmallSystems(project);
         }
     }
 }

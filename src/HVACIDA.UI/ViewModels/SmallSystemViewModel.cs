@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
@@ -41,29 +41,43 @@ namespace HVACIDA.UI.ViewModels
         private int _roomSequence;
 
         public SmallSystemViewModel()
-            : this(SmallSystemType.AllAirOnceReturn, null)
+            : this(SmallSystemType.AllAirOnceReturn, null, false)
         {
         }
 
         /// <summary>按 Ribbon 选定的系统类型构造(六类小系统为 Ribbon 一级按钮,2026-09-11)。</summary>
         public SmallSystemViewModel(SmallSystemType systemType)
-            : this(systemType, null)
+            : this(systemType, null, false)
         {
         }
 
         /// <summary>
-        /// 通过仓库构造:类型一致时复用上次保存的参数(与「小系统 → 计算结果」共用一份数据);
+        /// 通过仓库构造:复用已保存的同类系统参数(与「小系统 → 计算结果」共用一份数据);
         /// 室外干球/湿球温度由 <see cref="SmallSystemInputService"/> 从「项目信息 → 气象参数」回填。
+        /// 模型拾取按不可用处理(非 Revit 环境)。
         /// </summary>
         public SmallSystemViewModel(SmallSystemType systemType, IDataRepository repository)
+            : this(systemType, repository, false)
+        {
+        }
+
+        /// <summary>
+        /// 通过仓库构造并声明**模型拾取是否可用**(Revit 命令侧按有无 ActiveUIDocument 传入)。
+        /// <para>
+        /// 输入由 VM 自己按「系统类型 + 系统编号」取(<see cref="SmallSystemInputService.Load(SmallSystemType, string)"/>):
+        /// 同类型已有系统时复用它(含已保存的房间列表),没有则新建空壳便于首次录入;
+        /// 系统编号可在窗内填写,点【保 存 参 数】时按「类型 + 编号」新增或覆盖(<see cref="SmallSystemInputService.Save"/>)。
+        /// </para>
+        /// </summary>
+        public SmallSystemViewModel(SmallSystemType systemType, IDataRepository repository, bool pickAvailable)
         {
             _calculator = new SmallSystemLoadCalculator();
             _inputService = new SmallSystemInputService(repository);
+            IsPickAvailable = pickAvailable;
 
-            var saved = _inputService.Load();
-            _input = saved != null && saved.SystemType == systemType
-                ? saved
-                : new SmallSystemInput { SystemType = systemType };
+            var saved = _inputService.Load(systemType, "");
+            _input = saved ?? new SmallSystemInput { SystemType = systemType };
+            _input.SystemType = systemType;
             if (_input.Rooms == null) _input.Rooms = new List<SmallRoomInput>();
 
             _rooms = new ObservableCollection<SmallRoomInput>(_input.Rooms);
@@ -216,6 +230,144 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>恢复公式文档默认参数(房间列表保留)。</summary>
         public ICommand ResetCommand { get; }
 
+        // ================================================================== 模型拾取
+
+        /// <summary>
+        /// 模型拾取是否可用(Revit 命令侧传入)。界面据此启用/禁用两个拾取按钮;
+        /// 非 Revit 环境(自检、单测)为 false,按钮呈灰。
+        /// </summary>
+        public bool IsPickAvailable { get; private set; }
+
+        /// <summary>【从模型拾取空间…】已被请求(窗口已关闭,命令层据此执行拾取)。</summary>
+        public bool PickSpacesRequested { get; private set; }
+
+        /// <summary>【拾取墙体求外墙总长…】已被请求(窗口已关闭,命令层据此执行拾取)。</summary>
+        public bool PickWallRequested { get; private set; }
+
+        /// <summary>
+        /// 请求拾取模型空间(需求:房间参数由用户依次选取模型空间)。
+        /// <para>
+        /// 为什么不在这里直接调 Revit API:WPF <c>ShowDialog()</c> 会在 Win32 层禁用 Revit 主窗,
+        /// 模态期间模型点不动,<c>Hide()</c> 也不恢复 Owner —— 必须让模态循环真正结束(窗口 <c>Close()</c>),
+        /// 由命令层拾取后再用**同一个 ViewModel** 重开窗(用户已填内容不丢,与「公共区参数」窗同构)。
+        /// </para>
+        /// </summary>
+        public void RequestPickSpaces()
+        {
+            PickSpacesRequested = true;
+        }
+
+        /// <summary>请求拾取墙体求与土壤接触外墙总长(应先选中房间行,窗口侧已判空)。</summary>
+        public void RequestPickWall()
+        {
+            PickWallRequested = true;
+        }
+
+        /// <summary>命令层执行完拾取后清空两个请求标记。</summary>
+        public void ClearPickRequests()
+        {
+            PickSpacesRequested = false;
+            PickWallRequested = false;
+        }
+
+        /// <summary>由命令层写入状态提示(用户在模型里 Esc 取消拾取等窗口外发生的情况)。</summary>
+        public void SetStatus(string text)
+        {
+            Status = text ?? "";
+        }
+
+        /// <summary>
+        /// 命令层拾取空间后的回填:**追加**房间行(同名房间跳过)。
+        /// 名称 / 面积 / 层高取自空间快照,屋顶面积默认与面积相同(F27 默认 = C27),
+        /// 设备冷负荷取系统默认 1000 W,外墙长度留 0(由【拾取墙体】按钮填),
+        /// 换气次数留 0(= 按房间类型取默认值)。
+        /// </summary>
+        public void ApplyPickedSpaces(IList<SpaceSnapshot> spaces, string note)
+        {
+            try
+            {
+                if (spaces == null || spaces.Count == 0)
+                {
+                    Status = "已取消拾取空间;房间列表未变。";
+                    return;
+                }
+
+                int added = 0;
+                int skipped = 0;
+                foreach (var space in spaces)
+                {
+                    if (space == null) continue;
+
+                    string name = string.IsNullOrEmpty(space.Name) ? (space.Number ?? "") : space.Name;
+                    if (string.IsNullOrEmpty(name)) name = "房间" + (_roomSequence + added + 1);
+
+                    bool exists = false;
+                    foreach (var room in _rooms)
+                    {
+                        if (room == null) continue;
+                        if (string.Equals((room.Name ?? "").Trim(), name.Trim(), StringComparison.Ordinal))
+                        {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (exists)
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    var picked = SmallRoomInput.Create(name, space.AreaM2, space.HeightM);
+                    picked.RoofAreaM2 = space.AreaM2;
+                    picked.EquipmentCoolingW = HVACIDA.Core.Utils.HvacConstants.SmallEquipmentCoolingW;
+                    picked.WallLengthM = 0;
+                    picked.AirChangePerHour = 0;
+                    _rooms.Add(picked);
+                    added++;
+                }
+
+                _roomSequence = _rooms.Count;
+                SyncRoomsToInput();
+                Calculate();
+                Status = "已从模型拾取空间:新增 " + added + " 个、跳过 " + skipped + " 个同名" +
+                         (string.IsNullOrEmpty(note) ? "" : "(" + note + ")") +
+                         ";面积 / 层高 / 屋顶面积已按空间填入,请核对后点【保 存 参 数】。";
+            }
+            catch (Exception ex)
+            {
+                Status = "拾取空间回填失败: " + ex.Message;
+            }
+        }
+
+        /// <summary>
+        /// 命令层拾取墙体后的回填:把**当前选中房间行**的与土壤接触外墙长度设为所选墙体长度之和
+        /// (需求原文:可选取多个墙体,自动获取墙体属性的长度值之和)。
+        /// </summary>
+        public void ApplyPickedWallLength(double lengthM, string note)
+        {
+            try
+            {
+                if (_selectedRoom == null)
+                {
+                    Status = "请先在房间表里选中一行再拾取墙体。";
+                    return;
+                }
+
+                _selectedRoom.WallLengthM = lengthM;
+                string name = _selectedRoom.Name ?? "";
+                SyncRoomsToInput();
+                Calculate();
+                Status = "已把房间「" + name + "」的与土壤接触外墙长度设为 " +
+                         lengthM.ToString("0.##") + " m(所选墙体长度之和)" +
+                         (string.IsNullOrEmpty(note) ? "" : "(" + note + ")") +
+                         ";请核对后点【保 存 参 数】。";
+            }
+            catch (Exception ex)
+            {
+                Status = "拾取墙体回填失败: " + ex.Message;
+            }
+        }
+
         // ================================================================== 实现
 
         /// <summary>把录入表的房间行同步回 <see cref="Input"/>.Rooms(计算/保存前必须调用)。</summary>
@@ -292,15 +444,15 @@ namespace HVACIDA.UI.ViewModels
             }
         }
 
-        /// <summary>保存到 %AppData%\HVACIDA\small-system.xml(与「小系统 → 计算结果」窗共用)。</summary>
+        /// <summary>按「系统类型 + 系统编号」保存到 %AppData%\HVACIDA\small-systems.xml(与「小系统 → 计算结果」窗共用)。</summary>
         private void Save()
         {
             try
             {
                 SyncRoomsToInput();
-                _inputService.Save(_input);
-                Status = "参数与 " + _rooms.Count + " 个房间行已保存: " +
-                         _inputService.StorageDirectory + "\\small-system.xml";
+                int systemCount = _inputService.Save(_input);
+                Status = "参数与 " + _rooms.Count + " 个房间行已保存(当前工程共 " + systemCount +
+                         " 套小系统): " + _inputService.StorageDirectory + "\\small-systems.xml";
             }
             catch (Exception ex)
             {

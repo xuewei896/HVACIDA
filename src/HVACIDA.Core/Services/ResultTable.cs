@@ -266,6 +266,48 @@ namespace HVACIDA.Core.Services
             return t;
         }
 
+        /// <summary>
+        /// 小系统**全站汇总**结果表(需求 2.2.3.2「小系统计算结果」):逐系统一行 + 全站合计。
+        /// 逐系统明细由界面表格呈现(列见 <see cref="SmallRoomTable.SummaryColumns"/>),这里给合计指标。
+        /// </summary>
+        public static ResultTable ForSmallSystemSummary(SmallSystemSummary s)
+        {
+            var t = new ResultTable
+            {
+                Title = "小系统全站汇总",
+                Note = s == null ? "" : s.Note
+            };
+            if (s == null || s.Rows.Count == 0) return t;
+
+            var totals = t.Section("一、全站合计");
+            totals.Add("小系统套数", "", s.SystemCount, "套", 0);
+            totals.Add("房间/分区数", "", s.RoomCount, "个", 0);
+            totals.Add("设备台数", "", s.EquipmentCount, "台", 0);
+            totals.Add("总面积", "", s.TotalAreaM2, "m²", 2);
+            if (s.TotalCoolingKw > 0) totals.AddTotal("冷负荷合计", "", s.TotalCoolingKw, "kW", 2);
+            if (s.TotalUnitCoolingKw > 0) totals.AddTotal("设备冷量合计(空调器/多联机)", "", s.TotalUnitCoolingKw, "kW", 2);
+
+            var air = t.Section("二、全站风量合计");
+            if (s.TotalSupplyM3H > 0) air.Add("总送风量", "", s.TotalSupplyM3H, "m³/h", 0);
+            if (s.TotalReturnM3H > 0) air.Add("总回风量", "", s.TotalReturnM3H, "m³/h", 0);
+            if (s.TotalFreshAirM3H > 0) air.Add("新风量合计", "", s.TotalFreshAirM3H, "m³/h", 0);
+            if (s.TotalExhaustM3H > 0) air.Add("排风量合计", "", s.TotalExhaustM3H, "m³/h", 0);
+            if (s.TotalSmokeM3H > 0) air.Add("排烟量合计", "", s.TotalSmokeM3H, "m³/h", 0);
+            if (s.TotalMakeupAirM3H > 0) air.Add("补风量合计", "", s.TotalMakeupAirM3H, "m³/h", 0);
+
+            var byType = t.Section("三、逐系统(点界面表格可看该系统的计算书)");
+            foreach (var row in s.Rows)
+            {
+                string label = row.TypeName + (string.IsNullOrEmpty(row.SystemCode) ? "" : " " + row.SystemCode);
+                byType.Add(label + " · 房间数", "", row.RoomCount, "个", 0);
+                if (row.TotalCoolingKw > 0) byType.Add(label + " · 冷负荷", "", row.TotalCoolingKw, "kW", 2);
+                if (row.TotalSupplyM3H > 0) byType.Add(label + " · 送风量", "", row.TotalSupplyM3H, "m³/h", 0);
+                if (row.TotalExhaustM3H > 0) byType.Add(label + " · 排风量", "", row.TotalExhaustM3H, "m³/h", 0);
+                if (row.TotalSmokeM3H > 0) byType.Add(label + " · 排烟量", "", row.TotalSmokeM3H, "m³/h", 0);
+            }
+            return t;
+        }
+
         /// <summary>系统类型中文名(界面与计算书统一用词)。</summary>
         public static string SystemTypeName(SmallSystemType type)
         {

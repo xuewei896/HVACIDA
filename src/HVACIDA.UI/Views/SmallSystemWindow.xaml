@@ -1,4 +1,4 @@
-<Window x:Class="HVACIDA.UI.Views.SmallSystemWindow"
+﻿<Window x:Class="HVACIDA.UI.Views.SmallSystemWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:HVACIDA.UI.Views"
@@ -246,6 +246,12 @@
                         <Button Content="添加行" Width="84" Height="26" Command="{Binding AddRoomCommand}"/>
                         <Button Content="删除行" Width="84" Height="26" Margin="8,0,0,0" Command="{Binding RemoveRoomCommand}"
                                 ToolTip="删除录入表中当前选中的房间行"/>
+                        <Button x:Name="PickSpacesButton" Content="从模型拾取空间…" Height="26" Margin="8,0,0,0"
+                                Click="OnPickSpacesClick" IsEnabled="{Binding IsPickAvailable}"
+                                ToolTip="点击后本窗关闭,在模型中依次选择本系统负责的空间(可多选,回车结束);随后自动回到本窗并把这些空间追加为房间行"/>
+                        <Button x:Name="PickWallButton" Content="拾取墙体求外墙总长…" Height="26" Margin="8,0,0,0"
+                                Click="OnPickWallClick" IsEnabled="{Binding IsPickAvailable}"
+                                ToolTip="先在房间表中选中一行,再点击本按钮;在模型中选取与该房间接触的多段外墙,自动取其长度之和填入该行的与土壤接触外墙长度"/>
                         <TextBlock VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#5A5A5A"
                                    TextTrimming="CharacterEllipsis"
                                    Text="房间类型可填「卫生间 / 淋浴间 / 环控机房 / 气瓶间 / 电缆引入间 / 泵房」等;送排风排烟系统的「参与送/排烟/补风」勾选环控机房行。"/>

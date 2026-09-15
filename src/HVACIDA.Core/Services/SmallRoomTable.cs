@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -143,6 +143,29 @@ namespace HVACIDA.Core.Services
                     break;
             }
             return cols;
+        }
+
+        /// <summary>
+        /// 全站汇总"逐系统一行"的列(界面表格用)。零值列表示该系统不涉及该项,界面显示「—」。
+        /// </summary>
+        public static IList<RoomColumn> SummaryColumns()
+        {
+            return new List<RoomColumn>
+            {
+                new RoomColumn { Header = "系统类型", Property = "TypeName", Kind = "text", Width = 150 },
+                new RoomColumn { Header = "系统编号", Property = "SystemCode", Kind = "text", Width = 110 },
+                new RoomColumn { Header = "房间/分区", Property = "RoomCount", Decimals = 0, Width = 80 },
+                new RoomColumn { Header = "面积 m²", Property = "TotalAreaM2", Decimals = 2, Width = 90 },
+                new RoomColumn { Header = "冷负荷 kW", Property = "TotalCoolingKw", Decimals = 2, Width = 95 },
+                new RoomColumn { Header = "送风量 m³/h", Property = "TotalSupplyM3H", Decimals = 0, Width = 105 },
+                new RoomColumn { Header = "回风量 m³/h", Property = "TotalReturnM3H", Decimals = 0, Width = 105 },
+                new RoomColumn { Header = "新风量 m³/h", Property = "TotalFreshAirM3H", Decimals = 0, Width = 105 },
+                new RoomColumn { Header = "排风量 m³/h", Property = "TotalExhaustM3H", Decimals = 0, Width = 105 },
+                new RoomColumn { Header = "排烟量 m³/h", Property = "TotalSmokeM3H", Decimals = 0, Width = 105 },
+                new RoomColumn { Header = "补风量 m³/h", Property = "TotalMakeupAirM3H", Decimals = 0, Width = 105 },
+                new RoomColumn { Header = "设备冷量 kW", Property = "TotalUnitCoolingKw", Decimals = 2, Width = 110 },
+                new RoomColumn { Header = "设备 台", Property = "EquipmentCount", Decimals = 0, Width = 70 }
+            };
         }
 
         /// <summary>房间明细的等宽文本(计算书用;列宽按显示宽度补齐,CJK 记 2 列)。</summary>
