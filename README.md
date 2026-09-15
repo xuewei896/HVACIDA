@@ -80,11 +80,11 @@ dotnet build .\HVACIDA.sln
 | 界面文案纪律 | — | **不体现公式文档单元格编号**(D55/C39/E159…):只在悬停提示里可见,计算书正文亦不含;window-smoke 有防回归扫描 |
 | 2.1.2→2.2.3.1 气象联动 | `LargeSystemInputService` + `ProjectDesignSync`(C5/F4/F6 ← 项目信息) | ✅ 默认自动联动、可取消转手工;未填不覆盖 |
 | 2.2.1/2.2.3.1 模型取值 | `SpaceSnapshot` + `PublicAreaAggregator` + `RevitSpaceReader`(D55/D56/C13/C14) | 🟡 Core+UI+命令层就绪,Revit 实机待验 |
-| 2.2.3.2 小系统负荷 | 六类系统计算窗 + 计算结果窗(SmallSystemLoadCalculator) | ✅ **六类全部实装**(全空气一次回风 / 多联机+新风 / 排风 / 送风排风排烟 / 加压送风 / 排烟);公式源《小系统空调负荷、送排风、排烟计算公式.docx》,已按文档示例复算(见 §6b 自检);**结果按「系统结果 + 房间明细 + 设备选型」三张表呈现**(§4.6) |
+| 2.2.3.2 小系统负荷 | 六类系统计算窗 + **全站多系统汇总窗**(SmallSystemLoadCalculator / SmallSystemSummaryService) | ✅ **六类全部实装**(全空气一次回风 / 多联机+新风 / 排风 / 送风排风排烟 / 加压送风 / 排烟);公式源《小系统空调负荷、送排风、排烟计算公式.docx》(**口径:按公式计算,示例仅用于理解公式**);结果按「系统结果 + 房间明细 + 设备选型」三张表呈现;**多系统按类型+编号 upsert 汇总**(§4.6);模型拾取:拾取空间建房间列表 / 拾取墙体求外墙总长 |
 | 排烟计算(2.2.3.1) | 排烟计算窗(`LargeSmokeCalculator`)+ 计算结果表格 | ✅ 已实现(计算 ×60 / 选型 ×1.2 / 2 台取大者;防烟分区口径待接入) |
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | TextReportGenerator(文本计算书,`%AppData%\HVACIDA\Reports`) | 🟡 文本版 |
-| 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / small-system.xml) | 🟡 待换 SQLite |
+| 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml**) | 🟡 待换 SQLite(旧 small-system.xml 首次读取自动迁移) |
 | 2.7 规范知识库 | DesignQaService(本地规则应答)+ 知识库窗口 | 🟡 规则版,待接 AI |
 | 2.3/2.4 水力、2.5 材料表、2.6 出图 | — | ⬜ 未开始(入口已就位,点击给口径说明) |
 
