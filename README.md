@@ -23,14 +23,18 @@ D:\DSH
 │  ├─ 需求源文档-通风空调智能设计助手.md  交付 docx 的正文 Markdown 副本(diff 友好,由 tools/docx2md 生成)
 │  └─ ui-prototype/    HTML 可点击原型(双击 index.html;含流程/逻辑视图与深链接)
 ├─ src
-│  ├─ HVACIDA.Core     领域模型/计算/焓湿图/仓库/报告/模块目录(无 Revit 依赖,可单测)
+│  ├─ HVACIDA.Core     领域模型/计算/焓湿图/仓库/报告/模块目录/气象库(无 Revit 依赖,可单测)
+│  │  └─ Resources/weather-db.csv  全国省市气象参数库(294 台站,由 tools/weatherdb 生成、内嵌进 DLL)
 │  ├─ HVACIDA.UI       WPF 窗口+MVVM(不引用 Revit API)
 │  └─ HVACIDA.Revit    ExternalApplication/Ribbon/Command + 内嵌图标(引用前两者+Revit 2020 API)
 │     └─ Resources/Icons/  22 个按钮图标 ×(16/32)px,由 tools/HVACIDA.IconGen 生成、内嵌进 DLL
 ├─ tools
-│  ├─ HVACIDA.Smoke    数值+结构自检(北京算例 30 项、目录/仓库/知识库/小系统)+ 窗口/Ribbon/文档三项脚本
+│  ├─ HVACIDA.Smoke    数值+结构自检(北京算例 30 项、目录/仓库/知识库/小系统/空间聚合/气象联动/省市气象库)
+│  │                   + 窗口 / Ribbon / 文档同步 / 气象库同步四项脚本
 │  ├─ HVACIDA.IconGen  Ribbon 图标生成器(矢量几何 → PNG,无需设计素材)
-│  └─ docx2md          交付 docx → Markdown 正文副本提取器与同步门禁
+│  ├─ docx2md          交付 docx → Markdown 正文副本提取器与同步门禁
+│  └─ weatherdb        各省市室外空气参数.md → weather-db.csv 生成器与同步门禁(含数据校验报告)
+├─ 各省市室外空气参数.md   ★ 气象库源数据(GB 50736-2012 附录A 表A,294 台站;生成物的唯一上游)
 ├─ deploy
 │  ├─ HVACIDA.addin     清单模板(占位路径)
 │  └─ install.ps1       编译 + 安装 .addin 到 C:\ProgramData\Autodesk\Revit\Addins\2020
@@ -71,6 +75,7 @@ dotnet build .\HVACIDA.sln
 | 需求章节 | 模块 | 现状 |
 |---|---|---|
 | 2.1 项目信息 | 工程信息窗 + 气象参数窗(ProjectInfoModel/DesignConditionParams → project.xml) | ✅ 可用(Excel 模板导入、.rvt 全局参数待实现) |
+| 2.1.2 气象数据库 | 省/市下拉 + 选定城市自动回填室外参数(`WeatherDatabase`,内嵌 294 台站 / 31 省级行政区) | ✅ 可用(源 GB 50736-2012 附录A) |
 | 2.2.3.1 大系统负荷 | 公共区参数窗 + 负荷计算窗 + 计算结果窗(LargeSystemLoadCalculator) | ✅ 已按公式文档移植;北京站算例 30 项逐格一致 |
 | 2.1.2→2.2.3.1 气象联动 | `LargeSystemInputService` + `ProjectDesignSync`(C5/F4/F6 ← 项目信息) | ✅ 默认自动联动、可取消转手工;未填不覆盖 |
 | 2.2.1/2.2.3.1 模型取值 | `SpaceSnapshot` + `PublicAreaAggregator` + `RevitSpaceReader`(D55/D56/C13/C14) | 🟡 Core+UI+命令层就绪,Revit 实机待验 |
@@ -85,7 +90,9 @@ dotnet build .\HVACIDA.sln
 ## 6. 关键 TODO(按技能规范)
 
 1. **大系统公式核对**:主计算链完成(算例 30 项逐格一致,2026-09-04);待补:**排烟"防烟分区"选型口径**(计算风量=面积×60,选型=×1.2,需分区几何输入)。
-2. ~~大系统输入 F4/F6/C5 接项目信息~~ 已实现(`ProjectDesignSync`,默认联动+可手工覆盖);剩余:接**气象数据库查询**(现为内置典型值)。
+2. ~~大系统输入 F4/F6/C5 接项目信息~~ 已实现(`ProjectDesignSync`,默认联动+可手工覆盖);~~接气象数据库~~ 已实现(**内嵌 GB 50736-2012 附录A 全国 294 台站**,按省市选取)。
+   剩余:① **附录A 表19**(标准对咸阳/黔南州/新疆塔城等 6 个台站未记录夏季湿球温度,需按表19 或当地资料补);
+   ② 源文件里 2 处海拔疑似笔误(西藏山南地区 9280→约 4280 m、青海黄南州 8500 m,由气压列反证),待人工核对。
 3. SQLite 化:实现 `IDataRepository` 的 SQLite 版(需求:数据库 SQLite)。
 4. Revit 读取:空间面积/体积/高度→D55/D56/C13/C14 **已实现**(含链接模型、自动识别+手动拾取,实机待验);
    剩余:**墙长**(小系统"与土壤接触外墙长度")、**与土壤接触屋顶面积**、参数回写、批量空间分区。
@@ -111,6 +118,10 @@ powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smo
 
 # 4) 文档同步自检:交付 docx 与 Markdown 副本的 SHA256 是否一致(0 = 副本不过期)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\docx2md\check-docx-sync.ps1
+
+# 5) 气象库同步自检:源文件 各省市室外空气参数.md 与内嵌 weather-db.csv 是否一致 + 解析校验
+#    (过期时 -Regenerate 自动重生成)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\weatherdb\check-weather-db-sync.ps1
 ```
 
 ## 6c. docx → Markdown 正文副本(便于 diff)
@@ -132,6 +143,28 @@ python tools\docx2md\docx_to_markdown.py "通风空调智能设计助手.docx" `
 | 约定 | **docx 是交付件、Markdown 是派生件**:改正文改 docx,然后重跑上面的命令;两边不要各改各的 |
 | 门禁 | `tools\docx2md\check-docx-sync.ps1` 校验副本头部记录的 SHA256 与当前 docx 是否一致;**过期则退出码 1**(加 `-Regenerate` 可自动重生成)——已挂到 `docs/开发流程.md` §5.4 与 §6 交付清单 |
 
+## 6d. 全国省市气象参数库(内嵌,GB 50736-2012 附录A)
+
+「项目信息 → 工程信息」的项目地点是**省 / 市级联下拉**;选定城市后**自动把该市室外气象参数写进本工程**。
+
+| 项 | 说明 |
+|---|---|
+| 源数据 | 仓库根目录 `各省市室外空气参数.md` —— GB 50736-2012 **附录A 表A「室外空气计算参数」**的 HTML 表格转录(294 个台站 / 31 个省级行政区 = 22 省 + 5 自治区 + 4 直辖市) |
+| 生成物 | `src/HVACIDA.Core/Resources/weather-db.csv`(内嵌进 `HVACIDA.Core.dll`,插件不依赖外部文件、不联网) |
+| 重新生成 | `python tools\weatherdb\build_weather_db.py` |
+| 校验报告 | `tools/weatherdb/weather-db-report.txt`(每个省的台站数核对、错误与提示清单) |
+| 门禁 | `tools\weatherdb\check-weather-db-sync.ps1`:源文件 SHA256 ↔ CSV 头部记录、台站数、重跑解析校验;**过期退出码 1**(`-Regenerate` 自动重生成) |
+| 回填范围 | **只回填室外参数**:大系统室外 5 项、小系统室外 3 项、大气压力(取**夏季**值,1000.2 hPa → 100.02 kPa)、室外相对湿度(取夏季通风相对湿度)。**室内设计参数(站厅/站台/用房温湿度)属设计取值,气象库不动它** |
+| 缺记录处理 | 标准未记录的格(附录A 条文说明点名:咸阳、黔南州、新疆塔城等共 **6 个台站**的夏季空调湿球温度)在 CSV 里留**空**,取用时**不覆盖原值**并给出告警 —— **不猜值、不用邻近台站顶替** |
+
+生成器为什么要存在(而不是手抄 CSV):源文件是分块 HTML 表格,块与块**共享省名上下文**,且有两类缺省形状 ——
+① 省份格只剩计数(如 `(2)` = 天津续块、`(10)` = 河北续块);② 少数块整行没有省行(39 行布局)。
+生成器按列位展开 `rowspan/colspan`、左起逐格推断"当前省",并用**每个省声明的台站数做 checksum**
+(30 个省全部相符),另有"湿球 ≤ 干球""台站号唯一且 5 位""大气压力与海拔物理自洽"等断言。
+
+> 已知问题(已记录,不影响计算):源文件里 **2 处海拔疑似笔误** —— 西藏山南地区标 9280 m、
+> 青海黄南州标 8500 m;由**气压列反证**其真值约为 4280 m / 3400 m(相应高度的大气压才对得上)。
+> `HVACIDA.Smoke` 场景10 断言"气压/海拔不一致的**只有**这 2 个已知台站",防止列位串行被放过。
 ## 7. 与 AI 协作(DSH 技能)
 
 `.dsh\skills\revit-hvac-2020\SKILL.md` 已被 DSH 自动发现;任何会话写本项目代码前都会加载它
