@@ -29,7 +29,7 @@ D:\DSH
 │  └─ HVACIDA.Revit    ExternalApplication/Ribbon/Command + 内嵌图标(引用前两者+Revit 2020 API)
 │     └─ Resources/Icons/  22 个按钮图标 ×(16/32)px,由 tools/HVACIDA.IconGen 生成、内嵌进 DLL
 ├─ tools
-│  ├─ HVACIDA.Smoke    数值+结构自检(北京算例 30 项、目录/仓库/知识库/小系统/空间聚合/气象联动/省市气象库)
+│  ├─ HVACIDA.Smoke    数值+结构自检(北京算例 30 项、目录/仓库/知识库/小系统/空间聚合/气象联动/省市气象库/排烟计算)
 │  │                   + 窗口 / Ribbon / 文档同步 / 气象库同步四项脚本
 │  ├─ HVACIDA.IconGen  Ribbon 图标生成器(矢量几何 → PNG,无需设计素材)
 │  ├─ docx2md          交付 docx → Markdown 正文副本提取器与同步门禁
@@ -80,16 +80,17 @@ dotnet build .\HVACIDA.sln
 | 2.1.2→2.2.3.1 气象联动 | `LargeSystemInputService` + `ProjectDesignSync`(C5/F4/F6 ← 项目信息) | ✅ 默认自动联动、可取消转手工;未填不覆盖 |
 | 2.2.1/2.2.3.1 模型取值 | `SpaceSnapshot` + `PublicAreaAggregator` + `RevitSpaceReader`(D55/D56/C13/C14) | 🟡 Core+UI+命令层就绪,Revit 实机待验 |
 | 2.2.3.2 小系统负荷 | 全空气一次回风窗 + 计算结果窗(SmallSystemLoadCalculator) | 🟡 仅一类实现,其余 5 类给待实现说明 |
-| 排烟计算(2.2.3.1) | — | ⬜ 待实现(需防烟分区几何) |
+| 排烟计算(2.2.3.1) | 排烟计算窗(`LargeSmokeCalculator`)+ 计算结果表格 | ✅ 已实现(计算 ×60 / 选型 ×1.2 / 2 台取大者;防烟分区口径待接入) |
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | TextReportGenerator(文本计算书,`%AppData%\HVACIDA\Reports`) | 🟡 文本版 |
-| 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / small-system.xml) | 🟡 待换 SQLite |
+| 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / small-system.xml) | 🟡 待换 SQLite |
 | 2.7 规范知识库 | DesignQaService(本地规则应答)+ 知识库窗口 | 🟡 规则版,待接 AI |
 | 2.3/2.4 水力、2.5 材料表、2.6 出图 | — | ⬜ 未开始(入口已就位,点击给口径说明) |
 
 ## 6. 关键 TODO(按技能规范)
 
-1. **大系统公式核对**:主计算链完成(算例 30 项逐格一致,2026-09-04);待补:**排烟"防烟分区"选型口径**(计算风量=面积×60,选型=×1.2,需分区几何输入)。
+1. **大系统公式核对**:主计算链完成(算例 30 项逐格一致,2026-09-04);**排烟计算已按已定口径实装**(计算=面积×60,选型=×1.2,风机 2 台取站厅/站台大者,结果以表格给出);
+   待补:**防烟分区几何**(分区面积、挡烟垂壁、储烟仓)未接入模型 —— 现按公共区整体作为一个分区,量偏大,接入后应逐分区取量、风机按最大分区选型。
 2. ~~大系统输入 F4/F6/C5 接项目信息~~ 已实现(`ProjectDesignSync`,默认联动+可手工覆盖);~~接气象数据库~~ 已实现(**内嵌 GB 50736-2012 附录A 全国 294 台站**,按省市选取)。
    剩余:① **附录A 表19**(标准对咸阳/黔南州/新疆塔城等 6 个台站未记录夏季湿球温度,需按表19 或当地资料补);
    ② 源文件里 2 处海拔疑似笔误(西藏山南地区 9280→约 4280 m、青海黄南州 8500 m,由气压列反证),待人工核对。
