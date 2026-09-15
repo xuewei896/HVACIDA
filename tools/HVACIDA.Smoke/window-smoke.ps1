@@ -1128,6 +1128,36 @@ try {
         Write-Host "FAIL  空系统被落盘"; $fail++
     }
 
+    # ---- 三个水力键必须是「真功能」而不是「待实现说明窗」(防回归:类名搬回 ModuleInfoCommands.cs 即 FAIL) ----
+    try {
+        $thisScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path      # tools\HVACIDA.Smoke
+        $repoRoot = Split-Path (Split-Path $thisScriptDir -Parent) -Parent     # 仓库根
+        $srcRoot = Join-Path $repoRoot 'src'
+        $hydCmdFile = Join-Path $srcRoot 'HVACIDA.Revit\Commands\HydraulicCommands.cs'
+        $infoCmdFile = Join-Path $srcRoot 'HVACIDA.Revit\Commands\ModuleInfoCommands.cs'
+        if ((Test-Path -LiteralPath $hydCmdFile) -and (Test-Path -LiteralPath $infoCmdFile)) {
+            $hydText = [string](Get-Content -LiteralPath $hydCmdFile -Raw)
+            $infoText = [string](Get-Content -LiteralPath $infoCmdFile -Raw)
+            $moved = $hydText.Contains('class ShowAirHydraulicCommand') -and
+                     $hydText.Contains('class ShowWaterHydraulicCommand') -and
+                     $hydText.Contains('class ShowHydraulicResultCommand') -and
+                     $hydText.Contains('TransactionMode.Manual') -and
+                     $hydText.Contains('RevitHydraulicReader')
+            $stillInfo = $infoText.Contains('ShowAirHydraulicCommand') -or
+                         $infoText.Contains('ShowWaterHydraulicCommand') -or
+                         $infoText.Contains('ShowHydraulicResultCommand')
+            if ($moved -and -not $stillInfo) {
+                Write-Host "PASS  水力三键已是真实功能(命令在 HydraulicCommands.cs 且走 RevitHydraulicReader,未留在待实现说明窗)"
+            } else {
+                Write-Host ("FAIL  水力三键接线: moved={0} stillInInfoWindow={1}" -f $moved, $stillInfo); $fail++
+            }
+        } else {
+            Write-Host ("FAIL  找不到水力命令源文件: {0} / {1}" -f $hydCmdFile, $infoCmdFile); $fail++
+        }
+    } catch {
+        Write-Host ("FAIL  水力三键接线检查  {0}" -f $_.Exception.Message); $fail++
+    }
+
     try { Remove-Item $tmpH -Recurse -Force -ErrorAction Stop } catch { }
     try { Remove-Item $tmpH2 -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
