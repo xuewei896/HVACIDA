@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using HVACIDA.Core.Models;
 
@@ -28,8 +28,8 @@ namespace HVACIDA.Core.Services
             sb.AppendLine("【大系统排烟计算书】(需求 2.2.3.1)");
             sb.AppendLine(ResultTable.ForLargeSmoke(x, r).ToText());
             sb.AppendLine();
-            sb.AppendLine("面积来源:站厅公共区 D55 = " + Num(areas.HallAreaM2) + " m²," +
-                          "站台公共区 D56 = " + Num(areas.PlatformAreaM2) + " m²(与「公共区参数」同一份输入)。");
+            sb.AppendLine("面积来源:站厅公共区 " + Num(areas.HallAreaM2) + " m²," +
+                          "站台公共区 " + Num(areas.PlatformAreaM2) + " m²(与「公共区参数」同一份输入)。");
             return sb.ToString();
         }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -296,6 +296,10 @@ namespace HVACIDA.Smoke
             LargeSystemResult synced = calculator.Calculate(beijing);
             Console.WriteLine("-- 端到端:E159 总制冷量(手填算例 = 381.598170929697)--");
             Check("E159 总制冷量(联动后)", synced.TotalCoolingKw, 381.598170929697);
+            var codeHits = string.Join(",", System.Text.RegularExpressions.Regex.Matches(
+                ResultFormatter.FormatLarge(beijing, synced), @"\b[A-Z]{1,2}\d{2,3}\b").Cast<System.Text.RegularExpressions.Match>()
+                .Select(m => m.Value).Distinct().ToArray());
+            CheckInt("大系统计算书不含单元格编号(命中: " + codeHits + ")", codeHits.Length == 0 ? 0 : 1, 0);
             Check("C125 总送风量(联动后)", synced.TotalSupplyFlowM3H, 87767.9950526333);
             Check("A165 单端机组风量(联动后)", synced.UnitSupplyFlowM3H, 43883.9975263166);
             Check("B165 单端机组冷量(联动后)", synced.UnitCoolingKw, 190.799085464848);
@@ -559,7 +563,7 @@ namespace HVACIDA.Smoke
             Check("站台单台风机风量 = 选型/2", platform.UnitFlowM3H, 58320);
 
             // 取大者:站厅(120000 > 97200)
-            CheckText("选型基准区 = 站厅公共区(D55)", result.GoverningZoneName, "站厅公共区(D55)");
+            CheckText("选型基准区 = 站厅公共区(界面不体现单元格编号)", result.GoverningZoneName, "站厅公共区");
             CheckInt("基准区标记唯一", result.Zones.FindAll(z => z.IsGoverning).Count, 1);
             CheckInt("基准区是站厅", hall.IsGoverning ? 1 : 0, 1);
             Check("基准区选型风量 = 144000", result.GoverningSelectionFlowM3H, 144000);
@@ -573,7 +577,7 @@ namespace HVACIDA.Smoke
             // 站台面积更大时,基准区必须切换(防"写死站厅")
             var swapped = new LargeSmokeCalculator().Calculate(
                 new LargeSystemInput { HallAreaM2 = 800, PlatformAreaM2 = 1620 }, parameters);
-            CheckText("站台面积更大时基准区 = 站台公共区(D56)", swapped.GoverningZoneName, "站台公共区(D56)");
+            CheckText("站台面积更大时基准区 = 站台公共区", swapped.GoverningZoneName, "站台公共区");
             Check("此时单台选型风量 = 1620×60×1.2/2", swapped.UnitSelectionFlowM3H, 58320);
 
             // 台数/系数可调:4 台、系数 1.0
@@ -582,6 +586,16 @@ namespace HVACIDA.Smoke
             Check("单位面积 72 时站厅计算排烟量 = 144000", custom.Zones[0].CalculatedFlowM3H, 144000);
             Check("系数 1.0 时选型 = 计算", custom.Zones[0].SelectionFlowM3H, 144000);
             Check("4 台时单台 = 选型/4", custom.Zones[0].UnitFlowM3H, 36000);
+
+            // 单元格编号:界面/交付件不体现,但数据与"核对视图"仍保留(可追溯回公式文档)
+            CheckText("区域名不含单元格编号(评审要求)", result.Zones[0].ZoneName, "站厅公共区");
+            CheckText("编号保留在数据字段(供悬停/核对)", result.Zones[0].Cell, "D55");
+            CheckInt("默认计算书不含单元格编号",
+                System.Text.RegularExpressions.Regex.IsMatch(
+                    ResultFormatter.FormatLargeSmoke(areas, parameters, result), @"\b[A-Z]{1,2}\d{2,3}\b") ? 1 : 0, 0);
+            CheckInt("核对视图(显式开启)仍带单元格编号",
+                ResultTable.ForLargeSystem(areas, new LargeSystemLoadCalculator().Calculate(areas)).ToText(true)
+                    .Contains("D107") ? 1 : 0, 1);
 
             CheckInt("口径说明非空", result.Note.Length > 0 ? 1 : 0, 1);
             CheckInt("过渡口径(防烟分区)必须写明", result.PendingNote.Contains("防烟分区") ? 1 : 0, 1);

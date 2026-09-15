@@ -39,6 +39,27 @@ function Test-Window([string]$name, [scriptblock]$factory) {
 $uiNs = 'HVACIDA.UI.Views'
 $vmNs = 'HVACIDA.UI.ViewModels'
 
+# =====================================================================
+# 静态扫描:XAML 的可见文本(Text/Header/Content)不得出现公式文档单元格编号
+# —— 编号只允许出现在 ToolTip(悬停提示)里;这是"插件不体现单元格编号"的防回归闸门
+# =====================================================================
+try {
+    $uiRoot = Split-Path (Split-Path (Split-Path (Split-Path (Resolve-Path -LiteralPath $UiDir).Path -Parent) -Parent) -Parent) -Parent
+    $srcDir = Join-Path $uiRoot 'src'
+    if (-not (Test-Path -LiteralPath $srcDir)) { $srcDir = Join-Path (Split-Path $uiRoot -Parent) 'src' }
+    $xamls = @(Get-ChildItem -LiteralPath $srcDir -Recurse -Filter *.xaml -File | Where-Object { $_.FullName -notmatch '\\obj\\' })
+    $bad = @()
+    foreach ($x in $xamls) {
+        $hit = Select-String -Path $x.FullName -Pattern '(Text|Header|Content)="[^"]*(?:[（(]\s*[A-Z]{1,2}[0-9]{1,3}|\b[A-Z]{1,2}[0-9]{2,3}\b)'
+        foreach ($h in $hit) { $bad += ((Split-Path $x.FullName -Leaf) + ':' + $h.LineNumber) }
+    }
+    if ($bad.Count -eq 0) { Write-Host ("PASS  XAML 可见文本无单元格编号(已扫描 {0} 个 .xaml)" -f $xamls.Count) }
+    else { Write-Host ("FAIL  XAML 可见文本含单元格编号: " + ($bad -join ', ')); $fail++ }
+} catch {
+    Write-Host ("FAIL  单元格编号扫描  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
 Test-Window '工程信息 ProjectInfoWindow'      { New-Object "$uiNs.ProjectInfoWindow" }
 Test-Window '气象参数 WeatherWindow'          { New-Object "$uiNs.WeatherWindow" }
 Test-Window '公共区参数 PublicAreaWindow'      { New-Object "$uiNs.PublicAreaWindow" }
@@ -217,9 +238,20 @@ try {
     $srw.Close()
 
     # ---- 文本计算书仍与表格同源(逐行抽查)----
-    if ($srvm.ResultText -match '四、设备选型' -and $blvm.ResultText -match 'D107' -and $blvm.ResultText -match 'E159') {
-        Write-Host "PASS  导出计算书与结果表同源(分区标题 + 单元格代号均在)"
+    if ($srvm.ResultText -match '四、设备选型' -and $blvm.ResultText -match '站厅冷负荷合计' -and $blvm.ResultText -match '总制冷量') {
+        Write-Host "PASS  导出计算书与结果表同源(分区标题 + 合计行均在文本计算书中)"
     } else { Write-Host "FAIL  计算书文本与表格不同源"; $fail++ }
+
+    # 计算结果**不体现公式文档单元格编号**(2026-09-15 评审):界面表格列与计算书正文都不含
+    $codePattern = '\b[A-Z]{1,2}[0-9]{2,3}\b'
+    $textHit = [regex]::IsMatch($blvm.ResultText, $codePattern) -or [regex]::IsMatch($srvm.ResultText, $codePattern)
+    $rowHit = $false
+    foreach ($r in $allRows) { if ($r.Label -match $codePattern -or $r.Display -match $codePattern) { $rowHit = $true } }
+    if (-not $textHit -and -not $rowHit) {
+        Write-Host "PASS  界面表格与计算书均不体现单元格编号(仅悬停提示可见)"
+    } else { Write-Host "FAIL  仍有单元格编号出现在正文: text=$textHit row=$rowHit"; $fail++ }
+    if ($allRows[0].Hint -match '单元格') { Write-Host "PASS  单元格编号仅在悬停提示(Hint)中提供" }
+    else { Write-Host "FAIL  悬停提示未提供编号"; $fail++ }
 
     try { Remove-Item $tmp5 -Recurse -Force -ErrorAction Stop } catch { }
 } catch {

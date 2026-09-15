@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HVACIDA.Core.Models
@@ -50,8 +50,11 @@ namespace HVACIDA.Core.Models
     /// <summary>排烟计算结果表的一行。</summary>
     public class LargeSmokeZoneRow
     {
-        /// <summary>区域名(站厅公共区 / 站台公共区)。</summary>
+        /// <summary>区域名(站厅公共区 / 站台公共区;不体现公式文档单元格编号)。</summary>
         public string ZoneName { get; set; } = "";
+
+        /// <summary>面积来源单元格代号(仅供悬停提示/自检核对,不在界面正文出现)。</summary>
+        public string Cell { get; set; } = "";
 
         /// <summary>面积 m²(D55 / D56)。</summary>
         public double AreaM2 { get; set; }

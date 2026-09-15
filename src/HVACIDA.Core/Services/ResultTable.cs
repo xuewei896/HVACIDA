@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -37,8 +37,14 @@ namespace HVACIDA.Core.Services
             return section;
         }
 
-        /// <summary>渲染为等宽文本(供计算书导出;列宽按显示宽度补齐,CJK 记 2 列)。</summary>
-        public string ToText()
+        /// <summary>
+        /// 渲染为等宽文本(供计算书导出;列宽按显示宽度补齐,CJK 记 2 列)。
+        /// <para>
+        /// <paramref name="includeCellCodes"/> 默认 <c>false</c> —— **交付件与插件界面都不体现公式文档单元格编号**
+        /// (2026-09-15 评审要求);开发自检需要与 Excel 逐格核对时可传 <c>true</c>。
+        /// </para>
+        /// </summary>
+        public string ToText(bool includeCellCodes = false)
         {
             var sb = new StringBuilder();
             if (!string.IsNullOrEmpty(Title)) sb.AppendLine("【" + Title + "】");
@@ -50,7 +56,7 @@ namespace HVACIDA.Core.Services
                     sb.Append("  ").Append(Pad(row.Label, 26));
                     sb.Append(Pad(row.Display, 16));
                     if (!string.IsNullOrEmpty(row.Unit)) sb.Append(Pad(row.Unit, 8));
-                    if (!string.IsNullOrEmpty(row.Cell)) sb.Append(row.Cell);
+                    if (includeCellCodes && !string.IsNullOrEmpty(row.Cell)) sb.Append(row.Cell);
                     sb.AppendLine();
                 }
             }
@@ -84,8 +90,8 @@ namespace HVACIDA.Core.Services
             var t = new ResultTable
             {
                 Title = "大系统负荷计算结果",
-                Note = "口径与《大系统负荷计算公式.docx》一致,已通过北京站算例《-示例.xls》30 项逐格核对(2026-09-04);" +
-                       "单元格代号见每行末列。E159 用 C143(露点焓,D143 系公式文档笔误);站厅/站台送风温度一致。"
+                Note = "口径与《大系统负荷计算公式.docx》一致,已通过北京站算例《-示例.xls》30 项逐格核对(2026-09-04)。" +
+                       "总制冷量按**露点焓**取值(公式文档该处引用的一格系笔误,已在决策记录中说明);站厅/站台送风温度一致。"
             };
 
             var flow = t.Section("一、高峰客流(个/min)");
@@ -101,8 +107,8 @@ namespace HVACIDA.Core.Services
             hall.Add("乘客潜热", "D96", r.HallLatentKw, "kW");
             hall.Add("照明", "D97", r.HallLightingKw, "kW");
             hall.Add("广告灯箱", "D98", r.HallAdvertKw, "kW");
-            hall.Add("自动扶梯(B64/2)", "D99", r.HallEscalatorKw, "kW");
-            hall.Add("垂直电梯(D64/2)", "D100", r.HallElevatorKw, "kW");
+            hall.Add("自动扶梯", "D99", r.HallEscalatorKw, "kW");
+            hall.Add("垂直电梯", "D100", r.HallElevatorKw, "kW");
             hall.Add("AFC 设备", "D101", r.HallAfcKw, "kW");
             hall.Add("出入口渗透", "D102", r.HallEntranceInfiltrationKw, "kW");
             hall.Add("屏蔽门传热(输入)", "D103", r.HallPsdTransferKw, "kW");
@@ -146,7 +152,7 @@ namespace HVACIDA.Core.Services
             ratio.Add("新风饱和含湿量", "D149", r.FreshSaturatedMoistureGkg, "g/kg");
             ratio.Add("新风焓", "C149", r.FreshEnthalpy, "kJ/kg");
             ratio.Add("新回风混合焓", "C146", r.FreshReturnMixEnthalpy, "kJ/kg");
-            ratio.Add("露点焓(E159 取此值)", "C143", r.DewPointEnthalpy, "kJ/kg");
+            ratio.Add("露点焓(制冷量取此值)", "C143", r.DewPointEnthalpy, "kJ/kg");
 
             var air = t.Section("六、风量与制冷量");
             air.Add("站厅送风量", "A125", r.HallSupplyFlowM3H, "m³/h");
@@ -161,12 +167,12 @@ namespace HVACIDA.Core.Services
             air.AddTotal("总制冷量", "E159", r.TotalCoolingKw, "kW");
 
             var units = t.Section("七、设备选型(单台;需求指定 4 项)");
-            units.Add("组合式空调机组送风量(C125/2)", "A165", r.UnitSupplyFlowM3H, "m³/h");
-            units.Add("组合式空调机组制冷量(E159/2)", "B165", r.UnitCoolingKw, "kW");
-            units.Add("回排风机回风量(E136/2)", "C178", r.UnitReturnFlowM3H, "m³/h");
-            units.Add("排烟风机排烟风量(MAX(C171,D171)/2)", "E178", r.UnitSmokeFlowM3H, "m³/h");
-            units.Add("站厅排烟量(面积×60)", "C171", r.HallSmokeFlowM3H, "m³/h");
-            units.Add("站台排烟量(面积×60)", "D171", r.PlatformSmokeFlowM3H, "m³/h");
+            units.Add("组合式空调机组送风量(总送风量的一半)", "A165", r.UnitSupplyFlowM3H, "m³/h");
+            units.Add("组合式空调机组制冷量(总制冷量的一半)", "B165", r.UnitCoolingKw, "kW");
+            units.Add("回排风机回风量(总回风量的一半)", "C178", r.UnitReturnFlowM3H, "m³/h");
+            units.Add("排烟风机排烟风量(两区排烟量大者的一半)", "E178", r.UnitSmokeFlowM3H, "m³/h");
+            units.Add("站厅排烟量", "C171", r.HallSmokeFlowM3H, "m³/h");
+            units.Add("站台排烟量", "D171", r.PlatformSmokeFlowM3H, "m³/h");
 
             return t;
         }
@@ -235,7 +241,7 @@ namespace HVACIDA.Core.Services
             fans.AddText("基准区名称", r.GoverningZoneName);
             fans.Add("排烟风机台数", "", r.FanUnitCount, "台", 0);
             fans.AddTotal("单台选型风量(基准区选型 ÷ 台数)", "", r.UnitSelectionFlowM3H, "m³/h");
-            fans.Add("参考:公式文档口径 MAX/2(不含系数)", "E178", r.UnitFlowPerFormulaDocM3H, "m³/h");
+            fans.Add("参考:公式文档口径(不含选型系数)", "E178", r.UnitFlowPerFormulaDocM3H, "m³/h");
 
             return t;
         }
@@ -308,6 +314,13 @@ namespace HVACIDA.Core.Services
 
         /// <summary>无数值的文本行(界面左对齐、不加粗)。</summary>
         public bool IsText => !Value.HasValue;
+
+        /// <summary>
+        /// 界面悬停提示:业务名称 + (可选)对应公式文档单元格 —— 编号只在悬停时出现,不占正文。
+        /// </summary>
+        public string Hint => string.IsNullOrEmpty(Cell)
+            ? Label
+            : Label + "   ·   对应《大系统负荷计算公式》单元格 " + Cell;
 
         /// <summary>数值列显示内容(数值千分位;文本行显示文本)。</summary>
         public string Display => Value.HasValue

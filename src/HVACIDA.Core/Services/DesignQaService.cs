@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -59,7 +59,7 @@ namespace HVACIDA.Core.Services
             new QaEntry(
                 "高峰客流怎么算?",
                 "高峰客流 = (上客 + 下客) × 集群系数(0.89)× 超高峰小时系数;停站时间默认上车 2 min / 下车 1.5 min。" +
-                "客流必须由用户输入(A27~F27),不能由模型推断。",
+                "客流必须由用户手工输入,不能由模型推断。",
                 "客流", "集群", "停站", "超高峰"),
 
             new QaEntry(

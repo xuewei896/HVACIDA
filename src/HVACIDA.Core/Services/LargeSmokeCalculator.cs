@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using HVACIDA.Core.Models;
 
@@ -75,7 +75,8 @@ namespace HVACIDA.Core.Services
             double selection = calculated * p.SelectionFactor;
             return new LargeSmokeZoneRow
             {
-                ZoneName = zoneName + "(" + cell + ")",
+                ZoneName = zoneName,
+                Cell = cell,
                 AreaM2 = areaM2,
                 CalculatedFlowM3H = calculated,
                 SelectionFlowM3H = selection,

@@ -1,4 +1,4 @@
-<Window x:Class="HVACIDA.UI.Views.LargeSmokeWindow"
+﻿<Window x:Class="HVACIDA.UI.Views.LargeSmokeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="大系统 — 排烟计算 - HVACIDA"
@@ -52,7 +52,7 @@
         <Border DockPanel.Dock="Top" Background="#FFF4E5" Padding="8,6">
             <StackPanel>
                 <TextBlock TextWrapping="Wrap" Foreground="#8A6100"
-                           Text="需求 2.2.3.1 排烟量计算 + 排烟风机选型。计算排烟量 = 公共区面积 × 60 m³/(h·m²)(示例 C171/D171);选型排烟量 = 计算排烟量 × 1.2(2026-09-04 决策);排烟风机 2 台,取站厅/站台大者。"/>
+                           Text="需求 2.2.3.1 排烟量计算 + 排烟风机选型。计算排烟量 = 公共区面积 × 60 m³/(h·m²);选型排烟量 = 计算排烟量 × 1.2(2026-09-04 决策);排烟风机 2 台,取站厅/站台大者。"/>
                 <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
             </StackPanel>
         </Border>
