@@ -39,5 +39,108 @@ namespace HVACIDA.Core.Utils
 
         /// <summary>排烟风机台数(需求文档:2 台)</summary>
         public const double SmokeFanUnitCount = 2.0;
+
+        // =====================================================================
+        // 小系统系数(权威源:《小系统空调负荷、送排风、排烟计算公式.docx》)
+        // 单元格代号保留在注释里便于逐格核对;文档文字与示例冲突处已注明。
+        // =====================================================================
+
+        /// <summary>J27/H64 人员冷负荷 W/人(= 134 × 人数)</summary>
+        public const double SmallPersonCoolingW = 134.0;
+
+        /// <summary>K27 人员湿负荷 g/(h·人)(= 115 × 人数)</summary>
+        public const double SmallPersonMoistureGH = 115.0;
+
+        /// <summary>T27/M64 人员新风量 m³/(h·人)(= 30 × 人数)</summary>
+        public const double SmallFreshAirPerPersonM3H = 30.0;
+
+        /// <summary>U27 10% 系统新风量(新风比取"人员新风量"与"10% 系统新风量"的较大值)</summary>
+        public const double SmallSystemFreshAirRatio = 0.1;
+
+        /// <summary>V27 焓差→冷量换算系数(= R27×(C52−C50)×1.15/3600)</summary>
+        public const double SmallEnthalpyFlowFactor = 1.15;
+
+        /// <summary>N4 送风温差默认 10 ℃</summary>
+        public const double SmallSupplyTempDiffC = 10.0;
+
+        /// <summary>E9 管道温升默认 1.5 ℃</summary>
+        public const double SmallDuctTempRiseC = 1.5;
+
+        /// <summary>E7 室内计算干球温度默认 27 ℃(用户可改)</summary>
+        public const double SmallIndoorTempC = 27.0;
+
+        /// <summary>N8 过渡季通风室外计算干球温度默认 14 ℃(多联机+新风用)</summary>
+        public const double SmallTransitionOutdoorC = 14.0;
+
+        /// <summary>D44 露点相对湿度默认 95 %(全空气一次回风用)</summary>
+        public const double SmallDewPointRhPct = 95.0;
+
+        /// <summary>C83 室内相对湿度默认 50 %(多联机+新风用)</summary>
+        public const double SmallIndoorRhPct = 50.0;
+
+        /// <summary>A21 照明指标默认 8 W/m²(文档示例工程用 20)</summary>
+        public const double SmallLightingIndexWm2 = 8.0;
+
+        /// <summary>A17 壁面单位面积产湿量默认 2 g/(m²·h)</summary>
+        public const double SmallWallMoistureEmission = 2.0;
+
+        /// <summary>G27/E64 房间设备冷负荷默认 1000 W</summary>
+        public const double SmallEquipmentCoolingW = 1000.0;
+
+        /// <summary>P27/K64 房间换气次数默认 6 次/h</summary>
+        public const double SmallRoomAirChangePerHour = 6.0;
+
+        /// <summary>
+        /// 饱和空气含湿量 7 次多项式系数 g/kg(文档 E44/E54/E83/E87,自 t⁷ 降幂):
+        /// d = −4.171e-10·t⁷ + 4.843e-8·t⁶ − 2.133e-6·t⁵ + 5.009e-5·t⁴ − 4.032e-4·t³ + 0.01264·t² + 0.265·t + 3.787
+        /// </summary>
+        public static readonly double[] SaturatedHumidityPolyGkg =
+        {
+            -0.0000000004171, 0.00000004843, -0.000002133, 0.00005009,
+            -0.0004032, 0.01264, 0.265, 3.787
+        };
+
+        /// <summary>排烟系统:计算排烟量 = 空间面积 × 60 m³/(h·m²)(文档明确)</summary>
+        public const double SmokeSystemRateM3HPerM2 = 60.0;
+
+        /// <summary>排烟系统选型系数:选型排烟量 = 计算排烟量 × 1.2(文档明确)</summary>
+        public const double SmokeSystemSelectionFactor = 1.2;
+
+        /// <summary>补风量比例:计算补风量 = 计算排烟量 × 0.6(文档明确)</summary>
+        public const double MakeupAirRatio = 0.6;
+
+        /// <summary>补风选型系数:选型补风量 = 计算补风量 × 1.1(文档明确)</summary>
+        public const double MakeupAirSelectionFactor = 1.1;
+
+        /// <summary>
+        /// 排风系统 / 送排风排烟系统 的排风选型系数 1.1(文档文字:"选型排风量为计算排风量×1.1")。
+        /// ⚠ 文档示例(卫生间排风 EAF-A601)用的系数是 **1.3**(5386×1.3 = 7002),与文字不一致;
+        /// 代码按文字取 1.1 作默认且允许修改,示例口径在自检里单独断言。
+        /// </summary>
+        public const double ExhaustSelectionFactor = 1.1;
+
+        /// <summary>文档示例中卫生间排风系统实际使用的选型系数(1.3)</summary>
+        public const double ExhaustSelectionFactorInSample = 1.3;
+
+        /// <summary>送风量比例:计算送风量 = 计算排风量 × 0.9(送排风排烟系统)</summary>
+        public const double SupplyFromExhaustRatio = 0.9;
+
+        /// <summary>送风选型系数:选型送风量 = 计算排风量 × 1.1(文档文字)</summary>
+        public const double SupplySelectionFactor = 1.1;
+
+        /// <summary>加压送风选型系数:D392 = S388 × 1.2(文档明确)</summary>
+        public const double PressurizationSelectionFactor = 1.2;
+
+        /// <summary>疏散门缝隙有效宽度系数(I388=(B388+C388)×2×0.004)</summary>
+        public const double DoorGapWidthFactor = 0.004;
+
+        /// <summary>门缝漏风量系数(N388=0.827×I388×ΔP^0.5×1.25×M388)</summary>
+        public const double DoorLeakageFactor = 0.827;
+
+        /// <summary>门缝漏风附加系数 1.25(N388)</summary>
+        public const double DoorLeakageAdditional = 1.25;
+
+        /// <summary>余压阀漏风系数(R388=0.083×O388×P388)</summary>
+        public const double ReliefValveLeakageFactor = 0.083;
     }
 }

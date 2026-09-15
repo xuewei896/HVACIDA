@@ -57,6 +57,30 @@ namespace HVACIDA.Core.Services
         public static double GPerKg(double humidityKgKg) => humidityKgKg * 1000.0;
 
         /// <summary>
+        /// 饱和空气含湿量 g/kg —— 《小系统空调负荷、送排风、排烟计算公式.docx》给定的 7 次多项式
+        /// (单元格 E44/E54/E83/E87)。小系统计算链一律用它(而不是 Magnus),以保证与公式文档逐格一致。
+        /// </summary>
+        public static double SaturatedHumidityRatioGkg(double temperatureC)
+        {
+            double[] c = HvacConstants.SaturatedHumidityPolyGkg;
+            double value = 0;
+            for (int i = 0; i < c.Length; i++)
+            {
+                value = value * temperatureC + c[i];   // 自最高次降幂的 Horner 求值
+            }
+            return value;
+        }
+
+        /// <summary>
+        /// 湿空气焓值 kJ/kg —— 按公式文档写法:h = 1.01·t + (2500 + 1.84·t)·d/1000 + 0.4
+        /// (d 为 g/kg;末项 0.4 为文档给定的附加项)。
+        /// </summary>
+        public static double EnthalpyFromMoistureGkg(double temperatureC, double humidityGkg)
+        {
+            return 1.01 * temperatureC + (2500.0 + 1.84 * temperatureC) * humidityGkg / 1000.0 + 0.4;
+        }
+
+        /// <summary>
         /// 热湿比 ε = Q / W (kJ/kg)。Q 为全热 kW,W 为湿负荷 kg/h。
         /// </summary>
         public static double HeatHumidityRatio(double coolingKw, double moistureKgPerHour)

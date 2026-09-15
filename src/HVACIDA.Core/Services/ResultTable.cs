@@ -177,44 +177,108 @@ namespace HVACIDA.Core.Services
             return t;
         }
 
-        // ================================================================== 小系统负荷
+        // ================================================================== 小系统
 
-        /// <summary>小系统负荷计算结果表(需求 2.2.3.2)。</summary>
+        /// <summary>
+        /// 小系统系统级结果表(需求 2.2.3.2)。分区按系统类型取舍:
+        /// 合计 → 风量与冷量 → 状态点(空调类)→ 加压送风(加压类)→ 设备选型。
+        /// 逐房间明细另见 <see cref="SmallRoomTable"/>(列与顺序按系统类型)。
+        /// </summary>
         public static ResultTable ForSmallSystem(SmallSystemInput x, SmallSystemResult r)
         {
             var t = new ResultTable
             {
-                Title = "小系统负荷计算结果" + (x == null ? "" : " · " + x.SystemType +
-                        (string.IsNullOrEmpty(x.RoomName) ? "" : " / " + x.RoomName)),
-                Note = "骨架算法结论待按《小系统空调负荷、送排风、排烟计算公式.docx》逐格核对;设备选型规则库待接入。"
+                Title = "小系统计算结果 · " + SystemTypeName(r.SystemType) +
+                        (x != null && !string.IsNullOrEmpty(x.SystemCode) ? " · " + x.SystemCode : ""),
+                Note = r.Note
             };
 
-            var load = t.Section("一、负荷(W)");
-            load.Add("照明冷负荷", "", r.LightingW, "W");
-            load.Add("人员显热负荷", "", r.PeopleSensibleW, "W");
-            load.Add("设备冷负荷", "", r.EquipmentW, "W");
-            load.AddTotal("总显热负荷", "", r.TotalSensibleW, "W");
-            load.Add("人员潜热负荷", "", r.PeopleLatentW, "W");
-            load.AddTotal("总冷负荷", "", r.TotalCoolingW, "W");
-
-            var moisture = t.Section("二、湿负荷");
-            moisture.Add("人员湿负荷", "", r.PeopleWaterVaporKgH, "kg/h", 3);
-
-            var air = t.Section("三、通风量与新风量(m³/h)");
-            air.Add("消除余热通风量", "", r.VentilationByHeatM3H, "m³/h");
-            air.Add("换气次数通风量", "", r.VentilationByACHM3H, "m³/h");
-            air.AddTotal("实际通风量(取大值)", "", r.ActualVentilationM3H, "m³/h");
-            air.Add("新风量", "", r.FreshAirM3H, "m³/h");
-
-            var units = t.Section("四、设备选型");
-            units.AddText("设备选型", string.IsNullOrEmpty(r.EquipmentSelectionText) ? "—" : r.EquipmentSelectionText);
-
-            if (!string.IsNullOrEmpty(r.StatusMessage))
+            var totals = t.Section("一、合计");
+            totals.Add("房间/分区数", "", r.Rooms.Count, "个", 0);
+            totals.Add("总面积", "", r.TotalAreaM2, "m²", 2);
+            if (r.TotalCoolingKw > 0)
             {
-                t.Section("五、状态提示").AddText("提示", r.StatusMessage);
+                totals.AddTotal("冷负荷合计", "", r.TotalCoolingKw, "kW", 2);
+            }
+            if (r.TotalMoistureGps > 0)
+            {
+                totals.AddTotal("湿负荷合计", "", r.TotalMoistureGps, "g/s", 5);
+            }
+            if (r.TotalCoolingKw > 0 && r.TotalMoistureGps > 0 && !double.IsInfinity(r.HeatHumidityRatio) && !double.IsNaN(r.HeatHumidityRatio))
+            {
+                totals.Add("热湿比", "", r.HeatHumidityRatio, "kJ/kg", 0);
+            }
+
+            var air = t.Section("二、风量与冷量");
+            if (r.TotalSupplyM3H > 0) air.Add("总送风量", "", r.TotalSupplyM3H, "m³/h", 0);
+            if (r.TotalReturnM3H > 0) air.Add("总回风量", "", r.TotalReturnM3H, "m³/h", 0);
+            if (r.TotalFreshAirM3H > 0) air.Add("人员新风量合计", "", r.TotalFreshAirM3H, "m³/h", 0);
+            if (r.TotalSystemFreshAirM3H > 0) air.Add("10% 系统新风量合计", "", r.TotalSystemFreshAirM3H, "m³/h", 0);
+            if (r.DesignFreshAirM3H > 0) air.Add("取用新风量(取大)", "", r.DesignFreshAirM3H, "m³/h", 0);
+            if (r.FreshAirRatio > 0) air.Add("新风比", "", r.FreshAirRatio, "—", 3);
+            if (r.TotalUnitCoolingKw > 0) air.AddTotal("空调器/多联机冷量合计", "", r.TotalUnitCoolingKw, "kW", 2);
+            if (r.TotalExhaustM3H > 0) air.AddTotal("计算排风量合计", "", r.TotalExhaustM3H, "m³/h", 0);
+            if (r.TotalSmokeM3H > 0) air.AddTotal("计算排烟量合计", "", r.TotalSmokeM3H, "m³/h", 0);
+            if (r.TotalMakeupAirM3H > 0) air.AddTotal("计算补风量合计", "", r.TotalMakeupAirM3H, "m³/h", 0);
+            if (r.TotalSupplyM3H <= 0 && r.TotalExhaustM3H <= 0 && r.TotalSmokeM3H <= 0)
+            {
+                air.AddText("风量", "本系统类型不涉及风量计算(见下方加压送风)");
+            }
+
+            if (r.SupplyEnthalpy > 0 || r.IndoorEnthalpy > 0)
+            {
+                var points = t.Section("三、状态点(焓湿过程)");
+                if (r.SupplyTempC > 0) points.Add("送风温度", "", r.SupplyTempC, "℃", 2);
+                if (r.DewPointTempC > 0) points.Add("露点温度", "", r.DewPointTempC, "℃", 2);
+                if (r.DewPointHumidityGkg > 0) points.Add("露点含湿量", "", r.DewPointHumidityGkg, "g/kg", 3);
+                if (r.SupplyEnthalpy > 0) points.Add("送风点焓", "", r.SupplyEnthalpy, "kJ/kg", 2);
+                if (r.IndoorHumidityGkg > 0) points.Add("室内含湿量", "", r.IndoorHumidityGkg, "g/kg", 3);
+                if (r.IndoorEnthalpy > 0) points.Add("室内状态点焓", "", r.IndoorEnthalpy, "kJ/kg", 2);
+                if (r.DewPointEnthalpy > 0) points.Add("露点焓", "", r.DewPointEnthalpy, "kJ/kg", 2);
+                if (r.FreshEnthalpy > 0) points.Add("新风状态点焓", "", r.FreshEnthalpy, "kJ/kg", 2);
+                if (r.MixEnthalpy > 0) points.Add("新回风点焓", "", r.MixEnthalpy, "kJ/kg", 2);
+            }
+
+            if (r.PressurizationFlowM3H > 0)
+            {
+                var press = t.Section("三、加压送风(楼梯间)");
+                press.Add("一层内可开启门面积", "", r.DoorAreaM2, "m²", 3);
+                press.Add("门开启风量(L1)", "", r.DoorOpenFlowM3H, "m³/h", 0);
+                press.Add("门缝漏风量(L2)", "", r.DoorLeakFlowM3H, "m³/h", 0);
+                press.Add("余压阀漏风量(L3)", "", r.ReliefValveLeakFlowM3H, "m³/h", 0);
+                press.AddTotal("楼梯间加压送风量", "", r.PressurizationFlowM3H, "m³/h", 0);
+            }
+
+            if (r.Equipments.Count > 0)
+            {
+                var units = t.Section("四、设备选型(选型系数见各行)");
+                foreach (var e in r.Equipments)
+                {
+                    string label = e.Code + " " + e.Name + "(×" + Num(e.Factor) + ")";
+                    units.Add(label + " 风量", "", e.FlowM3H, "m³/h", 0);
+                    if (e.HasCooling)
+                    {
+                        units.Add(label + " 冷量", "", e.CoolingKw, "kW", 2);
+                    }
+                }
             }
 
             return t;
+        }
+
+        /// <summary>系统类型中文名(界面与计算书统一用词)。</summary>
+        public static string SystemTypeName(SmallSystemType type)
+        {
+            switch (type)
+            {
+                case SmallSystemType.AllAirOnceReturn: return "全空气一次回风系统";
+                case SmallSystemType.VrfWithFreshAir: return "多联机+新风系统";
+                case SmallSystemType.ExhaustVentilation: return "排风系统";
+                case SmallSystemType.SmokeExhaust: return "排烟系统";
+                case SmallSystemType.SupplyExhaustSmoke: return "送风排风排烟系统";
+                case SmallSystemType.PressurizationSupply: return "加压送风系统";
+                default: return type.ToString();
+            }
         }
 
         // ================================================================== 大系统排烟

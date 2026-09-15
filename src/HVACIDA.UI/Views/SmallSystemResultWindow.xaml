@@ -3,22 +3,46 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:HVACIDA.UI.Views"
         Title="小系统 — 计算结果 - HVACIDA"
-        Width="940" Height="660" MinWidth="760" MinHeight="480"
+        Width="1080" Height="800" MinWidth="860" MinHeight="620"
         WindowStartupLocation="CenterOwner"
         FontFamily="Microsoft YaHei UI" FontSize="12"
         UseLayoutRounding="True">
+    <Window.Resources>
+        <Style x:Key="ResultGrid" TargetType="{x:Type DataGrid}">
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="CanUserDeleteRows" Value="False"/>
+            <Setter Property="CanUserResizeRows" Value="False"/>
+            <Setter Property="CanUserSortColumns" Value="False"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="GridLinesVisibility" Value="All"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="#DDDDDD"/>
+            <Setter Property="VerticalGridLinesBrush" Value="#DDDDDD"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="RowHeight" Value="26"/>
+            <Setter Property="ColumnHeaderHeight" Value="30"/>
+        </Style>
+    </Window.Resources>
+
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
-            <TextBlock TextWrapping="Wrap"
-                       Text="小系统计算结果(需求 2.2.3.2):负荷 / 湿负荷 / 通风量与新风量 / 设备选型,按分区分组以表格呈现。当前仅「全空气一次回风系统」完成计算链路,其余五类实现后自动纳入;骨架算法结论待按《小系统空调负荷、送排风、排烟计算公式.docx》逐格核对。"/>
+            <StackPanel>
+                <TextBlock TextWrapping="Wrap" Foreground="#23486E">
+                    <Run Text="小系统计算结果:"/><Run Text="{Binding SystemTypeName, Mode=OneWay}" FontWeight="Bold"/>
+                    <Run Text="   ·   数据源 small-system.xml(需求 2.2.3.2;公式源《小系统空调负荷、送排风、排烟计算公式.docx》)"/>
+                </TextBlock>
+                <TextBlock Text="{Binding WeatherNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,4,0,0"/>
+                <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
+            </StackPanel>
         </Border>
 
         <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
             <DockPanel>
-                <Button DockPanel.Dock="Left" Content="计 算" Width="100" Height="30"
-                        Command="{Binding CalculateCommand}" IsDefault="True"/>
-                <Button DockPanel.Dock="Left" Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0"
-                        Command="{Binding ExportCommand}"/>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <Button Content="计 算" Width="100" Height="30" Command="{Binding CalculateCommand}" IsDefault="True"/>
+                    <Button Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0" Command="{Binding ExportCommand}"/>
+                </StackPanel>
                 <Button DockPanel.Dock="Right" Content="关 闭" Width="96" Height="30" IsCancel="True"/>
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
                            TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
@@ -27,13 +51,65 @@
 
         <Grid Margin="10">
             <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="2*" MinHeight="110"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="1.4*" MinHeight="84"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-            <views:ResultTableView x:Name="ResultTableHost" Grid.Row="0" Table="{Binding Table}"/>
-            <Expander Grid.Row="1" Margin="0,6,0,0" Header="计算书全文(文本,可导出)" Foreground="#23486E">
+
+            <TextBlock Grid.Row="0" Margin="4,0,0,4" FontWeight="Bold"
+                       Text="一、系统结果(与导出的计算书同源)"/>
+            <views:ResultTableView x:Name="ResultTableHost" Grid.Row="1" Table="{Binding Table}"/>
+
+            <TextBlock Grid.Row="2" Margin="4,6,0,4" FontWeight="Bold"
+                       Text="二、房间 / 分区明细(列按系统类型取舍)"/>
+            <DataGrid Grid.Row="3" x:Name="RoomDetailGrid" Style="{StaticResource ResultGrid}"
+                      ItemsSource="{Binding RoomRows}" AlternatingRowBackground="#F7FAFD"
+                      HorizontalScrollBarVisibility="Auto"/>
+
+            <TextBlock Grid.Row="4" Margin="4,6,0,4" FontWeight="Bold"
+                       Text="三、设备编号及选型(系数 / 风量 m³/h / 冷量 kW)"/>
+            <DataGrid Grid.Row="5" x:Name="EquipmentGrid" Style="{StaticResource ResultGrid}"
+                      MaxHeight="124" ItemsSource="{Binding EquipmentRows}" AlternatingRowBackground="#F7FAFD">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="系统代码" Width="150" Binding="{Binding Code}"/>
+                    <DataGridTextColumn Header="设备" Width="180" Binding="{Binding Name}"/>
+                    <DataGridTextColumn Header="系数" Width="90" Binding="{Binding Factor, StringFormat={}{0:N2}}"/>
+                    <DataGridTextColumn Header="风量 m³/h" Width="140" Binding="{Binding FlowM3H, StringFormat={}{0:N0}}"/>
+                    <DataGridTemplateColumn Header="冷量 kW" Width="120">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <!-- 通风类设备无冷量,显示破折号 -->
+                                <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" Margin="6,0,8,0" FontFamily="Consolas">
+                                    <TextBlock.Style>
+                                        <Style TargetType="{x:Type TextBlock}">
+                                            <Setter Property="Text" Value="{Binding CoolingKw, StringFormat={}{0:N2}}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasCooling}" Value="False">
+                                                    <Setter Property="Text" Value="—"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <Border Grid.Row="6" Margin="0,8,0,0" Padding="8,6" Background="#F3F7FD"
+                    BorderBrush="#D6E2F0" BorderThickness="1">
+                <TextBlock Text="{Binding Note}" TextWrapping="Wrap" Foreground="#5A5A5A"/>
+            </Border>
+
+            <Expander Grid.Row="7" Margin="0,6,0,0" Header="四、计算书全文(文本,可导出)" Foreground="#23486E">
                 <TextBox Text="{Binding ResultText, Mode=OneWay}" IsReadOnly="True"
-                         FontFamily="Consolas" FontSize="12" Height="140"
+                         FontFamily="Consolas" FontSize="12" Height="96"
                          Background="White" BorderBrush="#DDDDDD" BorderThickness="1"
                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                          TextWrapping="NoWrap" Padding="8"/>

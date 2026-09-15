@@ -8,70 +8,78 @@ namespace HVACIDA.Revit.Commands
     // 小系统面板 7 键(2026-09-11 Ribbon 定稿):
     //   全空气一次回风系统 / 多联机+新风系统 / 排风系统 / 送风排风排烟系统 /
     //   加压送风系统 / 排烟系统 / 计算结果
-    // 除"全空气一次回风系统"外均为待实现 —— 打开统一的说明窗(口径 + 待补项),
-    // 说明文字取自 Core.Services.ModuleCatalog,与 Ribbon 按钮同源。
+    //
+    // 2026-09-15:**六类系统全部实装** —— 都按《小系统空调负荷、送排风、排烟计算公式.docx》
+    // 的公式链计算(见 Core.Services.SmallSystemLoadCalculator),命令统一打开
+    // SmallSystemWindow(系统类型由按钮决定,窗内只读显示)。
     // =========================================================================
 
-    /// <summary>小系统「待实现类型」说明命令基类。</summary>
-    public abstract class SmallSystemNotImplementedCommandBase : IExternalCommand
+    /// <summary>
+    /// 小系统"按系统类型打开计算窗"命令基类:子类只声明系统类型。
+    /// 窗内是"多房间录入 + 结果表格",房间列表与系统参数存 small-system.xml。
+    /// </summary>
+    public abstract class SmallSystemWindowCommandBase : IExternalCommand
     {
-        /// <summary>ModuleCatalog 中的模块键。</summary>
-        protected abstract string ModuleKey { get; }
+        /// <summary>本按钮对应的系统类型。</summary>
+        protected abstract Core.Models.SmallSystemType SystemType { get; }
 
-        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
-        {
-            return CommandHost.ShowModuleInfo(ModuleKey, ref message);
-        }
-    }
-
-    /// <summary>全空气一次回风系统(已实现:打开计算窗口)。</summary>
-    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowSmallAllAirCommand : IExternalCommand
-    {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             return CommandHost.Show(
                 () =>
                 {
-                    var viewModel = new UI.ViewModels.SmallSystemViewModel(Core.Models.SmallSystemType.AllAirOnceReturn);
+                    var viewModel = new UI.ViewModels.SmallSystemViewModel(SystemType);
                     return new UI.Views.SmallSystemWindow(viewModel);
                 },
                 ref message);
         }
     }
 
-    /// <summary>多联机 + 新风系统(待实现)。</summary>
+    /// <summary>全空气一次回风系统(多个弱电/强电房间共用一台柜式空调机组)。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowSmallVrfCommand : SmallSystemNotImplementedCommandBase
+    public class ShowSmallAllAirCommand : SmallSystemWindowCommandBase
     {
-        protected override string ModuleKey => "small-vrf";
+        protected override Core.Models.SmallSystemType SystemType =>
+            Core.Models.SmallSystemType.AllAirOnceReturn;
     }
 
-    /// <summary>排风系统(待实现,含环控机房通风与卫生间排风)。</summary>
+    /// <summary>多联机 + 新风系统(多个人员房间)。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowSmallExhaustCommand : SmallSystemNotImplementedCommandBase
+    public class ShowSmallVrfCommand : SmallSystemWindowCommandBase
     {
-        protected override string ModuleKey => "small-exhaust";
+        protected override Core.Models.SmallSystemType SystemType =>
+            Core.Models.SmallSystemType.VrfWithFreshAir;
     }
 
-    /// <summary>送风排风排烟系统(待实现)。</summary>
+    /// <summary>排风系统(卫生间、泵房等,多房间排风)。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowSmallSupplyExhaustSmokeCommand : SmallSystemNotImplementedCommandBase
+    public class ShowSmallExhaustCommand : SmallSystemWindowCommandBase
     {
-        protected override string ModuleKey => "small-sesmoke";
+        protected override Core.Models.SmallSystemType SystemType =>
+            Core.Models.SmallSystemType.ExhaustVentilation;
     }
 
-    /// <summary>加压送风系统(待实现)。</summary>
+    /// <summary>送风排风排烟系统(环控机房 + 气瓶间)。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowSmallPressurizationCommand : SmallSystemNotImplementedCommandBase
+    public class ShowSmallSupplyExhaustSmokeCommand : SmallSystemWindowCommandBase
     {
-        protected override string ModuleKey => "small-press";
+        protected override Core.Models.SmallSystemType SystemType =>
+            Core.Models.SmallSystemType.SupplyExhaustSmoke;
     }
 
-    /// <summary>排烟系统(待实现)。</summary>
+    /// <summary>加压送风系统(楼梯间)。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowSmallSmokeCommand : SmallSystemNotImplementedCommandBase
+    public class ShowSmallPressurizationCommand : SmallSystemWindowCommandBase
     {
-        protected override string ModuleKey => "small-smoke";
+        protected override Core.Models.SmallSystemType SystemType =>
+            Core.Models.SmallSystemType.PressurizationSupply;
+    }
+
+    /// <summary>排烟系统(多个防烟分区排烟 + 补风)。</summary>
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class ShowSmallSmokeCommand : SmallSystemWindowCommandBase
+    {
+        protected override Core.Models.SmallSystemType SystemType =>
+            Core.Models.SmallSystemType.SmokeExhaust;
     }
 }
