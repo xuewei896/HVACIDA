@@ -1,4 +1,4 @@
-# HVACIDA — Revit 2020 地铁暖通智能设计辅助插件(骨架版)
+﻿# HVACIDA — Revit 2020 地铁暖通智能设计辅助插件(骨架版)
 
 依据 `HVACIDA_需求分析文档.md`(310 行)从零搭建的可编译骨架。当前里程碑:**能编译、能出 Ribbon 页、能打开三个 WPF 功能窗;大系统负荷主计算链已按《大系统负荷计算公式.docx》移植,并通过北京站算例《大系统负荷计算公式-示例.xls》30 项逐格一致校验(tools/HVACIDA.Smoke)**。
 
@@ -25,7 +25,7 @@ D:\DSH
 ├─ src
 │  ├─ HVACIDA.Core     领域模型/计算/焓湿图/仓库/报告/模块目录/气象库(无 Revit 依赖,可单测)
 │  │  └─ Resources/weather-db.csv  全国省市气象参数库(294 台站,由 tools/weatherdb 生成、内嵌进 DLL)
-│  ├─ HVACIDA.UI       WPF 窗口+MVVM(不引用 Revit API)
+│  ├─ HVACIDA.UI       WPF 窗口+MVVM(不引用 Revit API);结果视图统一走可复用 ResultTableView(分组表格)
 │  └─ HVACIDA.Revit    ExternalApplication/Ribbon/Command + 内嵌图标(引用前两者+Revit 2020 API)
 │     └─ Resources/Icons/  22 个按钮图标 ×(16/32)px,由 tools/HVACIDA.IconGen 生成、内嵌进 DLL
 ├─ tools
@@ -76,10 +76,10 @@ dotnet build .\HVACIDA.sln
 |---|---|---|
 | 2.1 项目信息 | 工程信息窗 + 气象参数窗(ProjectInfoModel/DesignConditionParams → project.xml) | ✅ 可用(Excel 模板导入、.rvt 全局参数待实现) |
 | 2.1.2 气象数据库 | 省/市下拉 + 选定城市自动回填室外参数(`WeatherDatabase`,内嵌 294 台站 / 31 省级行政区) | ✅ 可用(源 GB 50736-2012 附录A) |
-| 2.2.3.1 大系统负荷 | 公共区参数窗 + 负荷计算窗 + 计算结果窗(LargeSystemLoadCalculator) | ✅ 已按公式文档移植;北京站算例 30 项逐格一致 |
+| 2.2.3.1 大系统负荷 | 公共区参数窗 + 负荷计算窗 + 计算结果窗(LargeSystemLoadCalculator) | ✅ 已按公式文档移植;北京站算例 30 项逐格一致;**结果按分区分组以表格呈现**(§4.6) |
 | 2.1.2→2.2.3.1 气象联动 | `LargeSystemInputService` + `ProjectDesignSync`(C5/F4/F6 ← 项目信息) | ✅ 默认自动联动、可取消转手工;未填不覆盖 |
 | 2.2.1/2.2.3.1 模型取值 | `SpaceSnapshot` + `PublicAreaAggregator` + `RevitSpaceReader`(D55/D56/C13/C14) | 🟡 Core+UI+命令层就绪,Revit 实机待验 |
-| 2.2.3.2 小系统负荷 | 全空气一次回风窗 + 计算结果窗(SmallSystemLoadCalculator) | 🟡 仅一类实现,其余 5 类给待实现说明 |
+| 2.2.3.2 小系统负荷 | 全空气一次回风窗 + 计算结果窗(SmallSystemLoadCalculator) | 🟡 仅一类实现,其余 5 类给待实现说明;**结果以表格呈现**(§4.6) |
 | 排烟计算(2.2.3.1) | 排烟计算窗(`LargeSmokeCalculator`)+ 计算结果表格 | ✅ 已实现(计算 ×60 / 选型 ×1.2 / 2 台取大者;防烟分区口径待接入) |
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | TextReportGenerator(文本计算书,`%AppData%\HVACIDA\Reports`) | 🟡 文本版 |
