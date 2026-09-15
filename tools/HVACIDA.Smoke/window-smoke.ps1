@@ -139,6 +139,73 @@ try {
 }
 
 # =====================================================================
+# 省市气象数据库:省市级联 + 选市自动回填(不需要 Revit)
+# =====================================================================
+try {
+    $wdb = [HVACIDA.Core.Services.WeatherDatabase]::Default
+    Write-Host ("      气象库: {0} 个台站 / {1} 个省级行政区" -f $wdb.All.Count, $wdb.Provinces.Count)
+
+    $tmp3 = Join-Path $env:TEMP ("HVACIDA-WinSmoke-" + [guid]::NewGuid().ToString('N'))
+    $repo3 = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmp3
+    $pivm = New-Object "$vmNs.ProjectInfoViewModel" -ArgumentList $repo3, $wdb
+
+    if ($pivm.Provinces.Count -eq 31 -and $pivm.Provinces[0] -eq '北京') {
+        Write-Host "PASS  工程信息窗省下拉来自气象库(31 个,首个为北京)"
+    } else { Write-Host ("FAIL  省下拉: {0} 个, 首个 {1}" -f $pivm.Provinces.Count, $pivm.Provinces[0]); $fail++ }
+
+    if ($pivm.HasCities -eq $false) { Write-Host "PASS  未选省时城市下拉为空(禁用)" }
+    else { Write-Host "FAIL  未选省时城市下拉应为空"; $fail++ }
+
+    $pivm.SelectedProvince = '广东'
+    if ($pivm.Cities.Count -eq 15 -and $pivm.Cities -contains '深圳') {
+        Write-Host "PASS  选省后城市下拉级联更新(广东 15 个,含深圳)"
+    } else { Write-Host ("FAIL  级联: {0} 个" -f $pivm.Cities.Count); $fail++ }
+    if ($pivm.Model.Basic.LocationProvince -eq '广东') { Write-Host "PASS  省写入 Model.Basic.LocationProvince" }
+    else { Write-Host "FAIL  省未写入模型"; $fail++ }
+
+    # 选定城市 -> 自动回填气象参数(需求:选择市后自动把该市气象参数输入到项目中)
+    $pivm.SelectedCity = '深圳'
+    $d = $pivm.Model.Design
+    if ($pivm.Model.Basic.LocationCity -eq '深圳' -and
+        $d.LargeSystemOutdoor.SummerACDryBulbC -eq 33.7 -and
+        $d.LargeSystemOutdoor.SummerACWetBulbC -eq 27.5 -and
+        $d.LargeSystemOutdoor.SummerVentDryBulbC -eq 31.2 -and
+        $d.LargeSystemOutdoor.WinterACDryBulbC -eq 6.0 -and
+        $d.LargeSystemOutdoor.WinterVentDryBulbC -eq 14.9 -and
+        $d.Common.AtmosphericPressureKPa -eq 100.24 -and
+        $d.Common.OutdoorRelativeHumidityPercent -eq 70) {
+        Write-Host "PASS  选市自动回填深圳气象参数(干球 33.7 / 湿球 27.5 / 夏季通风 31.2 / 冬季 6.0·14.9 / 100.24 kPa / 70%)"
+    } else {
+        Write-Host ("FAIL  深圳回填: {0}/{1}/{2}/{3}/{4}/{5}/{6}" -f $d.LargeSystemOutdoor.SummerACDryBulbC,
+            $d.LargeSystemOutdoor.SummerACWetBulbC, $d.LargeSystemOutdoor.SummerVentDryBulbC,
+            $d.LargeSystemOutdoor.WinterACDryBulbC, $d.LargeSystemOutdoor.WinterVentDryBulbC,
+            $d.Common.AtmosphericPressureKPa, $d.Common.OutdoorRelativeHumidityPercent)
+        $fail++
+    }
+
+    if ($d.SmallSystemOutdoor.SummerACWetBulbC -eq 27.5 -and $d.SmallSystemOutdoor.SummerVentDryBulbC -eq 31.2) {
+        Write-Host "PASS  小系统室外参数与大系统夏季同源"
+    } else { Write-Host "FAIL  小系统室外参数未同源"; $fail++ }
+
+    if ($pivm.WeatherFromDatabase -eq $true -and $pivm.StationInfo -match '59493' -and $pivm.StationInfo -match 'GB 50736') {
+        Write-Host ("PASS  台站信息来源可见: {0}" -f $pivm.StationInfo.Substring(0, [Math]::Min(52, $pivm.StationInfo.Length)))
+    } else { Write-Host "FAIL  台站信息未显示"; $fail++ }
+
+    # 换到缺湿球温度的台站:不得覆盖原值,且必须给告警
+    $pivm.SelectedProvince = '陕西'
+    $pivm.SelectedCity = '咸阳'
+    $wetKept = $pivm.Model.Design.LargeSystemOutdoor.SummerACWetBulbC
+    if ($pivm.WeatherWarning -ne '' -and $wetKept -eq 27.5) {
+        Write-Host "PASS  标准未记录湿球温度的台站:给出告警且不覆盖原值"
+    } else { Write-Host ("FAIL  咸阳: warning='{0}' wet={1}" -f $pivm.WeatherWarning, $wetKept); $fail++ }
+
+    Test-Window '工程信息(带气象库) ProjectInfoWindow' { New-Object "$uiNs.ProjectInfoWindow" -ArgumentList $pivm }
+    try { Remove-Item $tmp3 -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  省市气象库自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
+# =====================================================================
 # 公共区几何:模型空间取值(不需要 Revit,用 SpaceSnapshot 直接构造)
 # =====================================================================
 try {

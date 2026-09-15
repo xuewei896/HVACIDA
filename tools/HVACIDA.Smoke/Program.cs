@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using HVACIDA.Core.Models;
 using HVACIDA.Core.Services;
@@ -17,7 +18,8 @@ namespace HVACIDA.Smoke
     /// 场景6:规范知识库规则应答;
     /// 场景7:小系统计算(骨架)自检;
     /// 场景8:空间分类/聚合(公共区几何由模型空间获取);
-    /// 场景9:气象参数联动(C5/F4/F6 ← 项目信息,含端到端复核北京算例)。
+    /// 场景9:气象参数联动(C5/F4/F6 ← 项目信息,含端到端复核北京算例);
+    /// 场景10:全国省市气象数据库(GB 50736-2012 附录A,294 台站)。
     /// 退出码 0 = 全部通过;1 = 存在偏差。
     /// </summary>
     internal static class Program
@@ -38,10 +40,11 @@ namespace HVACIDA.Smoke
             RunSmallSystemChecks();
             RunSpaceAggregatorChecks();
             RunWeatherSyncChecks(calculator);
+            RunWeatherDatabaseChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统/空间聚合/气象联动自检通过。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统/空间聚合/气象联动/省市气象库自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
@@ -378,6 +381,145 @@ namespace HVACIDA.Smoke
             d.LargeSystemIndoor.HallDryBulbC = 29.0;
             d.LargeSystemIndoor.PlatformDryBulbC = 27.0;
             return d;
+        }
+
+        // =====================================================================
+        // 场景10:全国省市气象数据库(GB 50736-2012 附录A)
+        // =====================================================================
+        private static void RunWeatherDatabaseChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景10:全国省市气象数据库(内嵌 weather-db.csv)");
+            Console.WriteLine("==================================================");
+
+            var db = WeatherDatabase.Default;
+            Console.WriteLine("台站数 = " + db.All.Count + ",省级行政区 = " + db.Provinces.Count);
+            Console.WriteLine(db.SourceNote.Replace("\n", " | "));
+            Console.WriteLine("-- 自检 --");
+
+            // 规模:附录A 条文说明为"28 个省级行政区、4 个直辖市所属 294 个台站"
+            CheckInt("台站数 = 294", db.All.Count, 294);
+            CheckInt("省级行政区数 = 31", db.Provinces.Count, 31);
+            CheckText("首个省级行政区 = 北京(按标准顺序)", db.Provinces[0], "北京");
+            CheckInt("含全部 4 个直辖市",
+                (db.Provinces.Contains("北京") ? 1 : 0) + (db.Provinces.Contains("天津") ? 1 : 0) +
+                (db.Provinces.Contains("上海") ? 1 : 0) + (db.Provinces.Contains("重庆") ? 1 : 0), 4);
+            CheckInt("含全部 5 个自治区",
+                (db.Provinces.Contains("内蒙古") ? 1 : 0) + (db.Provinces.Contains("广西") ? 1 : 0) +
+                (db.Provinces.Contains("西藏") ? 1 : 0) + (db.Provinces.Contains("宁夏") ? 1 : 0) +
+                (db.Provinces.Contains("新疆") ? 1 : 0), 5);
+
+            // 逐行完整性:台站号唯一且 5 位;驱动计算的字段必须有值;湿球不得大于干球
+            int badId = 0, badWet = 0, missingRequired = 0;
+            var ids = new HashSet<string>();
+            var pressureMismatch = new List<string>();
+            foreach (var s in db.All)
+            {
+                if (s.StationId.Length != 5 || !ids.Add(s.StationId)) badId++;
+                if (!s.SummerAcDryBulbC.HasValue || !s.SummerVentDryBulbC.HasValue ||
+                    !s.WinterVentOutdoorC.HasValue || !s.WinterAcOutdoorC.HasValue ||
+                    !s.SummerVentRhPct.HasValue || !s.SummerAtmPressureHpa.HasValue ||
+                    !s.WinterAtmPressureHpa.HasValue) missingRequired++;
+                if (s.SummerAcWetBulbC.HasValue && s.SummerAcDryBulbC.HasValue &&
+                    s.SummerAcWetBulbC.Value > s.SummerAcDryBulbC.Value) badWet++;
+
+                // 大气压力与海拔必须物理自洽(海拔高→气压低):这条能独立抓出列位串行
+                if (s.ElevationM.HasValue && s.SummerAtmPressureHpa.HasValue)
+                {
+                    double expected = 1013.25 * Math.Pow(1.0 - 2.25577e-5 * Math.Max(s.ElevationM.Value, 0), 5.25588);
+                    if (Math.Abs(expected - s.SummerAtmPressureHpa.Value) > 60.0) pressureMismatch.Add(s.City);
+                }
+            }
+            CheckInt("台站号均为 5 位且唯一(0 = 正常)", badId, 0);
+            CheckInt("关键字段无缺失(0 = 正常)", missingRequired, 0);
+            CheckInt("湿球 ≤ 干球(0 = 正常)", badWet, 0);
+
+            // 气压/海拔自洽检查的目的是"抓列位串行"。源文件有 2 处海拔笔误,并被**气压列反证**:
+            // 山南地区标 9280 m(该高度应 ~295 hPa,表里是 602.7 hPa ⇒ 实为 ~4280 m,疑 4→9 笔误);
+            // 黄南州标 8500 m 同理。故断言"不一致的**只有**这 2 个已知台站" —— 换别的台站出问题就 FAIL。
+            CheckInt("气压/海拔不一致的台站 = 2 个(已知源文件海拔笔误)", pressureMismatch.Count, 2);
+            CheckInt("不一致者含 山南地区(报告中已记录待人工核对)",
+                pressureMismatch.Contains("山南地区") ? 1 : 0, 1);
+            CheckInt("不一致者含 黄南州(报告中已记录待人工核对)",
+                pressureMismatch.Contains("黄南州") ? 1 : 0, 1);
+
+            // 标准本身留空的湿球温度:必须保持"未填"而不是被猜出来
+            var noWet = db.All.Where(s => !s.SummerAcWetBulbC.HasValue).Select(s => s.City).ToList();
+            CheckInt("湿球温度缺记录 = 6 个台站(附录A 条文说明所列缺口)", noWet.Count, 6);
+            CheckInt("咸阳在其中(条文说明点名)", noWet.Contains("咸阳") ? 1 : 0, 1);
+            CheckInt("黔南州在其中(条文说明点名)", noWet.Contains("黔南州") ? 1 : 0, 1);
+
+            // 逐值核对北京台站(与源文件表格同一行)
+            var bj = db.Find("北京", "北京");
+            CheckInt("能按省+市取到北京台站", bj == null ? 0 : 1, 1);
+            if (bj != null)
+            {
+                CheckText("北京 台站号 = 54511", bj.StationId, "54511");
+                Check("北京 夏季空调干球 33.5", bj.SummerAcDryBulbC ?? -999, 33.5);
+                Check("北京 夏季空调湿球 26.4", bj.SummerAcWetBulbC ?? -999, 26.4);
+                Check("北京 夏季通风 29.7", bj.SummerVentDryBulbC ?? -999, 29.7);
+                Check("北京 冬季空调 -9.9", bj.WinterAcOutdoorC ?? -999, -9.9);
+                Check("北京 冬季通风 -3.6", bj.WinterVentOutdoorC ?? -999, -3.6);
+                Check("北京 供暖室外 -7.6", bj.HeatingOutdoorC ?? -999, -7.6);
+                Check("北京 夏季通风相对湿度 61", bj.SummerVentRhPct ?? -999, 61);
+                Check("北京 夏季大气压力 1000.2 hPa", bj.SummerAtmPressureHpa ?? -999, 1000.2);
+                Check("北京 冬季大气压力 1021.7 hPa", bj.WinterAtmPressureHpa ?? -999, 1021.7);
+                Check("北京 海拔 31.3 m", bj.ElevationM ?? -999, 31.3);
+                CheckText("北京 统计年份 1971~2000", bj.StatsPeriod, "1971~2000");
+            }
+
+            // 省→市级联
+            var gd = db.CitiesOf("广东");
+            CheckInt("广东省城市数 = 15", gd.Count, 15);
+            CheckInt("广东含深圳", gd.Contains("深圳") ? 1 : 0, 1);
+            CheckInt("广东含汕头", gd.Contains("汕头") ? 1 : 0, 1);
+            CheckInt("未知省返回空列表", db.CitiesOf("不存在的省").Count, 0);
+            CheckInt("未知城市返回 null", db.Find("广东", "不存在的市") == null ? 1 : 0, 1);
+
+            // 源文件杂质("、27.7")必须已被规范化,不能变成缺值
+            var st = db.Find("广东", "汕头");
+            Check("汕头 湿球 = 27.7(源文件写作「、27.7」)", st == null ? -999 : (st.SummerAcWetBulbC ?? -999), 27.7);
+
+            // 回填映射:室外 8 项 + 大气压力 + 相对湿度;室内设计参数不得被动
+            var design = new DesignConditionParams();
+            design.LargeSystemIndoor.HallDryBulbC = 29.0;
+            var apply = WeatherDatabase.Apply(bj, design);
+            CheckInt("回填项数 = 10", apply.FilledCount, 10);
+            Check("→ 大系统夏季空调干球", design.LargeSystemOutdoor.SummerACDryBulbC, 33.5);
+            Check("→ 大系统夏季空调湿球", design.LargeSystemOutdoor.SummerACWetBulbC, 26.4);
+            Check("→ 大系统夏季通风", design.LargeSystemOutdoor.SummerVentDryBulbC, 29.7);
+            Check("→ 大系统冬季通风", design.LargeSystemOutdoor.WinterVentDryBulbC, -3.6);
+            Check("→ 大系统冬季空调", design.LargeSystemOutdoor.WinterACDryBulbC, -9.9);
+            Check("→ 小系统夏季空调干球(与室外同源)", design.SmallSystemOutdoor.SummerACDryBulbC, 33.5);
+            Check("→ 小系统夏季空调湿球(与室外同源)", design.SmallSystemOutdoor.SummerACWetBulbC, 26.4);
+            Check("→ 小系统夏季通风(与室外同源)", design.SmallSystemOutdoor.SummerVentDryBulbC, 29.7);
+            Check("→ 大气压力取夏季值 1000.2 hPa = 100.02 kPa", design.Common.AtmosphericPressureKPa, 100.02);
+            Check("→ 室外相对湿度取夏季通风值", design.Common.OutdoorRelativeHumidityPercent, 61);
+            Check("室内设计参数不被气象库改动(站厅 29 ℃)", design.LargeSystemIndoor.HallDryBulbC, 29.0);
+            CheckText("状态文案含台站", apply.Note.Contains("54511") ? "1" : "0", "1");
+
+            // 缺湿球台站:不得覆盖,且必须给出告警
+            var xianyang = db.Find("陕西", "咸阳");
+            var design2 = new DesignConditionParams();
+            design2.LargeSystemOutdoor.SummerACWetBulbC = 25.5;
+            var apply2 = WeatherDatabase.Apply(xianyang, design2);
+            Check("缺湿球时不覆盖原值", design2.LargeSystemOutdoor.SummerACWetBulbC, 25.5);
+            CheckInt("缺湿球时给出告警", apply2.Warning.Length > 0 ? 1 : 0, 1);
+            // 湿球同时喂"大系统室外"与"小系统室外"两处,故缺 1 个源值 → 少 2 个写入项
+            CheckInt("缺湿球时回填项数 = 8(10 - 2,湿球喂大小系统两处)", apply2.FilledCount, 8);
+
+            // 与"气象参数联动"串起来:北京台站回填后,大系统 C5 必须取 26.4(而非旧的内置典型值 25.0)
+            var design3 = new DesignConditionParams();
+            WeatherDatabase.Apply(bj, design3);
+            var largeInput = new LargeSystemInput();
+            var sync = ProjectDesignSync.ApplyWeather(design3, largeInput);
+            // 气象库只提供**室外**参数:F4/F6(站厅/站台室内设计温度)属设计取值,不由气象库改动,
+            // 故此时只有 C5 会变(与 LargeSystemInput 默认的 30/28 相同 → 不计入变化格数)。
+            CheckInt("北京台站 → 只有 C5 被回填(室内设计温度不由气象库决定)", sync.AppliedCount, 1);
+            Check("北京 C5 湿球 = 26.4(GB 50736 值,而非旧内置典型值 25.0)", largeInput.OutdoorWetBulbC, 26.4);
+            Check("F4 站厅设计温度保持设计值 30 ℃(非气象数据)", largeInput.HallDesignTempC, 30);
+
+            Console.WriteLine();
         }
 
         private static LargeSystemInput BuildBusyScenario()
