@@ -662,14 +662,15 @@ namespace HVACIDA.Smoke
             Check("设备选型 RAF 风量 ≈ 32213 m³/h(29285×1.1)", allAirResult.Equipments[1].FlowM3H, 32213, 33.0);
             Check("设备选型 AHU 冷量(V37×1.1)", allAirResult.Equipments[0].CoolingKw, allAirResult.TotalUnitCoolingKw * 1.1, 1e-9);
 
-            // ⚠ 口径存疑(必须显式记录、不静默):
-            // 文档公式写 V27=R27×(C52−C50)×1.15/3600(用"实际通风量"R27),示例合计 157.6;
-            // 但示例中 2/5/10/16/19 号房间的值只有用"消除余热通风量 O27"才算得出来
-            // (例:2 号房间 448×15.7×1.15/3600 = 2.25 ≈ 表列 2.2;用 R27=863 得 4.33)。
-            Check("按文档公式 R27 复算 V37 ≈ 162.2 kW(示例为 157.6,差 2.9%,已记录待确认)",
+            // 口径(2026-09-15 已确认):**一律按公式文档的文字公式计算,示例仅用于理解公式**。
+            // 公式写 V27 = 实际通风量 × (混合焓 − 露点焓) × 1.15 / 3600;文档示例中 2/5/10/16/19 号房间的
+            // 冷量值对应的是"消除余热通风量",故示例合计 157.6 与本实现 162.2 有约 3% 差异 —— 属预期,不作为基准。
+            Check("按公式(实际通风量)复算 V37 ≈ 162.2 kW(示例 157.6 属示例取值,不作为基准)",
                 allAirResult.TotalUnitCoolingKw, 162.2, 0.6);
-            Console.WriteLine("     ⚠ V37 口径存疑:公式文字用 R27(得 162.2),而示例 2/5/10/16/19 号房间" +
-                              "只有用 O27 才算得出表列值(合计 157.6);请确认以哪个为准。");
+            CheckInt("口径说明已改为「按公式计算、示例仅作理解参照」",
+                allAirResult.PendingNote.Contains("按公式") && allAirResult.PendingNote.Contains("示例") ? 1 : 0, 1);
+            Console.WriteLine("     ✓ 口径已确认:按公式文字计算(实际通风量 R27);示例中 2/5/10/16/19 号房间用的是 O27," +
+                              "故示例合计 157.6 与本实现 162.2 差约 3%,属预期。");
 
             // ---------- 2) 多联机+新风:文档「人员房间 VRV」11 个房间示例 ----------
             var vrf = new SmallSystemInput
@@ -720,10 +721,11 @@ namespace HVACIDA.Smoke
             Check("计算排风量合计 = 5386 m³/h", exhaustResult.TotalExhaustM3H, 5386, 1.0);
             Check("单房间校验:男卫 = 5.83×5.9×20 = 688 m³/h", exhaustResult.Rooms[0].ExhaustM3H, 688, 1.0);
             Check("默认系数 1.1 时选型风量(文档文字口径)", exhaustResult.Equipments[0].FlowM3H, 5386 * 1.1, 1.1);
-            exhaust.SelectionFactor = HvacConstants.ExhaustSelectionFactorInSample;   // 1.3(示例口径)
+            exhaust.SelectionFactor = HvacConstants.ExhaustSelectionFactorInSample;   // 1.3(仅用于核对示例)
             var exhaustSample = calc.Calculate(exhaust);
-            Check("示例系数 1.3 时选型风量 = 7002 m³/h(与文档示例一致)", exhaustSample.Equipments[0].FlowM3H, 7002, 1.0);
-            Console.WriteLine("     ⚠ 排风选型系数口径存疑:文档文字 1.1、示例 1.3(已记录待确认)。");
+            Check("示例系数 1.3 时选型风量 = 7002 m³/h(即文档示例值,仅作理解参照)",
+                exhaustSample.Equipments[0].FlowM3H, 7002, 1.0);
+            Check("默认按公式取 1.1(示例的 1.3 不作为基准)", exhaustResult.Equipments[0].Factor, 1.1, 1e-9);
 
             // ---------- 4) 排烟系统:文档「走道排烟及补风」2 个防烟分区示例 ----------
             var smoke = new SmallSystemInput { SystemType = SmallSystemType.SmokeExhaust, SystemCode = "SEF-A501" };
@@ -839,11 +841,14 @@ namespace HVACIDA.Smoke
                 service.Save(loaded);
                 Check("脱离联动后保留手工值", service.Load().OutdoorDryBulbC, 35.0, 1e-9);
 
-                var roundTrip = repo.LoadSmallSystem();
-                roundTrip.SystemType = SmallSystemType.SmokeExhaust;
-                roundTrip.Rooms.Add(SmallRoomInput.Create("防烟分区1", 300, 0));
-                repo.SaveSmallSystem(roundTrip);
-                var back = repo.LoadSmallSystem();
+                // 多系统容器往返(LoadSmallSystem 只是兼容入口:返回容器里第一套,不再等于"刚保存的那套")
+                var roundTrip = repo.LoadSmallSystems();
+                var sefRoundTrip = new SmallSystemInput { SystemType = SmallSystemType.SmokeExhaust, SystemCode = "SEF-T1" };
+                sefRoundTrip.Rooms.Add(SmallRoomInput.Create("防烟分区1", 300, 0));
+                roundTrip.Upsert(sefRoundTrip);
+                repo.SaveSmallSystems(roundTrip);
+                var back = repo.LoadSmallSystems().Find(SmallSystemType.SmokeExhaust, "SEF-T1");
+                CheckInt("容器往返:取回该系统", back == null ? 0 : 1, 1);
                 CheckInt("房间列表往返 房间数", back.Rooms.Count, 1);
                 Check("房间列表往返 面积", back.Rooms[0].AreaM2, 300, 1e-9);
                 CheckText("系统类型往返", back.SystemType.ToString(), SmallSystemType.SmokeExhaust.ToString());
@@ -851,6 +856,114 @@ namespace HVACIDA.Smoke
             finally
             {
                 try { Directory.Delete(dir, true); } catch { }
+            }
+
+            // ---------- 9) 多系统汇总(需求 2.2.3.2:全站多套小系统) ----------
+            var smallProject = new SmallSystemProject();
+
+            var ahu1 = new SmallSystemInput { SystemType = SmallSystemType.AllAirOnceReturn, SystemCode = "AHU-A101" };
+            ahu1.Rooms.Add(SmallRoomInput.Create("弱电间1", 50, 5.9));
+            var ahu2 = new SmallSystemInput { SystemType = SmallSystemType.AllAirOnceReturn, SystemCode = "AHU-A201" };
+            ahu2.Rooms.Add(SmallRoomInput.Create("强电间1", 80, 4.55));
+            var eaf = new SmallSystemInput { SystemType = SmallSystemType.ExhaustVentilation, SystemCode = "EAF-A601" };
+            var toilet = SmallRoomInput.Create("男卫", 5.83, 5.9); toilet.RoomType = "男卫生间";
+            eaf.Rooms.Add(toilet);
+            var sef = new SmallSystemInput { SystemType = SmallSystemType.SmokeExhaust, SystemCode = "SEF-A501" };
+            sef.Rooms.Add(SmallRoomInput.Create("防烟分区1", 300, 0));
+
+            smallProject.Upsert(ahu1);
+            smallProject.Upsert(ahu2);
+            smallProject.Upsert(eaf);
+            smallProject.Upsert(sef);
+            CheckInt("多系统工程:4 套系统", smallProject.Systems.Count, 4);
+
+            // 同类型同编号 → 覆盖,不新增
+            var ahu1b = new SmallSystemInput { SystemType = SmallSystemType.AllAirOnceReturn, SystemCode = "AHU-A101" };
+            ahu1b.Rooms.Add(SmallRoomInput.Create("弱电间1改", 60, 5.9));
+            smallProject.Upsert(ahu1b);
+            CheckInt("同类型同编号 upsert 不新增系统", smallProject.Systems.Count, 4);
+            CheckText("upsert 覆盖了原系统", smallProject.Find(SmallSystemType.AllAirOnceReturn, "AHU-A101").Rooms[0].Name, "弱电间1改");
+            CheckInt("按类型找(编号为空取第一个)", smallProject.Find(SmallSystemType.AllAirOnceReturn, "") == null ? 0 : 1, 1);
+            CheckInt("删除系统", smallProject.Remove(SmallSystemType.SmokeExhaust, "SEF-A501") ? 1 : 0, 1);
+            CheckInt("删除后剩 3 套", smallProject.Systems.Count, 3);
+            smallProject.Upsert(sef);
+
+            var summary = new SmallSystemSummaryService().Summarize(smallProject);
+            Console.WriteLine("—— 全站汇总 —— " + summary.Note);
+            CheckInt("汇总:系统套数 = 4", summary.SystemCount, 4);
+            CheckInt("汇总:房间/分区合计 = 4", summary.RoomCount, 4);
+            CheckInt("汇总:逐系统行数 = 4", summary.Rows.Count, 4);
+            CheckInt("汇总:类型分布文本含套数", summary.TypeBreakdown.Contains("全空气一次回风系统 2 套") ? 1 : 0, 1);
+
+            // 合计 == 逐系统相加(不跨系统重算)
+            double manualCooling = 0, manualSupply = 0, manualExhaust = 0, manualSmoke = 0;
+            var one = new SmallSystemLoadCalculator();
+            foreach (var s in smallProject.Systems)
+            {
+                var rr = one.Calculate(s);
+                manualCooling += rr.TotalCoolingKw;
+                manualSupply += rr.TotalSupplyM3H;
+                manualExhaust += rr.TotalExhaustM3H;
+                manualSmoke += rr.TotalSmokeM3H;
+            }
+            Check("汇总冷负荷 = 逐系统相加", summary.TotalCoolingKw, manualCooling, 1e-9);
+            Check("汇总送风量 = 逐系统相加", summary.TotalSupplyM3H, manualSupply, 1e-9);
+            Check("汇总排风量 = 逐系统相加", summary.TotalExhaustM3H, manualExhaust, 1e-9);
+            Check("汇总排烟量 = 逐系统相加", summary.TotalSmokeM3H, manualSmoke, 1e-9);
+            CheckInt("逐系统行带各自的计算书文本",
+                summary.Rows.FindAll(x => x.ResultText.Contains("设备选型")).Count, 4);
+
+            var summaryTable = ResultTable.ForSmallSystemSummary(summary);
+            CheckInt("汇总结果表分区数 = 3(合计 / 风量 / 逐系统)", summaryTable.Sections.Count, 3);
+            CheckInt("汇总表逐系统列数 = 13", SmallRoomTable.SummaryColumns().Count, 13);
+            CheckInt("汇总口径说明写明只相加不重算", summary.Note.Contains("不跨系统重算") ? 1 : 0, 1);
+
+            // 仓库:多系统往返 + 旧单系统文件自动迁移
+            string dir7 = Path.Combine(Path.GetTempPath(), "HVACIDA-Multi-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var repo7 = new XmlProjectRepository(dir7);
+                repo7.SaveSmallSystems(smallProject);
+                var back7 = repo7.LoadSmallSystems();
+                CheckInt("小系统工程往返:4 套", back7.Systems.Count, 4);
+                Check("往返:第二套屋顶面积(默认=面积)", back7.Find(SmallSystemType.AllAirOnceReturn, "AHU-A201").Rooms[0].RoofAreaM2, 80, 1e-9);
+
+                // 兼容入口:SaveSmallSystem(单系统)应 upsert 进容器
+                var single = new SmallSystemInput { SystemType = SmallSystemType.PressurizationSupply, SystemCode = "SAF-1" };
+                repo7.SaveSmallSystem(single);
+                CheckInt("单系统旧接口 upsert 进容器 → 5 套", repo7.LoadSmallSystems().Systems.Count, 5);
+
+                // 迁移:只有旧 small-system.xml 时应自动搬进容器
+                string dir8 = Path.Combine(Path.GetTempPath(), "HVACIDA-Migrate-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var legacyRepo = new XmlProjectRepository(dir8);
+                    Directory.CreateDirectory(dir8);
+                    var legacy = new SmallSystemInput { SystemType = SmallSystemType.ExhaustVentilation, SystemCode = "EAF-OLD" };
+                    legacy.Rooms.Add(SmallRoomInput.Create("老卫生间", 6, 4.5));
+                    new XmlProjectRepository(dir8).SaveSmallSystem(legacy);   // 写出容器
+                    File.Delete(Path.Combine(dir8, "small-systems.xml"));      // 只留旧文件
+                    var migration = new XmlProjectRepository(dir8);
+                    var legacySingle = legacy;                                  // 用旧接口写单系统文件
+                    var serializer = new System.Xml.Serialization.XmlSerializer(typeof(SmallSystemInput));
+                    using (var w = System.Xml.XmlWriter.Create(Path.Combine(dir8, "small-system.xml")))
+                    {
+                        serializer.Serialize(w, legacySingle);
+                    }
+                    var migrated = migration.LoadSmallSystems();
+                    CheckInt("旧单系统文件自动迁移为容器", migrated.Systems.Count, 1);
+                    CheckText("迁移保留了系统编号", migrated.Systems[0].SystemCode, "EAF-OLD");
+                    CheckInt("迁移后已落盘 small-systems.xml",
+                        File.Exists(Path.Combine(dir8, "small-systems.xml")) ? 1 : 0, 1);
+                }
+                finally
+                {
+                    try { Directory.Delete(dir8, true); } catch { }
+                }
+            }
+            finally
+            {
+                try { Directory.Delete(dir7, true); } catch { }
             }
 
             Console.WriteLine();

@@ -260,6 +260,132 @@ try {
 }
 
 # =====================================================================
+# 多系统汇总 + 模型拾取协议(不需要 Revit:拾取由命令层注入结果,这里只验 VM 契约)
+# =====================================================================
+try {
+    $tmp7 = Join-Path $env:TEMP ("HVACIDA-Sum-" + [guid]::NewGuid().ToString('N'))
+    $repo7 = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmp7
+    $svc7 = New-Object HVACIDA.Core.Services.SmallSystemInputService -ArgumentList $repo7
+
+    # 存 3 套系统(两类空调 + 一套排风 + 一套排烟)
+    $a1 = New-Object HVACIDA.Core.Models.SmallSystemInput
+    $a1.SystemType = [HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn; $a1.SystemCode = 'AHU-A101'
+    $a1.Rooms.Add([HVACIDA.Core.Models.SmallRoomInput]::Create('弱电间1', 50, 5.9))
+    $svc7.Save($a1) | Out-Null
+    $a2 = New-Object HVACIDA.Core.Models.SmallSystemInput
+    $a2.SystemType = [HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn; $a2.SystemCode = 'AHU-A201'
+    $a2.Rooms.Add([HVACIDA.Core.Models.SmallRoomInput]::Create('强电间1', 80, 4.55))
+    $svc7.Save($a2) | Out-Null
+    $ef = New-Object HVACIDA.Core.Models.SmallSystemInput
+    $ef.SystemType = [HVACIDA.Core.Models.SmallSystemType]::ExhaustVentilation; $ef.SystemCode = 'EAF-A601'
+    $r = [HVACIDA.Core.Models.SmallRoomInput]::Create('男卫', 5.83, 5.9); $r.RoomType = '男卫生间'; $ef.Rooms.Add($r)
+    $count7 = $svc7.Save($ef)
+    if ($count7 -eq 3) { Write-Host "PASS  小系统按类型+编号 upsert 保存:当前 3 套" }
+    else { Write-Host ("FAIL  保存后套数 = {0}" -f $count7); $fail++ }
+
+    # ---- 汇总窗 ----
+    $sum = New-Object "$vmNs.SmallResultViewModel" -ArgumentList $repo7
+    $sum.CalculateCommand.Execute($null)
+    if ($sum.Summary.SystemCount -eq 3 -and $sum.SummaryRows.Count -eq 3 -and $sum.Table.Sections.Count -eq 3) {
+        Write-Host ("PASS  多系统汇总:{0} 套 / 逐系统 {1} 行 / 结果表 {2} 分区(冷负荷合计 {3:N2} kW)" -f `
+            $sum.Summary.SystemCount, $sum.SummaryRows.Count, $sum.Table.Sections.Count, $sum.Summary.TotalCoolingKw)
+    } else {
+        Write-Host ("FAIL  汇总: sys={0} rows={1} table={2}" -f $sum.Summary.SystemCount, $sum.SummaryRows.Count, $sum.Table.Sections.Count)
+        $fail++
+    }
+
+    $sumW = New-Object "$uiNs.SmallSystemResultWindow" -ArgumentList $sum
+    $sumW.Show(); $sumW.UpdateLayout()
+    $sg = $sumW.FindName('SummaryGrid')
+    $expectSum = [HVACIDA.Core.Services.SmallRoomTable]::SummaryColumns().Count
+    if ($sg -ne $null -and $sg.Columns.Count -eq $expectSum -and $sg.Items.Count -eq 3 -and
+        $sumW.FindName('ResultTableHost') -ne $null) {
+        Write-Host ("PASS  汇总窗渲染:汇总表 {0} 列 × {1} 行 + 合计表" -f $sg.Columns.Count, $sg.Items.Count)
+    } else {
+        Write-Host ("FAIL  汇总窗: cols={0} items={1}" -f $sg.Columns.Count, $sg.Items.Count); $fail++
+    }
+
+    # 选中某系统行 → 明细三块刷新(房间明细/设备选型/计算书)
+    $sum.SelectedSummaryRow = $sum.SummaryRows | Where-Object { $_.SystemCode -eq 'EAF-A601' } | Select-Object -First 1
+    $sumW.UpdateLayout()
+    if ($sum.DetailTitle -match 'EAF-A601' -and $sum.RoomRows.Count -eq 1 -and
+        $sum.EquipmentRows.Count -eq 1 -and $sum.ResultText -match '设备选型') {
+        Write-Host ("PASS  选中系统行后明细刷新:{0} · 房间 {1} 行 · 设备 {2} 台" -f $sum.DetailTitle, $sum.RoomRows.Count, $sum.EquipmentRows.Count)
+    } else {
+        Write-Host ("FAIL  选中行明细: title='{0}' rooms={1} equip={2}" -f $sum.DetailTitle, $sum.RoomRows.Count, $sum.EquipmentRows.Count)
+        $fail++
+    }
+    $sumW.Close()
+
+    # 「—」显示:排风系统不涉及冷负荷/排烟量,应显示「—」而不是 0.00
+    $eafRow = $sum.SummaryRows | Where-Object { $_.SystemCode -eq 'EAF-A601' } | Select-Object -First 1
+    $airRow = $sum.SummaryRows | Where-Object { $_.SystemCode -eq 'AHU-A101' } | Select-Object -First 1
+    if ($eafRow.TotalCoolingKw -eq '—' -and $eafRow.TotalSmokeM3H -eq '—' -and $eafRow.TotalExhaustM3H -ne '—' -and
+        $airRow.TotalCoolingKw -ne '—') {
+        Write-Host ("PASS  不涉及的量显示「—」:排风系统 冷负荷={0} 排烟={1} 排风={2};空调系统 冷负荷={3}" -f `
+            $eafRow.TotalCoolingKw, $eafRow.TotalSmokeM3H, $eafRow.TotalExhaustM3H, $airRow.TotalCoolingKw)
+    } else {
+        Write-Host ("FAIL  「—」显示: eaf cooling={0} smoke={1} exhaust={2} | ahu cooling={3}" -f `
+            $eafRow.TotalCoolingKw, $eafRow.TotalSmokeM3H, $eafRow.TotalExhaustM3H, $airRow.TotalCoolingKw)
+        $fail++
+    }
+
+    # ---- 拾取协议(VM 侧契约)----
+    $svm2 = New-Object "$vmNs.SmallSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn), $repo7, $true
+    if ($svm2.IsPickAvailable -eq $true) { Write-Host "PASS  拾取可用时按钮使能(IsPickAvailable)" }
+    else { Write-Host "FAIL  IsPickAvailable 应为 true"; $fail++ }
+
+    $svm2.RequestPickSpaces()
+    if ($svm2.PickSpacesRequested -eq $true) { Write-Host "PASS  请求拾取空间 → 置标记(命令层据此拾取)" }
+    else { Write-Host "FAIL  PickSpacesRequested 未置位"; $fail++ }
+    $svm2.ClearPickRequests()
+    if ($svm2.PickSpacesRequested -eq $false) { Write-Host "PASS  ClearPickRequests 复位" }
+    else { Write-Host "FAIL  拾取标记未复位"; $fail++ }
+
+    # 注入 "拾取到的空间" → 建房间行(面积/层高/屋顶面积取模型值)
+    $spaces7 = New-Object 'System.Collections.Generic.List[HVACIDA.Core.Models.SpaceSnapshot]'
+    $sp = New-Object HVACIDA.Core.Models.SpaceSnapshot
+    $sp.Name = '信号设备室'; $sp.Number = '101'; $sp.LevelName = '站厅层'
+    $sp.AreaM2 = 32.18; $sp.HeightM = 5.9; $sp.VolumeM3 = 32.18 * 5.9
+    $spaces7.Add($sp)
+    $before = $svm2.Rooms.Count
+    $svm2.ApplyPickedSpaces($spaces7, '拾取 1 个房间空间')
+    $newRoom = $svm2.Rooms | Where-Object { $_.Name -eq '信号设备室' } | Select-Object -First 1
+    if ($svm2.Rooms.Count -eq $before + 1 -and $newRoom -ne $null -and [math]::Abs($newRoom.AreaM2 - 32.18) -lt 1e-9 -and
+        [math]::Abs($newRoom.HeightM - 5.9) -lt 1e-9 -and [math]::Abs($newRoom.RoofAreaM2 - 32.18) -lt 1e-9) {
+        Write-Host "PASS  拾取空间 → 建房间行(面积/层高/屋顶面积=面积 均取模型值)"
+    } else { Write-Host ("FAIL  拾取空间建行: count={0}" -f $svm2.Rooms.Count); $fail++ }
+
+    # 同名空间再拾取一次 → 跳过不重复
+    $svm2.ApplyPickedSpaces($spaces7, '再来一次')
+    if ($svm2.Rooms.Count -eq $before + 1) { Write-Host "PASS  同名房间重复拾取被跳过(不产生重复行)" }
+    else { Write-Host ("FAIL  重复拾取后房间数 = {0}" -f $svm2.Rooms.Count); $fail++ }
+
+    # 拾取墙体 → 写入当前选中行的外墙长度
+    $svm2.SelectedRoom = $newRoom
+    $svm2.ApplyPickedWallLength(32.5, '已选 3 段墙体,合计长度 32.5 m')
+    if ([math]::Abs($newRoom.WallLengthM - 32.5) -lt 1e-9) {
+        Write-Host "PASS  拾取墙体 → 选中行外墙长度 = 32.5 m(长度之和)"
+    } else { Write-Host ("FAIL  外墙长度 = {0}" -f $newRoom.WallLengthM); $fail++ }
+
+    # 未选中行时拾取墙体:只提示,不改数据
+    $svm2.SelectedRoom = $null
+    $svm2.ApplyPickedWallLength(99, '无选中行')
+    if ([math]::Abs($newRoom.WallLengthM - 32.5) -lt 1e-9) { Write-Host "PASS  未选中行时不落值(仅提示)" }
+    else { Write-Host "FAIL  未选中行却改了外墙长度"; $fail++ }
+
+    # 不允许拾取时(无活动文档)按钮应禁用
+    $svm3 = New-Object "$vmNs.SmallSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn), $repo7, $false
+    if ($svm3.IsPickAvailable -eq $false) { Write-Host "PASS  无活动文档时拾取按钮禁用" }
+    else { Write-Host "FAIL  IsPickAvailable 应为 false"; $fail++ }
+
+    try { Remove-Item $tmp7 -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  多系统汇总/拾取协议自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
+# =====================================================================
 # 计算结果表格化:大系统负荷 / 小系统 结果是否真的以"分组表格"渲染
 # =====================================================================
 try {
@@ -317,18 +443,17 @@ try {
     } else { Write-Host "FAIL  计算结果窗缺少结果表"; $fail++ }
     $brw.Close()
 
-    # ---- 小系统计算结果窗 ----
+    # ---- 小系统计算结果窗:空工程必须"不摆结果,只给指引"(不做兜底假结果) ----
     $srvm = New-Object "$vmNs.SmallResultViewModel" -ArgumentList $repo5
     $srvm.CalculateCommand.Execute($null)
-    if ($srvm.Table -ne $null -and $srvm.Table.Sections.Count -ge 4) {
-        $srows = ($srvm.Table.Sections | ForEach-Object { $_.Rows.Count } | Measure-Object -Sum).Sum
-        Write-Host ("PASS  小系统结果表:{0} 个分区 / 共 {1} 行" -f $srvm.Table.Sections.Count, $srows)
-    } else { Write-Host ("FAIL  小系统结果表分区数={0}" -f $srvm.Table.Sections.Count); $fail++ }
-
-    $sText = @($srvm.Table.Sections | ForEach-Object { $_.Rows }) | Where-Object { $_.IsText -eq $true }
-    if ($sText -ne $null -and $sText.Display.Length -gt 0) {
-        Write-Host ("PASS  table text row routed to text branch: {0}" -f $sText.Label)
-    } else { Write-Host "FAIL  small-system table has no text row"; $fail++ }
+    if ($srvm.Summary.Rows.Count -eq 0 -and $srvm.Table -eq $null -and $srvm.SummaryRows.Count -eq 0 -and
+        $srvm.Note -match '还没有保存过' -and $srvm.Status -match '还没有保存过') {
+        Write-Host "PASS  小系统计算结果窗(空工程):汇总表为空、不摆结果、只给"去录入并保存"的指引"
+    } else {
+        Write-Host ("FAIL  空工程汇总: rows={0} table={1} note='{2}'" -f `
+            $srvm.Summary.Rows.Count, ($srvm.Table -ne $null), $srvm.Note)
+        $fail++
+    }
 
     $srw = New-Object "$uiNs.SmallSystemResultWindow" -ArgumentList $srvm
     $srw.Show(); $srw.UpdateLayout()
@@ -337,7 +462,7 @@ try {
     $srw.Close()
 
     # ---- 文本计算书仍与表格同源(逐行抽查)----
-    if ($srvm.ResultText -match '四、设备选型' -and $blvm.ResultText -match '站厅冷负荷合计' -and $blvm.ResultText -match '总制冷量') {
+    if ($blvm.ResultText -match '站厅冷负荷合计' -and $blvm.ResultText -match '总制冷量') {
         Write-Host "PASS  导出计算书与结果表同源(分区标题 + 合计行均在文本计算书中)"
     } else { Write-Host "FAIL  计算书文本与表格不同源"; $fail++ }
 
