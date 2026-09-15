@@ -77,6 +77,7 @@ dotnet build .\HVACIDA.sln
 | 2.1 项目信息 | 工程信息窗 + 气象参数窗(ProjectInfoModel/DesignConditionParams → project.xml) | ✅ 可用(Excel 模板导入、.rvt 全局参数待实现) |
 | 2.1.2 气象数据库 | 省/市下拉 + 选定城市自动回填室外参数(`WeatherDatabase`,内嵌 294 台站 / 31 省级行政区) | ✅ 可用(源 GB 50736-2012 附录A) |
 | 2.2.3.1 大系统负荷 | 公共区参数窗 + 负荷计算窗 + 计算结果窗(LargeSystemLoadCalculator) | ✅ 已按公式文档移植;北京站算例 30 项逐格一致;**结果按分区分组以表格呈现**(§4.6) |
+| 界面文案纪律 | — | **不体现公式文档单元格编号**(D55/C39/E159…):只在悬停提示里可见,计算书正文亦不含;window-smoke 有防回归扫描 |
 | 2.1.2→2.2.3.1 气象联动 | `LargeSystemInputService` + `ProjectDesignSync`(C5/F4/F6 ← 项目信息) | ✅ 默认自动联动、可取消转手工;未填不覆盖 |
 | 2.2.1/2.2.3.1 模型取值 | `SpaceSnapshot` + `PublicAreaAggregator` + `RevitSpaceReader`(D55/D56/C13/C14) | 🟡 Core+UI+命令层就绪,Revit 实机待验 |
 | 2.2.3.2 小系统负荷 | 全空气一次回风窗 + 计算结果窗(SmallSystemLoadCalculator) | 🟡 仅一类实现,其余 5 类给待实现说明;**结果以表格呈现**(§4.6) |
