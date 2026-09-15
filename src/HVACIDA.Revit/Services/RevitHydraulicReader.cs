@@ -586,23 +586,57 @@ namespace HVACIDA.Revit.Services
 
             var visited = new HashSet<int> { sourceId };
             var path = new List<int> { sourceId };
-            double bestLoss = -1.0;
-            List<int> bestPath = null;
+            var branchPaths = new Dictionary<int, BranchPath>();
             int steps = 0;
             bool overflow = false;
 
-            Search(sourceId, adjacency, lossById, terminalById, visited, path, 0.0,
-                ref bestLoss, ref bestPath, ref steps, ref overflow);
+            Search(sourceId, adjacency, lossById, terminalById, visited, path, 0.0, branchPaths, ref steps, ref overflow);
 
-            if (overflow || bestPath == null)
+            if (overflow || branchPaths.Count == 0)
             {
                 return overflow
-                    ? "管网连接关系过于复杂(环形/分支发散,搜索超过 " + MaxSearchSteps + " 步),**未判定最不利环路** —— 已按全部管段之和保守计入。"
-                    : "从风机/水泵出发没有走到任何末端,**未判定最不利环路** —— 已按全部管段之和保守计入。";
+                    ? "管网连接关系过于复杂(环形/分支发散,搜索超过 " + MaxSearchSteps + " 步),**未判定最不利环路也未收集到支路** —— 已按全部管段之和保守计入。"
+                    : "从风机/水泵出发没有走到任何末端,**未判定最不利环路也未收集到支路** —— 已按全部管段之和保守计入。";
+            }
+
+            // 最不利环路 = 各支路里累计阻力最大的一条
+            int criticalTerminalId = 0;
+            double criticalLoss = -1.0;
+            foreach (var pair in branchPaths)
+            {
+                if (pair.Value.Loss > criticalLoss)
+                {
+                    criticalLoss = pair.Value.Loss;
+                    criticalTerminalId = pair.Key;
+                }
+            }
+            var criticalPath = branchPaths[criticalTerminalId].Path;
+
+            // 逐支路写入输入(并联环路平衡用):管段 id 列表 + 路径说明
+            foreach (var pair in branchPaths)
+            {
+                HydraulicTerminal terminal;
+                terminalById.TryGetValue(pair.Key, out terminal);
+                var branch = new HydraulicBranch
+                {
+                    Name = terminal == null ? ("末端 #" + pair.Key) : terminal.Name,
+                    TerminalElementId = pair.Key,
+                    IsCritical = pair.Key == criticalTerminalId
+                };
+                var names = new List<string>();
+                foreach (int id in pair.Value.Path)
+                {
+                    HydraulicSegment segment;
+                    if (!segmentByElementId.TryGetValue(id, out segment) || segment == null) continue;
+                    branch.SegmentElementIds.Add(id);
+                    names.Add(segment.Name);
+                }
+                branch.SegmentSummary = names.Count == 0 ? "" : string.Join(" → ", names.ToArray());
+                input.Branches.Add(branch);
             }
 
             int onPathSegments = 0;
-            foreach (int id in bestPath)
+            foreach (int id in criticalPath)
             {
                 HydraulicSegment segment;
                 if (segmentByElementId.TryGetValue(id, out segment) && segment != null)
@@ -611,36 +645,61 @@ namespace HVACIDA.Revit.Services
                     onPathSegments++;
                 }
             }
-            var endTerminal = terminalById.ContainsKey(bestPath[bestPath.Count - 1])
-                ? terminalById[bestPath[bestPath.Count - 1]]
+            var endTerminal = terminalById.ContainsKey(criticalPath[criticalPath.Count - 1])
+                ? terminalById[criticalPath[criticalPath.Count - 1]]
                 : null;
             if (endTerminal != null) endTerminal.OnCriticalPath = true;
 
-            // 环路中间若有末端(支管末端不在最不利环路上),一律不计入
-            var onPath = new HashSet<int>(bestPath);
+            // 不在最不利环路上的末端不计入环路阻力(它们进并联平衡分析)
+            var onPath = new HashSet<int>(criticalPath);
+            int offPathTerminals = 0;
             foreach (var terminal in input.Terminals)
             {
                 if (terminal == null || terminal.ElementId == 0) continue;
-                if (!onPath.Contains(terminal.ElementId)) terminal.OnCriticalPath = false;
+                if (onPath.Contains(terminal.ElementId)) continue;
+                terminal.OnCriticalPath = false;
+                if (terminal.Kind != HydraulicItemKind.OutletDynamic) offPathTerminals++;
+            }
+
+            // 从风机出发走不到的末端(管网断开)要如实报出来
+            int unreached = 0;
+            foreach (var terminal in input.Terminals)
+            {
+                if (terminal == null || terminal.ElementId == 0) continue;
+                if (terminal.Kind == HydraulicItemKind.OutletDynamic) continue;
+                if (!branchPaths.ContainsKey(terminal.ElementId)) unreached++;
             }
 
             input.CriticalPathName = endTerminal != null ? endTerminal.Name : "未命名末端";
             return "最不利环路:" + input.CriticalPathName + ",经 " + onPathSegments +
-                   " 段管段,段阻力合计约 " + bestLoss.ToString("0.#") + " Pa(按本题参数估算)。";
+                   " 段管段,累计阻力约 " + criticalLoss.ToString("0.#") + " Pa(按本题参数估算);" +
+                   "共收集到 " + branchPaths.Count + " 条并联支路(另有 " + offPathTerminals +
+                   " 条不在最不利环路上,已纳入并联平衡分析)" +
+                   (unreached > 0 ? ";⚠ 有 " + unreached + " 个末端从风机/水泵出发走不通(管网可能断开),未纳入平衡分析" : "") + "。";
+        }
+
+        /// <summary>一条支路(末端 + 从起点到该末端的路径 + 累计阻力)。</summary>
+        private sealed class BranchPath
+        {
+            public double Loss;
+            public List<int> Path;
         }
 
         private static void Search(int current, Dictionary<int, List<int>> adjacency, Dictionary<int, double> lossById,
             Dictionary<int, HydraulicTerminal> terminalById, HashSet<int> visited, List<int> path, double loss,
-            ref double bestLoss, ref List<int> bestPath, ref int steps, ref bool overflow)
+            Dictionary<int, BranchPath> branchPaths, ref int steps, ref bool overflow)
         {
             if (overflow) return;
             if (++steps > MaxSearchSteps) { overflow = true; return; }
 
-            bool isEnd = terminalById.ContainsKey(current);
-            if (isEnd && loss > bestLoss)
+            if (terminalById.ContainsKey(current))
             {
-                bestLoss = loss;
-                bestPath = new List<int>(path);
+                // 同一末端可能有多条走法(环网):取累计阻力最大的那条(与"最不利"口径一致)
+                BranchPath existing;
+                if (!branchPaths.TryGetValue(current, out existing) || loss > existing.Loss)
+                {
+                    branchPaths[current] = new BranchPath { Loss = loss, Path = new List<int>(path) };
+                }
             }
 
             List<int> nexts;
@@ -651,7 +710,7 @@ namespace HVACIDA.Revit.Services
                 visited.Add(next);
                 path.Add(next);
                 Search(next, adjacency, lossById, terminalById, visited, path, loss + LossOf(lossById, next),
-                    ref bestLoss, ref bestPath, ref steps, ref overflow);
+                    branchPaths, ref steps, ref overflow);
                 path.RemoveAt(path.Count - 1);
                 visited.Remove(next);
             }

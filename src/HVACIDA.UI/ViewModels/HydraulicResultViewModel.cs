@@ -29,6 +29,9 @@ namespace HVACIDA.UI.ViewModels
         private ResultTable _table;
         private IList<HydraulicSegmentResult> _segmentRows = new List<HydraulicSegmentResult>();
         private IList<HydraulicItemResult> _itemRows = new List<HydraulicItemResult>();
+        private IList<HydraulicBranchResult> _branchRows = new List<HydraulicBranchResult>();
+        private IList<HydraulicCurvePoint> _curveRows = new List<HydraulicCurvePoint>();
+        private string _balanceNote = "";
         private string _detailTitle = "";
         private string _resultText = "";
         private string _status = "";
@@ -88,6 +91,27 @@ namespace HVACIDA.UI.ViewModels
         {
             get => _itemRows;
             private set => Set(ref _itemRows, value);
+        }
+
+        /// <summary>并联环路平衡(逐支路一行;没有拓扑数据时为空,界面提示"未做平衡分析")。</summary>
+        public IList<HydraulicBranchResult> BranchRows
+        {
+            get => _branchRows;
+            private set => Set(ref _branchRows, value);
+        }
+
+        /// <summary>系统阻力特性曲线点(50%~130% 设计流量)。</summary>
+        public IList<HydraulicCurvePoint> CurveRows
+        {
+            get => _curveRows;
+            private set => Set(ref _curveRows, value);
+        }
+
+        /// <summary>并联平衡与特性曲线的口径说明(界面显示;不假装算了工况点)。</summary>
+        public string BalanceNote
+        {
+            get => _balanceNote;
+            private set => Set(ref _balanceNote, value);
         }
 
         /// <summary>明细区标题。</summary>
@@ -165,6 +189,9 @@ namespace HVACIDA.UI.ViewModels
                     Table = null;
                     SegmentRows = new List<HydraulicSegmentResult>();
                     ItemRows = new List<HydraulicItemResult>();
+                    BranchRows = new List<HydraulicBranchResult>();
+                    CurveRows = new List<HydraulicCurvePoint>();
+                    BalanceNote = "";
                     ResultText = "";
                     DetailTitle = "";
                     Note = "";
@@ -183,6 +210,9 @@ namespace HVACIDA.UI.ViewModels
                 Table = null;
                 SegmentRows = new List<HydraulicSegmentResult>();
                 ItemRows = new List<HydraulicItemResult>();
+                BranchRows = new List<HydraulicBranchResult>();
+                CurveRows = new List<HydraulicCurvePoint>();
+                BalanceNote = "";
                 DetailTitle = "";
                 ResultText = "";
                 Note = "";
@@ -201,6 +231,9 @@ namespace HVACIDA.UI.ViewModels
             Table = ResultTable.ForHydraulic(row.Input, row.Result);
             SegmentRows = new List<HydraulicSegmentResult>(row.Result.Segments);
             ItemRows = new List<HydraulicItemResult>(row.Result.Items);
+            BranchRows = new List<HydraulicBranchResult>(row.Result.Branches);
+            CurveRows = new List<HydraulicCurvePoint>(row.Result.Curve);
+            BalanceNote = row.Result.BalanceNote;
             Note = row.Result.Note;
             PendingNote = string.IsNullOrEmpty(row.Input.PendingNote)
                 ? row.Result.PendingNote

@@ -178,6 +178,31 @@ namespace HVACIDA.Core.Models
     }
 
     /// <summary>
+    /// 并联支路(从风机 / 水泵到某一个末端的一条路径)。
+    /// <para>
+    /// 由模型读取器按连接件拓扑给出(**同一系统里每个末端一条**);没有拓扑信息时列表为空,
+    /// 此时只给最不利环路、不做平衡分析(不猜)。
+    /// </para>
+    /// </summary>
+    public class HydraulicBranch
+    {
+        /// <summary>支路名(末端名 / 支路编号)。</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>末端元素 Id(与 <see cref="HydraulicTerminal.ElementId"/> 对应)。</summary>
+        public int TerminalElementId { get; set; }
+
+        /// <summary>该支路上的管段元素 Id(从起点到末端顺序;计算器据此累加段阻力)。</summary>
+        public List<int> SegmentElementIds { get; set; } = new List<int>();
+
+        /// <summary>路径说明(管段名串联,便于人工核对这条支路走了哪几段)。</summary>
+        public string SegmentSummary { get; set; } = "";
+
+        /// <summary>是否最不利环路(读取器按拓扑标记;计算器复算后会以计算结果为准重标)。</summary>
+        public bool IsCritical { get; set; }
+    }
+
+    /// <summary>
     /// 一次水力计算的**输入**(一个风系统或一个水系统)。
     /// <para>
     /// 由「水力计算 → 风系统 / 水系统」窗从 Revit 模型读取后填入,再交给
@@ -201,6 +226,12 @@ namespace HVACIDA.Core.Models
 
         /// <summary>末端 / 设备阻力项(含最不利环路标记)。</summary>
         public List<HydraulicTerminal> Terminals { get; set; } = new List<HydraulicTerminal>();
+
+        /// <summary>
+        /// 并联支路(每末端一条路径;由模型读取器按连接件拓扑给出)。
+        /// 空 = 没有拓扑信息 → 只给最不利环路,不做并联平衡分析(并在待补说明里写明)。
+        /// </summary>
+        public List<HydraulicBranch> Branches { get; set; } = new List<HydraulicBranch>();
 
         /// <summary>静压高差 m(水系统:最不利环路最高点与水泵中心的高差;风系统为 0)。</summary>
         public double StaticHeightM { get; set; }
@@ -282,6 +313,12 @@ namespace HVACIDA.Core.Models
 
         /// <summary>重力加速度 m/s²(水系统静压与扬程换算用)。</summary>
         public double GravityM2S { get; set; } = HvacConstants.GravityM2S;
+
+        /// <summary>
+        /// 并联环路**允许不平衡率** %(某支路阻力与最不利环路的差额占比超过它就要设平衡装置)。
+        /// 常用控制指标:并联环路压力损失差额宜控制在 15% 以内(工程通行口径,项目可按设计文件调整)。
+        /// </summary>
+        public double ImbalanceLimitPct { get; set; } = HvacConstants.HydraulicImbalanceLimitPct;
 
         /// <summary>常用局部阻力系数表(管件 → ζ;逐件可查、可改,见 <see cref="Services.HydraulicLocalLossTable"/>)。</summary>
         public List<HydraulicLocalLossItem> LocalLossItems { get; set; } = new List<HydraulicLocalLossItem>();

@@ -58,13 +58,18 @@
         <Grid Margin="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="1.2*" MinHeight="120"/>
+                <RowDefinition Height="1.1*" MinHeight="110"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="1.0*" MinHeight="110"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="0.9*" MinHeight="96"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="0.7*" MinHeight="80"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="0.8*" MinHeight="92"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
@@ -88,6 +93,9 @@
                     <DataGridTextColumn Header="需求值" Width="118" Binding="{Binding RequiredText}"/>
                     <DataGridTextColumn Header="设备额定值" Width="118" Binding="{Binding RatedText}"/>
                     <DataGridTextColumn Header="余量" Width="84" Binding="{Binding MarginText}"/>
+                    <DataGridTextColumn Header="并联支路" Width="90" Binding="{Binding BranchText}"/>
+                    <DataGridTextColumn Header="最大不平衡率" Width="116" Binding="{Binding ImbalanceText}"/>
+                    <DataGridTextColumn Header="超限支路" Width="90" Binding="{Binding UnbalancedText}"/>
                     <DataGridTextColumn Header="校核结论" Width="*" Binding="{Binding VerdictText}"/>
                 </DataGrid.Columns>
             </DataGrid>
@@ -144,7 +152,57 @@
                 </DataGrid.Columns>
             </DataGrid>
 
-            <Expander Grid.Row="8" Margin="0,8,0,0" Foreground="#23486E" Header="五、选中介质的计算书全文(文本,可导出)">
+            <!-- 五、并联环路平衡 -->
+            <TextBlock Grid.Row="8" Style="{StaticResource SectionTitle}" Margin="4,6,0,4"
+                       Text="五、并联环路平衡(超限支路给出平衡阀 Kv / 需增加 ζ;最不利环路行高亮)"/>
+            <DataGrid Grid.Row="9" x:Name="BranchGrid" Style="{StaticResource Grid}"
+                      ItemsSource="{Binding BranchRows}" AlternatingRowBackground="#F7FAFD"
+                      HorizontalScrollBarVisibility="Auto">
+                <DataGrid.RowStyle>
+                    <Style TargetType="{x:Type DataGridRow}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsCritical}" Value="True">
+                                <Setter Property="Background" Value="#FFF4E5"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding WithinLimit}" Value="False">
+                                <Setter Property="Foreground" Value="#C0392B"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="支路(末端)" Width="180" Binding="{Binding Name}"/>
+                    <DataGridTextColumn Header="段数" Width="60" Binding="{Binding SegmentCount}"/>
+                    <DataGridTextColumn Header="管段 Pa" Width="96" Binding="{Binding SegmentLossPa, StringFormat={}{0:N1}}"/>
+                    <DataGridTextColumn Header="末端 Pa" Width="96" Binding="{Binding TerminalPa, StringFormat={}{0:N1}}"/>
+                    <DataGridTextColumn Header="支路合计 Pa" Width="110" Binding="{Binding TotalLossPa, StringFormat={}{0:N1}}"/>
+                    <DataGridTextColumn Header="不平衡 Pa" Width="100" Binding="{Binding ImbalancePa, StringFormat={}{0:N1}}"/>
+                    <DataGridTextColumn Header="不平衡 %" Width="90" Binding="{Binding ImbalancePct, StringFormat={}{0:0.#}}"/>
+                    <DataGridTextColumn Header="需吸收 Pa" Width="100" Binding="{Binding RequiredAbsorbPa, StringFormat={}{0:N1}}"/>
+                    <DataGridTextColumn Header="平衡阀 Kv" Width="94" Binding="{Binding ValveKv, StringFormat={}{0:0.##}}"/>
+                    <DataGridTextColumn Header="阀权度" Width="76" Binding="{Binding ValveAuthority, StringFormat={}{0:0.00}}"/>
+                    <DataGridTextColumn Header="需增加 ζ" Width="92" Binding="{Binding ZetaToAdd, StringFormat={}{0:0.###}}"/>
+                    <DataGridTextColumn Header="结论" Width="*" Binding="{Binding Conclusion}"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- 六、系统阻力特性曲线 -->
+            <TextBlock Grid.Row="10" Style="{StaticResource SectionTitle}" Margin="4,6,0,4"
+                       Text="六、系统阻力特性曲线(与厂家设备性能曲线的交点才是工况点)"/>
+            <DataGrid Grid.Row="11" x:Name="CurveGrid" Style="{StaticResource Grid}" MaxHeight="150"
+                      ItemsSource="{Binding CurveRows}" AlternatingRowBackground="#F7FAFD">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="流量比 %" Width="100" Binding="{Binding FlowRatioPct, StringFormat={}{0:0}}"/>
+                    <DataGridTextColumn Header="流量 m³/h" Width="120" Binding="{Binding FlowM3H, StringFormat={}{0:N0}}"/>
+                    <DataGridTextColumn Header="系统阻力 Pa" Width="130" Binding="{Binding ResistancePa, StringFormat={}{0:N1}}"/>
+                    <DataGridTextColumn Header="需求值 Pa" Width="130" Binding="{Binding RequiredPa, StringFormat={}{0:N1}}"/>
+                </DataGrid.Columns>
+            </DataGrid>
+            <TextBlock Grid.Row="12" Margin="4,4,4,0" TextWrapping="Wrap"
+                       Foreground="#8A6100" Text="{Binding BalanceNote}"/>
+
+            <Expander Grid.Row="13" Margin="0,8,0,0" Foreground="#23486E" Header="七、选中介质的计算书全文(文本,可导出)">
                 <TextBox Text="{Binding ResultText, Mode=OneWay}" IsReadOnly="True"
                          FontFamily="Consolas" FontSize="12" Height="150"
                          Background="White" BorderBrush="#DDDDDD" BorderThickness="1"

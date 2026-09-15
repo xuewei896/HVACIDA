@@ -87,7 +87,7 @@ dotnet build .\HVACIDA.sln
 | 2.2.4 结果管理 | TextReportGenerator(文本计算书,`%AppData%\HVACIDA\Reports`) | 🟡 文本版 |
 | 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml** / **hydraulic.xml**) | 🟡 待换 SQLite(旧 small-system.xml 首次读取自动迁移) |
 | 2.7 规范知识库 | DesignQaService(本地规则应答)+ 知识库窗口 | 🟡 规则版,待接 AI |
-| 2.3/2.4 水力计算 | 风系统 / 水系统录入窗 + 计算结果窗(`HydraulicCalculator` / `RevitHydraulicReader`) | ✅ 已实装:模型里选系统 → 读管网 → 连接件拓扑求**最不利环路** → 需求全压(Pa)/ 扬程(m)+ 设备校核;系数(ζ 表/粗糙度/富余)全部可见可改(§4.10) |
+| 2.3/2.4 水力计算 | 风系统 / 水系统录入窗 + 计算结果窗(`HydraulicCalculator` / `RevitHydraulicReader`) | ✅ 已实装:模型里选系统 → 读管网 → 连接件拓扑求**最不利环路** → 需求全压(Pa)/ 扬程(m)+ 设备校核;**并联环路平衡**(不平衡率 / 平衡阀 Kv / 阀权度 / 需增加 ζ)与**系统阻力特性曲线**;系数全部可见可改(§4.10) |
 | 2.5 材料表、2.6 出图 | — | ⬜ 未开始(入口已就位,点击给口径说明) |
 
 ## 6. 关键 TODO(按技能规范)
@@ -109,7 +109,8 @@ dotnet build .\HVACIDA.sln
    ① **局部阻力系数取的是手册常用值**(不是唯一值),项目应按手册图表或**设备样本**替换 `HydraulicLocalLossTable` 的取值;
    ② 模型里若没给风机「全压」/ 水泵「扬程」参数,需手工填额定值才能校核;
    ③ 三通未区分直通/分流,管件族名**匹配不到的管件不计局部阻力**(界面逐条提示,可手工加到管段 Σζ);
-   ④ 尚未做**环路水力平衡**(调节阀选型、并联环路平衡)与风机/水泵**工况点选型**。
+   ④ **风机/水泵工况点**:插件只给**系统侧**阻力特性曲线(设计流量 50%~130%),**工况点要用厂家性能曲线与本表求交** —— 不内置设备曲线,也不假装算了工况点;
+   ⑤ 允许不平衡率默认 15%(可改);平衡阀 **Kv 是按"需吸收压差 + 支路流量"反算**的,选型时还应核对厂家阀门的 Kv 档位与可调范围。
 
 ## 6b. 四项自检(不需要打开 Revit)
 ```powershell
@@ -120,7 +121,7 @@ dotnet build .\HVACIDA.sln
 #    + 静态绑定一致性(§5.2:12 个窗口约 450 条 {Binding} 路径逐条反射校验)
 #    + 气象联动/计算结果窗同源 + 公共区自动识别与手动拾取回填
 #    + 打开即算 / 计算即保存(打开就出结果、只是打开不写盘、点计算即落盘、空系统不落盘)
-#    + 水力计算窗(风/水两介质、管段表/系数表、汇总窗两行、「—」、端到端读数)
+#    + 水力计算窗(风/水两介质、管段表/系数表、汇总窗两行、「—」、并联环路平衡与阻力特性曲线表、端到端读数)
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\window-smoke.ps1 `
   -UiDir .\src\HVACIDA.UI\bin\Release\net48
 

@@ -367,7 +367,7 @@ namespace HVACIDA.Core.Services
             var t = new ResultTable
             {
                 Title = water ? "水系统水力计算结果" : "风系统水力计算结果",
-                Note = r.Note
+                Note = r.Note + (string.IsNullOrEmpty(r.BalanceNote) ? "" : " " + r.BalanceNote)
             };
 
             var system = t.Section("一、系统与介质");
@@ -412,6 +412,27 @@ namespace HVACIDA.Core.Services
             }
             if (!double.IsNaN(r.MarginPct)) check.AddTotal("余量", "", r.MarginPct, "%", 1);
             check.AddText("结论", r.CheckVerdict);
+
+            // 五、并联环路平衡(逐支路明细在结果窗与计算书里给,这里给汇总指标)
+            var balance = t.Section("五、并联环路平衡");
+            if (r.HasBranches)
+            {
+                balance.Add("允许不平衡率", "", r.ImbalanceLimitPct, "%", 1);
+                balance.Add("并联支路数", "", r.Branches.Count, "条", 0);
+                balance.Add("最大不平衡率", "", r.MaxImbalancePct, "%", 1);
+                balance.AddTotal("超出允许值的支路数", "", r.UnbalancedBranchCount, "条", 0);
+            }
+            else
+            {
+                balance.AddText("并联支路数", "—(没有支路拓扑数据,未做并联平衡分析)");
+            }
+            balance.AddText("平衡口径", r.BalanceNote);
+
+            // 六、系统阻力特性曲线(点表在结果窗与计算书里给)
+            var curve = t.Section("六、系统阻力特性曲线");
+            curve.AddText("曲线", r.HasCurve
+                ? r.Curve.Count + " 点(设计流量的 50%~130%),点表见结果窗与计算书"
+                : "—(没有流量数据,未给出曲线)");
 
             return t;
         }

@@ -168,5 +168,14 @@ namespace HVACIDA.Core.Utils
 
         /// <summary>层流临界雷诺数(Re 低于它按 λ = 64/Re;之上按湍流式)</summary>
         public const double LaminarReynoldsLimit = 2320.0;
+
+        /// <summary>
+        /// 并联环路允许不平衡率 %(工程通行口径:并联环路压力损失差额宜控制在 15% 以内;
+        /// 项目可按设计文件调整,界面上可改)。超过它对支路给出"需设平衡装置 + Kv / 需增加 ζ"的建议。
+        /// </summary>
+        public const double HydraulicImbalanceLimitPct = 15.0;
+
+        /// <summary>水系统平衡阀 Kv 换算常数:1 bar = 100000 Pa(Kv 定义:压差 1 bar 时 20 ℃ 水的流量 m³/h)</summary>
+        public const double PascalPerBar = 100000.0;
     }
 }

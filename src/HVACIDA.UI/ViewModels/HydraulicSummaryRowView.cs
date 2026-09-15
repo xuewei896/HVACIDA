@@ -87,6 +87,19 @@ namespace HVACIDA.UI.ViewModels
             ? "—"
             : Result.MarginPct.ToString("N1") + " %";
 
+        /// <summary>并联支路数(条;没有拓扑数据给「—」)。</summary>
+        public string BranchText => Result == null || !Result.HasBranches ? "—" : Result.Branches.Count.ToString();
+
+        /// <summary>最大不平衡率 %(没有支路数据给「—」)。</summary>
+        public string ImbalanceText => Result == null || !Result.HasBranches
+            ? "—"
+            : Result.MaxImbalancePct.ToString("N1") + " %";
+
+        /// <summary>超出允许不平衡率的支路数(0 = 各并联环路基本平衡)。</summary>
+        public string UnbalancedText => Result == null || !Result.HasBranches
+            ? "—"
+            : Result.UnbalancedBranchCount.ToString();
+
         public string VerdictText => Result == null || string.IsNullOrEmpty(Result.CheckVerdict)
             ? "—"
             : Result.CheckVerdict;

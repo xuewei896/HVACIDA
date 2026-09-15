@@ -1053,12 +1053,39 @@ try {
     $waterIn.Terminals.Add($chiller)
     $fanCoil = New-Object HVACIDA.Core.Models.HydraulicTerminal
     $fanCoil.Name = '风机盘管末端'; $fanCoil.Kind = [HVACIDA.Core.Models.HydraulicItemKind]::Terminal
+    $fanCoil.ElementId = 401
     $fanCoil.ResistancePa = 20000; $fanCoil.Source = '样本 20 kPa'; $fanCoil.OnCriticalPath = $true
     $waterIn.Terminals.Add($fanCoil)
-    $hWater.ApplyPickedSystem($waterIn, '已从模型读入 1 段水管')
+
+    # 并联支路 B(管径流量相同、管长更短 → 阻力小 19.18%,应判超限并给出平衡阀 Kv ≈ 145.83)
+    $waterSegB = New-Object HVACIDA.Core.Models.HydraulicSegment
+    $waterSegB.Name = '支路 B 供水管 #202'; $waterSegB.ElementId = 202
+    $waterSegB.Shape = [HVACIDA.Core.Models.HydraulicShape]::Round
+    $waterSegB.DiameterM = 0.1; $waterSegB.LengthM = 20; $waterSegB.FlowM3H = 36
+    $waterSegB.LocalZetaSum = 2.0; $waterSegB.OnCriticalPath = $false
+    $waterIn.Segments.Add($waterSegB)
+    $fanCoilB = New-Object HVACIDA.Core.Models.HydraulicTerminal
+    $fanCoilB.Name = '风机盘管 B'; $fanCoilB.Kind = [HVACIDA.Core.Models.HydraulicItemKind]::Terminal
+    $fanCoilB.ElementId = 402
+    $fanCoilB.ResistancePa = 20000; $fanCoilB.Source = '样本 20 kPa'; $fanCoilB.OnCriticalPath = $false
+    $waterIn.Terminals.Add($fanCoilB)
+    $branchA = New-Object HVACIDA.Core.Models.HydraulicBranch
+    $branchA.Name = '风机盘管末端'; $branchA.TerminalElementId = 401; $branchA.IsCritical = $true
+    $branchA.SegmentElementIds.Add(201) | Out-Null
+    $branchA.SegmentSummary = '供水干管 #201'
+    $waterIn.Branches.Add($branchA)
+    $branchB = New-Object HVACIDA.Core.Models.HydraulicBranch
+    $branchB.Name = '风机盘管 B'; $branchB.TerminalElementId = 402
+    $branchB.SegmentElementIds.Add(202) | Out-Null
+    $branchB.SegmentSummary = '支路 B 供水管 #202'
+    $waterIn.Branches.Add($branchB)
+
+    $hWater.ApplyPickedSystem($waterIn, '已从模型读入 2 段水管')
     if ($hWater.IsWater -eq $true -and $hWater.Summary -match '需求扬程 6\.93' -and
-        $hWater.CheckVerdict -match '满足' -and $hWater.Table.Sections.Count -eq 4) {
-        Write-Host ("PASS  水系统读数:{0};校核:{1}" -f $hWater.Summary, $hWater.CheckVerdict)
+        $hWater.CheckVerdict -match '满足' -and $hWater.Table.Sections.Count -eq 6 -and
+        $hWater.Summary -match '并联支路 2 条' -and $hWater.Summary -match '最大不平衡率 19\.2%') {
+        Write-Host ("PASS  水系统读数:{0}" -f $hWater.Summary)
+        Write-Host ("PASS  水系统校核:{0}" -f $hWater.CheckVerdict)
     } else {
         Write-Host ("FAIL  水系统读数: summary='{0}' verdict='{1}'" -f $hWater.Summary, $hWater.CheckVerdict)
         $fail++
@@ -1067,7 +1094,7 @@ try {
 
     # ---- 计算结果窗:打开即算 / 两行汇总 / 「—」 / 选中行刷新 ----
     $hr = New-Object "$vmNs.HydraulicResultViewModel" -ArgumentList $repoH
-    if ($hr.Rows.Count -eq 2 -and $hr.Table -ne $null -and $hr.Table.Sections.Count -eq 4 -and
+    if ($hr.Rows.Count -eq 2 -and $hr.Table -ne $null -and $hr.Table.Sections.Count -eq 6 -and
         $hr.SegmentRows.Count -ge 1 -and $hr.SummaryTitle -match '已拾取 2 个系统') {
         Write-Host ("PASS  水力计算结果窗打开即出结果:{0}" -f $hr.SummaryTitle)
     } else {
@@ -1087,11 +1114,26 @@ try {
     }
 
     $hr.SelectedRow = $waterRowH
-    if ($hr.DetailTitle -match '水系统' -and $hr.SegmentRows.Count -eq 1 -and $hr.ItemRows.Count -eq 2 -and
+    if ($hr.DetailTitle -match '水系统' -and $hr.SegmentRows.Count -eq 2 -and $hr.ItemRows.Count -eq 3 -and
         $hr.ResultText -match '需求扬程' -and $hr.ResultText -match '管段明细') {
         Write-Host "PASS  选中水系统行 → 逐段明细 / 阻力项 / 计算书同步刷新"
     } else {
         Write-Host ("FAIL  选中行刷新: title='{0}' segs={1} items={2}" -f $hr.DetailTitle, $hr.SegmentRows.Count, $hr.ItemRows.Count)
+        $fail++
+    }
+
+    # ---- 并联环路平衡 + 阻力特性曲线(结果窗两张新表) ----
+    $branchBRow = $hr.BranchRows | Where-Object { $_.Name -eq '风机盘管 B' } | Select-Object -First 1
+    if ($hr.BranchRows.Count -eq 2 -and $branchBRow -ne $null -and
+        [math]::Abs($branchBRow.ImbalancePct - 19.1775) -lt 0.01 -and
+        [math]::Abs($branchBRow.ValveKv - 145.8295) -lt 0.02 -and
+        [math]::Abs($branchBRow.ValveAuthority - 0.19178) -lt 0.0001 -and
+        $branchBRow.WithinLimit -eq $false -and $hr.CurveRows.Count -eq 9 -and
+        $hr.BalanceNote -match '工况点') {
+        Write-Host ("PASS  并联环路平衡:支路 B 不平衡 {0:N2}% → 平衡阀 Kv={1:N2}、阀权度 {2:N4};曲线 {3} 点,口径写明工况点需与厂家曲线求交" -f `
+            $branchBRow.ImbalancePct, $branchBRow.ValveKv, $branchBRow.ValveAuthority, $hr.CurveRows.Count)
+    } else {
+        Write-Host ("FAIL  并联平衡/曲线: branches={0} curve={1}" -f $hr.BranchRows.Count, $hr.CurveRows.Count)
         $fail++
     }
 
@@ -1100,11 +1142,16 @@ try {
     $sumGridH = $hrW.FindName('SummaryGrid')
     $segGridR = $hrW.FindName('SegmentGrid')
     $itemGridH = $hrW.FindName('ItemGrid')
-    if ($sumGridH -ne $null -and $sumGridH.Columns.Count -eq 14 -and $sumGridH.Items.Count -eq 2 -and
+    $branchGridH = $hrW.FindName('BranchGrid')
+    $curveGridH = $hrW.FindName('CurveGrid')
+    if ($sumGridH -ne $null -and $sumGridH.Columns.Count -eq 17 -and $sumGridH.Items.Count -eq 2 -and
         $segGridR -ne $null -and $segGridR.Columns.Count -eq 14 -and
-        $itemGridH -ne $null -and $itemGridH.Columns.Count -eq 5) {
-        Write-Host ("PASS  水力结果窗渲染:汇总 {0} 列 × {1} 行 / 逐段 {2} 列 / 阻力项 {3} 列" -f `
-            $sumGridH.Columns.Count, $sumGridH.Items.Count, $segGridR.Columns.Count, $itemGridH.Columns.Count)
+        $itemGridH -ne $null -and $itemGridH.Columns.Count -eq 5 -and
+        $branchGridH -ne $null -and $branchGridH.Columns.Count -eq 12 -and $branchGridH.Items.Count -eq 2 -and
+        $curveGridH -ne $null -and $curveGridH.Columns.Count -eq 4 -and $curveGridH.Items.Count -eq 9) {
+        Write-Host ("PASS  水力结果窗渲染:汇总 {0} 列 × {1} 行 / 逐段 {2} 列 / 阻力项 {3} 列 / 并联平衡 {4} 列 × {5} 行 / 特性曲线 {6} 列 × {7} 点" -f `
+            $sumGridH.Columns.Count, $sumGridH.Items.Count, $segGridR.Columns.Count, $itemGridH.Columns.Count, `
+            $branchGridH.Columns.Count, $branchGridH.Items.Count, $curveGridH.Columns.Count, $curveGridH.Items.Count)
     } else {
         Write-Host "FAIL  水力结果窗控件/绑定不符"; $fail++
     }

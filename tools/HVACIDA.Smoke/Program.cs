@@ -1171,9 +1171,137 @@ namespace HVACIDA.Smoke
             CheckText("空输入 给出「没读到任何管段」的指引",
                 emptyResult.PendingNote.Contains("没有读到任何管段") ? "有" : emptyResult.PendingNote, "有");
 
-            // ---------- 7) 结果表 / 计算书:与结构同源,且不出现公式文档单元格编号 ----------
+            // ---------- 7) 并联环路平衡(水):逐支路累计 → 不平衡率 → 平衡阀 Kv / 阀权度 ----------
+            //   期望值独立手算(两条支路同管径同流量 → 比摩阻 R=203.1388 Pa/m、动压 810.3263 Pa 相同):
+            //   支路 A(最不利)L=50、Σζ=2.0、末端 20000 Pa:段 = R×50 + 2×动压 = 11777.5915,合计 = 31777.5915
+            //   支路 B L=20、Σζ=2.0、末端 20000 Pa:段 = R×20 + 2×动压 = 5683.4282,合计 = 25683.4282
+            //   不平衡 = 31777.5915 − 25683.4282 = 6094.1634 Pa = 19.1775%(> 允许 15%)
+            //   平衡阀 Kv = Q ÷ √(ΔP[bar]) = 36 ÷ √(6094.1634/100000) = 145.8295;阀权度 = 6094.1634/31777.5915 = 0.19178
+            var parallelWater = new HydraulicInput
+            {
+                Kind = HydraulicKind.WaterPipe,
+                SystemName = "冷冻水并联支路",
+                MediumTempC = 10
+            };
+            parallelWater.Segments.Add(new HydraulicSegment
+            {
+                Name = "支路 A 供水管", ElementId = 301, Shape = HydraulicShape.Round,
+                DiameterM = 0.1, LengthM = 50, FlowM3H = 36, LocalZetaSum = 2.0, OnCriticalPath = true
+            });
+            parallelWater.Segments.Add(new HydraulicSegment
+            {
+                Name = "支路 B 供水管", ElementId = 302, Shape = HydraulicShape.Round,
+                DiameterM = 0.1, LengthM = 20, FlowM3H = 36, LocalZetaSum = 2.0
+            });
+            parallelWater.Terminals.Add(new HydraulicTerminal
+            {
+                Name = "末端 A", ElementId = 401, Kind = HydraulicItemKind.Terminal,
+                ResistancePa = 20000, OnCriticalPath = true
+            });
+            parallelWater.Terminals.Add(new HydraulicTerminal
+            {
+                Name = "末端 B", ElementId = 402, Kind = HydraulicItemKind.Terminal,
+                ResistancePa = 20000
+            });
+            parallelWater.Branches.Add(new HydraulicBranch
+            {
+                Name = "末端 A", TerminalElementId = 401, IsCritical = true,
+                SegmentSummary = "支路 A 供水管", SegmentElementIds = { 301 }
+            });
+            parallelWater.Branches.Add(new HydraulicBranch
+            {
+                Name = "末端 B", TerminalElementId = 402,
+                SegmentSummary = "支路 B 供水管", SegmentElementIds = { 302 }
+            });
+
+            var parallelResult = calc.Calculate(parallelWater, coefficients);
+            CheckInt("并联支路数 = 2", parallelResult.Branches.Count, 2);
+            CheckInt("超出允许不平衡率的支路数 = 1", parallelResult.UnbalancedBranchCount, 1);
+            Check("最大不平衡率 %", parallelResult.MaxImbalancePct, 19.1775, 1e-3);
+
+            var branchA = parallelResult.Branches[0];
+            var branchB = parallelResult.Branches[1];
+            Check("最不利环路标记落在支路 A", branchA.IsCritical ? 1 : 0, 1);
+            Check("支路 A 合计阻力 Pa", branchA.TotalLossPa, 31777.5915, 1e-2);
+            Check("支路 B 管段阻力 Pa", branchB.SegmentLossPa, 5683.4282, 1e-2);
+            Check("支路 B 合计阻力 Pa", branchB.TotalLossPa, 25683.4282, 1e-2);
+            Check("支路 B 不平衡 Pa", branchB.ImbalancePa, 6094.1634, 1e-2);
+            Check("支路 B 不平衡 %", branchB.ImbalancePct, 19.1775, 1e-3);
+            Check("支路 B 需吸收压差 Pa", branchB.RequiredAbsorbPa, 6094.1634, 1e-2);
+            Check("支路 B 平衡阀 Kv", branchB.ValveKv, 145.8295, 1e-2);
+            Check("支路 B 阀权度", branchB.ValveAuthority, 0.19178, 1e-4);
+            CheckText("支路 B 判定为超限(需设平衡装置)",
+                branchB.WithinLimit ? "在范围内" : "超限", "超限");
+            CheckText("最不利环路不设平衡装置", branchA.RequiredAbsorbPa <= 0 ? "不设" : "设了", "不设");
+
+            // ---------- 8) 并联环路平衡(风):超限支路给出「需增加的局部阻力系数 ζ」 ----------
+            //   支路 A(最不利)Φ0.5、L=10、Σζ=1.0:21.22656 Pa;支路 B Φ0.5、L=5、Σζ=0.5:10.61328 Pa
+            //   不平衡 = 10.61328 Pa(50.00%);末端管段动压 15.62778 Pa → 需增加 ζ = 10.61328/15.62778 = 0.67913
+            var parallelAir = new HydraulicInput { Kind = HydraulicKind.AirDuct, MediumTempC = 20 };
+            parallelAir.Segments.Add(new HydraulicSegment
+            {
+                Name = "风管 A", ElementId = 501, Shape = HydraulicShape.Round,
+                DiameterM = 0.5, LengthM = 10, FlowM3H = 3600, LocalZetaSum = 1.0, OnCriticalPath = true
+            });
+            parallelAir.Segments.Add(new HydraulicSegment
+            {
+                Name = "风管 B", ElementId = 502, Shape = HydraulicShape.Round,
+                DiameterM = 0.5, LengthM = 5, FlowM3H = 3600, LocalZetaSum = 0.5
+            });
+            parallelAir.Terminals.Add(new HydraulicTerminal { Name = "风口 A", ElementId = 601, OnCriticalPath = true });
+            parallelAir.Terminals.Add(new HydraulicTerminal { Name = "风口 B", ElementId = 602 });
+            parallelAir.Branches.Add(new HydraulicBranch
+            {
+                Name = "风口 A", TerminalElementId = 601, IsCritical = true, SegmentElementIds = { 501 }
+            });
+            parallelAir.Branches.Add(new HydraulicBranch
+            {
+                Name = "风口 B", TerminalElementId = 602, SegmentElementIds = { 502 }
+            });
+
+            var parallelAirResult = calc.Calculate(parallelAir, coefficients);
+            CheckInt("风系统并联支路数 = 2", parallelAirResult.Branches.Count, 2);
+            Check("风系统支路 B 不平衡 %", parallelAirResult.Branches[1].ImbalancePct, 50.0, 1e-6);
+            Check("风系统支路 B 参考动压 Pa", parallelAirResult.Branches[1].ReferenceDynamicPa, 15.62778, 1e-4);
+            Check("风系统支路 B 需增加 ζ", parallelAirResult.Branches[1].ZetaToAdd, 0.67913, 1e-4);
+            CheckText("风系统平衡结论写明 ζ",
+                parallelAirResult.Branches[1].Conclusion.Contains("ζ") ? "有" : parallelAirResult.Branches[1].Conclusion, "有");
+
+            // ---------- 9) 系统阻力特性曲线:ΔP(Q) = 静压 + (总阻力 − 静压) × (Q ÷ Q设计)² ----------
+            CheckInt("阻力特性曲线点数 = 9(50%~130% 每 10%)", parallelResult.Curve.Count, 9);
+            Check("曲线 50% 系统阻力 Pa", parallelResult.Curve[0].ResistancePa, 7944.3979, 1e-2);
+            Check("曲线 50% 需求值 Pa(= ×1.1)", parallelResult.Curve[0].RequiredPa, 8738.8377, 1e-2);
+            Check("曲线 50% 流量 m³/h", parallelResult.Curve[0].FlowM3H, 18.0, 1e-9);
+            Check("曲线 100% 系统阻力 Pa(设计点 = 计算总阻力)", parallelResult.Curve[5].ResistancePa, 31777.5915, 1e-2);
+            Check("曲线 130% 系统阻力 Pa", parallelResult.Curve[8].ResistancePa, 53704.1297, 1e-2);
+            Check("曲线 130% 流量 m³/h", parallelResult.Curve[8].FlowM3H, 46.8, 1e-9);
+
+            // 静压不随流量变化:曲线起点也必须含静压(而不是跟着平方缩小)
+            water.StaticHeightM = 10;
+            var staticCurve = calc.Calculate(water, coefficients);
+            water.StaticHeightM = 0;
+            double staticPa = 999.70 * 9.81 * 10;
+            Check("有静压时 50% 点 = 静压 + (总−静压)×0.25",
+                staticCurve.Curve[0].ResistancePa,
+                staticPa + (staticCurve.TotalResistancePa - staticPa) * 0.25, 1e-2);
+            Check("有静压时 130% 点 = 静压 + (总−静压)×1.69",
+                staticCurve.Curve[8].ResistancePa,
+                staticPa + (staticCurve.TotalResistancePa - staticPa) * 1.69, 1e-2);
+
+            // ---------- 10) 没有支路拓扑数据时:不做平衡分析(不猜),口径里写明 ----------
+            CheckInt("单段 fixture 没有支路数据", waterResult.Branches.Count, 0);
+            CheckText("无支路时不假装做了平衡分析",
+                waterResult.BalanceNote.Contains("未做并联环路平衡分析") ? "有" : waterResult.BalanceNote, "有");
+            CheckText("口径写明工况点要与厂家曲线求交",
+                waterResult.BalanceNote.Contains("工况点") ? "有" : waterResult.BalanceNote, "有");
+            CheckText("计算书含并联环路平衡表",
+                ResultFormatter.FormatHydraulic(parallelWater, parallelResult, coefficients).Contains("并联环路平衡") ? "有" : "无", "有");
+            CheckText("计算书含阻力特性曲线表",
+                ResultFormatter.FormatHydraulic(parallelWater, parallelResult, coefficients).Contains("系统阻力特性曲线") ? "有" : "无", "有");
+
+            // ---------- 11) 结果表 / 计算书:与结构同源,且不出现公式文档单元格编号 ----------
             var table = ResultTable.ForHydraulic(water, waterRated);
-            CheckInt("水力结果表 分区数 = 4", table.Sections.Count, 4);
+            CheckInt("水力结果表 分区数 = 6", table.Sections.Count, 6);
             CheckText("需求扬程行是合计行",
                 table.Sections[2].Rows[table.Sections[2].Rows.Count - 1].IsTotal ? "是" : "否", "是");
             var report = ResultFormatter.FormatHydraulic(water, waterRated, coefficients);

@@ -292,7 +292,14 @@ namespace HVACIDA.Core.Services
                 }
             }
 
-            // ---- 6. 与模型里的风机 / 水泵额定值校核 ----
+            // ---- 7. 并联环路平衡 + 系统阻力特性曲线 ----
+            result.ImbalanceLimitPct = c.ImbalanceLimitPct > 0
+                ? c.ImbalanceLimitPct
+                : HvacConstants.HydraulicImbalanceLimitPct;
+            BuildBranches(input, result, water);
+            BuildCurve(input, result);
+
+            // ---- 8. 与模型里的风机 / 水泵额定值校核 ----
             ApplyCheck(input, result, water);
 
             // ---- 7. 口径与待补 ----
@@ -305,6 +312,195 @@ namespace HVACIDA.Core.Services
                             "或确认该系统的管道已在模型中建模。");
             result.PendingNote = string.Join(" ", pending.ToArray());
             return result;
+        }
+
+        /// <summary>
+        /// 并联环路平衡:逐支路累计阻力 → 与最不利环路比较 → 超限支路给出平衡装置参数
+        /// (水:平衡阀 Kv 与阀权度;风:需增加的局部阻力系数 ζ)。没有支路数据就不做(不猜)。
+        /// </summary>
+        private static void BuildBranches(HydraulicInput input, HydraulicResult result, bool water)
+        {
+            var branches = input.Branches;
+            if (branches == null || branches.Count == 0)
+            {
+                result.BalanceNote =
+                    "本次没有并联支路数据(管网未形成可分辨的支路拓扑),**未做并联环路平衡分析**。" +
+                    "从模型拾取系统时会按连接件拓扑逐末端给出支路;" +
+                    "⚠ 风机 / 水泵的工况点需与**厂家性能曲线求交**,插件不内置设备曲线。";
+                return;
+            }
+
+            // 段阻力按元素 Id 索引(支路只带管段 Id,数值一律来自同一份逐段计算结果)
+            var lossById = new Dictionary<int, double>();
+            var dynamicById = new Dictionary<int, double>();
+            var flowById = new Dictionary<int, double>();
+            foreach (var row in result.Segments)
+            {
+                if (row.ElementId == 0) continue;
+                lossById[row.ElementId] = row.TotalLossPa;
+                dynamicById[row.ElementId] = row.DynamicPressurePa;
+                flowById[row.ElementId] = row.FlowM3H;
+            }
+
+            // 末端阻力按"支路末端元素 Id"取;取不到按 0 并在结论里说明
+            var terminalByElementId = new Dictionary<int, double>();
+            foreach (var terminal in input.Terminals)
+            {
+                if (terminal == null || terminal.ElementId == 0) continue;
+                terminalByElementId[terminal.ElementId] = terminal.ResistancePa;
+            }
+
+            // 逐支路累计
+            var computed = new List<HydraulicBranchResult>();
+            var branchFlows = new List<double>();
+            foreach (var branch in branches)
+            {
+                if (branch == null) continue;
+                var row = new HydraulicBranchResult
+                {
+                    Name = branch.Name,
+                    TerminalElementId = branch.TerminalElementId,
+                    Path = branch.SegmentSummary
+                };
+
+                double segmentLoss = 0;
+                int count = 0;
+                double lastFlow = 0;
+                double lastDynamic = 0;
+                var ids = branch.SegmentElementIds ?? new List<int>();
+                foreach (int id in ids)
+                {
+                    double loss;
+                    if (lossById.TryGetValue(id, out loss))
+                    {
+                        segmentLoss += loss;
+                        count++;
+                    }
+                    double flow;
+                    if (flowById.TryGetValue(id, out flow)) { lastFlow = flow; }
+                    double dynamic;
+                    if (dynamicById.TryGetValue(id, out dynamic)) { lastDynamic = dynamic; }
+                }
+
+                double terminalPa;
+                if (!terminalByElementId.TryGetValue(branch.TerminalElementId, out terminalPa)) terminalPa = 0;
+
+                row.SegmentCount = count;
+                row.SegmentLossPa = segmentLoss;
+                row.TerminalPa = terminalPa;
+                row.TotalLossPa = segmentLoss + terminalPa;
+                row.ReferenceDynamicPa = lastDynamic;
+                computed.Add(row);
+                branchFlows.Add(lastFlow);
+            }
+
+            if (computed.Count == 0)
+            {
+                result.BalanceNote = "支路数据里没有可用的路径,未做并联环路平衡分析。";
+                return;
+            }
+
+            double criticalPa = 0;
+            foreach (var row in computed) if (row.TotalLossPa > criticalPa) criticalPa = row.TotalLossPa;
+
+            double limit = result.ImbalanceLimitPct;
+            double maxImbalance = 0;
+            int unbalanced = 0;
+            for (int i = 0; i < computed.Count; i++)
+            {
+                var row = computed[i];
+                double branchFlow = branchFlows[i];
+                row.IsCritical = criticalPa > 0 && Math.Abs(row.TotalLossPa - criticalPa) < 1e-9;
+                row.ImbalancePa = criticalPa - row.TotalLossPa;
+                row.ImbalancePct = criticalPa > 0 ? row.ImbalancePa / criticalPa * 100.0 : 0.0;
+                if (Math.Abs(row.ImbalancePct) > maxImbalance) maxImbalance = Math.Abs(row.ImbalancePct);
+                row.WithinLimit = Math.Abs(row.ImbalancePct) <= limit;
+                row.RequiredAbsorbPa = row.WithinLimit || row.IsCritical ? 0.0 : row.ImbalancePa;
+
+                if (row.IsCritical)
+                {
+                    row.Conclusion = "最不利环路(平衡基准,不设平衡装置)";
+                }
+                else if (row.WithinLimit)
+                {
+                    row.Conclusion = "不平衡率 " + row.ImbalancePct.ToString("0.#") + "% ≤ 允许 " + limit.ToString("0.#") +
+                                     "%:与最不利环路差 " + row.ImbalancePa.ToString("0.#") + " Pa,在允许范围内,可不设平衡装置";
+                }
+                else
+                {
+                    unbalanced++;
+                    if (water)
+                    {
+                        // 平衡阀 Kv = Q ÷ √(ΔP[bar]);阀权度 S = 需吸收压差 ÷ 最不利环路总阻力
+                        if (row.RequiredAbsorbPa > 0)
+                            row.ValveKv = branchFlow > 0
+                                ? branchFlow / Math.Sqrt(row.RequiredAbsorbPa / HvacConstants.PascalPerBar)
+                                : 0.0;
+                        row.ValveAuthority = criticalPa > 0 ? row.RequiredAbsorbPa / criticalPa : 0.0;
+                        row.Conclusion = "不平衡率 " + row.ImbalancePct.ToString("0.#") + "% 超允许 " + limit.ToString("0.#") +
+                                         "%:需吸收 " + row.RequiredAbsorbPa.ToString("0.#") + " Pa → 配平衡阀 Kv ≈ " +
+                                         row.ValveKv.ToString("0.##") + " m³/h(支路流量 " + branchFlow.ToString("N0") +
+                                         " m³/h)、阀权度 " + row.ValveAuthority.ToString("0.00");
+                    }
+                    else
+                    {
+                        row.ZetaToAdd = row.ReferenceDynamicPa > 0
+                            ? row.RequiredAbsorbPa / row.ReferenceDynamicPa
+                            : 0.0;
+                        row.Conclusion = "不平衡率 " + row.ImbalancePct.ToString("0.#") + "% 超允许 " + limit.ToString("0.#") +
+                                         "%:需吸收 " + row.RequiredAbsorbPa.ToString("0.#") + " Pa → 需增加局部阻力系数 ζ ≈ " +
+                                         row.ZetaToAdd.ToString("0.##") + "(按末端管段动压 " +
+                                         row.ReferenceDynamicPa.ToString("0.#") + " Pa 折算)";
+                    }
+                }
+                result.Branches.Add(row);
+            }
+
+            // 最不利环路以计算结果为准重标(读取器标的是同一件事,这里再兜一层)
+            result.UnbalancedBranchCount = unbalanced;
+            result.MaxImbalancePct = maxImbalance;
+            result.BalanceNote =
+                "并联环路平衡口径:逐支路累计阻力(管段沿程+局部+该支路末端/设备)与**最不利环路**比较," +
+                "不平衡率 = (最不利环路 − 该支路) ÷ 最不利环路 × 100%,允许不平衡率取 " + limit.ToString("0.#") +
+                "%(工程通行口径,界面上可改)。超限支路的平衡装置参数:" +
+                (water
+                    ? "平衡阀 Kv = Q ÷ √(ΔP[bar])(20 ℃ 水,Kv 定义式),阀权度 S = 需吸收压差 ÷ 最不利环路总阻力;"
+                    : "需增加的局部阻力系数 ζ = 需吸收压差 ÷ (ρv²/2,按该支路末端管段动压折算);") +
+                "允许范围内不设平衡装置。⚠ 阻力特性曲线按 ΔP(Q) = 静压 + (总阻力 − 静压)×(Q ÷ Q设计)² 给出," +
+                "**与厂家风机/水泵性能曲线的交点才是工况点** —— 插件不内置设备曲线,请用样本曲线核对。";
+        }
+
+        /// <summary>
+        /// 系统阻力特性曲线(50%~130% 设计流量,每 10% 一点)。
+        /// 口径:阻力与流量平方成正比,但**静压不随流量变化**,故 ΔP(Q) = 静压 + (总阻力 − 静压)×(Q/Q设计)²。
+        /// </summary>
+        private static void BuildCurve(HydraulicInput input, HydraulicResult result)
+        {
+            double designFlow = 0;
+            foreach (var row in result.Segments)
+            {
+                if (!row.OnCriticalPath) continue;
+                if (row.FlowM3H > designFlow) designFlow = row.FlowM3H;
+            }
+            if (designFlow <= 0)
+            {
+                foreach (var row in result.Segments) if (row.FlowM3H > designFlow) designFlow = row.FlowM3H;
+            }
+            if (designFlow <= 0) return;
+
+            double variable = result.TotalResistancePa - result.StaticPa;   // 随流量平方变化的那部分
+            for (int pct = 50; pct <= 130; pct += 10)
+            {
+                double ratio = pct / 100.0;
+                double resistance = result.StaticPa + variable * ratio * ratio;
+                result.Curve.Add(new HydraulicCurvePoint
+                {
+                    FlowRatioPct = pct,
+                    FlowM3H = designFlow * ratio,
+                    ResistancePa = resistance,
+                    RequiredPa = resistance * result.ExtraFactor
+                });
+            }
         }
 
         /// <summary>出口管段:优先按元素 Id 找;没指定则取环路上动压最大的一段(并在待补说明里写明)。</summary>

@@ -108,6 +108,52 @@ namespace HVACIDA.Core.Services
                 sb.AppendLine("  " + Pad(item.Name, 26) + Pad("ζ=" + item.Zeta.ToString("0.##"), 12) + item.Source);
             }
 
+            // 并联环路平衡(逐支路)
+            sb.AppendLine();
+            sb.AppendLine("—— 并联环路平衡(逐支路;★ = 最不利环路即平衡基准) ——");
+            if (result.HasBranches)
+            {
+                sb.AppendLine(Pad("  支路(末端)", 30) + Pad("段数", 8) + Pad("管段 Pa", 12) + Pad("末端 Pa", 12) +
+                              Pad("支路合计 Pa", 14) + Pad("不平衡 Pa", 12) + "不平衡 %");
+                foreach (var branch in result.Branches)
+                {
+                    sb.AppendLine(Pad((branch.IsCritical ? "★ " : "  ") + branch.Name, 30) +
+                                  Pad(branch.SegmentCount.ToString(), 8) +
+                                  Pad(branch.SegmentLossPa.ToString("N1"), 12) +
+                                  Pad(branch.TerminalPa.ToString("N1"), 12) +
+                                  Pad(branch.TotalLossPa.ToString("N1"), 14) +
+                                  Pad(branch.ImbalancePa.ToString("N1"), 12) +
+                                  branch.ImbalancePct.ToString("0.#"));
+                    if (!string.IsNullOrEmpty(branch.Conclusion)) sb.AppendLine("      结论:" + branch.Conclusion);
+                    if (!string.IsNullOrEmpty(branch.Path)) sb.AppendLine("      路径:" + branch.Path);
+                }
+            }
+            else
+            {
+                sb.AppendLine("  (没有支路拓扑数据,未做并联平衡分析)");
+            }
+
+            // 系统阻力特性曲线
+            sb.AppendLine();
+            sb.AppendLine("—— 系统阻力特性曲线(与厂家设备性能曲线的交点即工况点) ——");
+            if (result.HasCurve)
+            {
+                sb.AppendLine(Pad("  流量比 %", 14) + Pad("流量 m³/h", 14) + Pad("系统阻力 Pa", 14) + "需求值 Pa");
+                foreach (var point in result.Curve)
+                {
+                    sb.AppendLine(Pad(point.FlowRatioPct.ToString("0"), 14) +
+                                  Pad(point.FlowM3H.ToString("N0"), 14) +
+                                  Pad(point.ResistancePa.ToString("N1"), 14) +
+                                  point.RequiredPa.ToString("N1"));
+                }
+                sb.AppendLine("  口径:ΔP(Q) = 静压 + (总阻力 − 静压) × (Q ÷ Q设计)²;");
+                sb.AppendLine("        插件不内置风机/水泵性能曲线,工况点请用厂家样本曲线与本表求交。");
+            }
+            else
+            {
+                sb.AppendLine("  (没有流量数据,未给出曲线)");
+            }
+
             if (!string.IsNullOrEmpty(result.PendingNote))
             {
                 sb.AppendLine();

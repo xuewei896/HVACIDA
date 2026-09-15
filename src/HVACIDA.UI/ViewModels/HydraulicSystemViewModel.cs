@@ -185,8 +185,14 @@ namespace HVACIDA.UI.ViewModels
                 string required = IsWater
                     ? "需求扬程 " + _result.RequiredHeadM.ToString("0.##") + " m"
                     : "需求全压 " + _result.RequiredPressurePa.ToString("0.#") + " Pa";
+                string balance = _result.HasBranches
+                    ? "   ·   并联支路 " + _result.Branches.Count + " 条,最大不平衡率 " +
+                      _result.MaxImbalancePct.ToString("0.#") + "%" +
+                      (_result.UnbalancedBranchCount > 0 ? "(超限 " + _result.UnbalancedBranchCount + " 条)" : "")
+                    : "";
                 return "计算总阻力 " + _result.TotalResistancePa.ToString("N1") + " Pa   ·   " + required +
-                       (_result.CriticalSegmentCount > 0 ? "   ·   最不利环路 " + _result.CriticalSegmentCount + " 段" : "");
+                       (_result.CriticalSegmentCount > 0 ? "   ·   最不利环路 " + _result.CriticalSegmentCount + " 段" : "") +
+                       balance;
             }
         }
 

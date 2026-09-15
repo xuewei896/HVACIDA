@@ -97,6 +97,95 @@ namespace HVACIDA.Core.Models
     }
 
     /// <summary>
+    /// 并联支路的平衡计算结果(结果窗「并联环路平衡」表一行)。
+    /// <para>
+    /// 判据与建议:支路阻力与**最不利环路**的差额占比超过允许不平衡率时,该支路需要设平衡装置吸收多余压差 ——
+    /// 水系统给出**平衡阀 Kv**(m³/h @ 1 bar)与**阀权度**(需吸收压差 ÷ 最不利环路总阻力);
+    /// 风系统给出**需增加的局部阻力系数 ζ**(按该支路末端管段动压折算,对应多叶调节阀的开度调节)。
+    /// </para>
+    /// <para>
+    /// Kv 定义式:<c>Kv = Q ÷ √(ΔP[bar])</c>(Q 为 m³/h、ΔP 为阀两端压差);
+    /// 风阀所需 ζ:<c>ζ = ΔP ÷ (ρv²/2)</c>,v 取该支路末端管段流速。
+    /// </para>
+    /// </summary>
+    public class HydraulicBranchResult
+    {
+        /// <summary>支路名(末端名)。</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>末端元素 Id。</summary>
+        public int TerminalElementId { get; set; }
+
+        /// <summary>支路上管段数。</summary>
+        public int SegmentCount { get; set; }
+
+        /// <summary>支路沿程 + 局部阻力 Pa。</summary>
+        public double SegmentLossPa { get; set; }
+
+        /// <summary>该支路末端 / 设备阻力 Pa。</summary>
+        public double TerminalPa { get; set; }
+
+        /// <summary>支路合计阻力 Pa(= 管段 + 末端/设备)。</summary>
+        public double TotalLossPa { get; set; }
+
+        /// <summary>与最不利环路的差额 Pa(最不利 − 本支路;正值 = 本支路阻力小,多出来的压差要吸收)。</summary>
+        public double ImbalancePa { get; set; }
+
+        /// <summary>不平衡率 %(= 差额 ÷ 最不利环路 × 100,按绝对值比较允许值)。</summary>
+        public double ImbalancePct { get; set; }
+
+        /// <summary>是否最不利环路。</summary>
+        public bool IsCritical { get; set; }
+
+        /// <summary>是否在允许不平衡率以内(在以内 → 不需要平衡装置)。</summary>
+        public bool WithinLimit { get; set; }
+
+        /// <summary>需要吸收的压差 Pa(超出允许范围时才给;不超范围为 0)。</summary>
+        public double RequiredAbsorbPa { get; set; }
+
+        /// <summary>水系统:平衡阀 Kv(m³/h @ 1 bar)。</summary>
+        public double ValveKv { get; set; }
+
+        /// <summary>水系统:阀权度 = 需吸收压差 ÷ 最不利环路总阻力。</summary>
+        public double ValveAuthority { get; set; }
+
+        /// <summary>风系统:需增加的局部阻力系数 ζ(按末端管段动压折算)。</summary>
+        public double ZetaToAdd { get; set; }
+
+        /// <summary>折算用的参考动压 Pa(风系统)。</summary>
+        public double ReferenceDynamicPa { get; set; }
+
+        /// <summary>结论一句话(含数值,直接可读)。</summary>
+        public string Conclusion { get; set; } = "";
+
+        /// <summary>该支路路径说明(经过哪些管段)。</summary>
+        public string Path { get; set; } = "";
+    }
+
+    /// <summary>
+    /// **系统阻力特性曲线**上的一个点:系统阻力随流量的变化(工程通用近似 —— 阻力与流量的平方成正比,
+    /// 但**静压不随流量变化**,故 <c>ΔP(Q) = 静压 + (总阻力 − 静压) × (Q ÷ Q设计)²</c>)。
+    /// <para>
+    /// 用途:与**厂家风机/水泵性能曲线求交点**即工况点。插件不内置设备曲线,故这里只给系统侧曲线,
+    /// 交点由设计人用样本曲线核对 —— 这一点在界面上写明,不假装算了工况点。
+    /// </para>
+    /// </summary>
+    public class HydraulicCurvePoint
+    {
+        /// <summary>流量占设计流量的百分比 %。</summary>
+        public double FlowRatioPct { get; set; }
+
+        /// <summary>对应流量 m³/h。</summary>
+        public double FlowM3H { get; set; }
+
+        /// <summary>系统阻力 Pa(计算值,未乘富余系数)。</summary>
+        public double ResistancePa { get; set; }
+
+        /// <summary>需求值 Pa(× 富余系数;风 = 需求全压,水 = 需求扬程折算的 Pa)。</summary>
+        public double RequiredPa { get; set; }
+    }
+
+    /// <summary>
     /// 水力计算结果:最不利环路的阻力累加 → **需求风压(Pa)** 或 **需求扬程(m)**,
     /// 并与模型里读到的风机额定全压 / 水泵额定扬程做校核。
     /// </summary>
@@ -113,6 +202,12 @@ namespace HVACIDA.Core.Models
 
         /// <summary>环路阻力项(末端 / 设备 / 出口动压)。</summary>
         public List<HydraulicItemResult> Items { get; set; } = new List<HydraulicItemResult>();
+
+        /// <summary>并联支路平衡结果(每末端一行;没有拓扑信息时为空)。</summary>
+        public List<HydraulicBranchResult> Branches { get; set; } = new List<HydraulicBranchResult>();
+
+        /// <summary>系统阻力特性曲线(50%~130% 设计流量,每 10% 一点)。</summary>
+        public List<HydraulicCurvePoint> Curve { get; set; } = new List<HydraulicCurvePoint>();
 
         /// <summary>最不利环路名称(末端名 / 说明)。</summary>
         public string CriticalPathName { get; set; } = "";
@@ -170,6 +265,26 @@ namespace HVACIDA.Core.Models
 
         /// <summary>口径说明(公式与系数来源,计算书与界面都显示)。</summary>
         public string Note { get; set; } = "";
+
+        /// <summary>允许不平衡率 %(来自系数集;界面上可改)。</summary>
+        public double ImbalanceLimitPct { get; set; }
+
+        /// <summary>超出允许不平衡率的支路数(0 = 各并联环路基本平衡)。</summary>
+        public int UnbalancedBranchCount { get; set; }
+
+        /// <summary>最大不平衡率 %(绝对值;没有支路数据时为 0)。</summary>
+        public double MaxImbalancePct { get; set; }
+
+        /// <summary>并联平衡与特性曲线的口径说明(界面与计算书显示)。</summary>
+        public string BalanceNote { get; set; } = "";
+
+        /// <summary>是否有并联支路数据(没有则不做平衡分析)。</summary>
+        [XmlIgnore]
+        public bool HasBranches => Branches != null && Branches.Count > 0;
+
+        /// <summary>是否有阻力特性曲线。</summary>
+        [XmlIgnore]
+        public bool HasCurve => Curve != null && Curve.Count > 0;
 
         /// <summary>待补项 / 本次计算的局限(界面红字,绝不静默)。</summary>
         public string PendingNote { get; set; } = "";
