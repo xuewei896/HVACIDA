@@ -21,13 +21,6 @@ namespace HVACIDA.Revit.Commands
         }
     }
 
-    /// <summary>大系统 → 排烟计算(待实现:需防烟分区几何)。</summary>
-    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowLargeSmokeCommand : ModuleInfoCommandBase
-    {
-        protected override string ModuleKey => "large-smoke";
-    }
-
     /// <summary>水力计算 → 风系统(待实现)。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class ShowAirHydraulicCommand : ModuleInfoCommandBase

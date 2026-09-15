@@ -49,6 +49,12 @@ namespace HVACIDA.Revit.Commands
     {
     }
 
+    /// <summary>大系统 → 排烟计算(需求 2.2.3.1;结果以表格呈现)。</summary>
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
+    public class ShowLargeSmokeCommand : ShowDialogCommandBase<UI.Views.LargeSmokeWindow>
+    {
+    }
+
     /// <summary>大系统 → 计算结果。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class ShowLargeResultCommand : ShowDialogCommandBase<UI.Views.LargeSystemResultWindow>

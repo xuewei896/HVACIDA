@@ -9,7 +9,7 @@ namespace HVACIDA.Core.Services
 {
     /// <summary>
     /// XML 文件仓库实现(骨架期落盘方案)。
-    /// 文件:project.xml(工程信息)/ large-system.xml(大系统输入)/ small-system.xml(小系统输入)。
+    /// 文件:project.xml(工程信息)/ large-system.xml(大系统输入)/ large-smoke.xml(排烟计算参数)/ small-system.xml(小系统输入)。
     /// TODO(存储):后续切换 SQLite(System.Data.SQLite 或 Microsoft.Data.Sqlite),保留本实现用于迁移/测试。
     /// </summary>
     public class XmlProjectRepository : IDataRepository
@@ -30,6 +30,8 @@ namespace HVACIDA.Core.Services
 
         private string LargeSystemFilePath => Path.Combine(StorageDirectory, "large-system.xml");
 
+        private string LargeSmokeFilePath => Path.Combine(StorageDirectory, "large-smoke.xml");
+
         private string SmallSystemFilePath => Path.Combine(StorageDirectory, "small-system.xml");
 
         public ProjectInfoModel LoadProject() => Load(ProjectFilePath, () => new ProjectInfoModel());
@@ -46,6 +48,14 @@ namespace HVACIDA.Core.Services
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
             Save(LargeSystemFilePath, input);
+        }
+
+        public LargeSmokeInput LoadLargeSmoke() => Load(LargeSmokeFilePath, () => new LargeSmokeInput());
+
+        public void SaveLargeSmoke(LargeSmokeInput input)
+        {
+            if (input == null) throw new ArgumentNullException(nameof(input));
+            Save(LargeSmokeFilePath, input);
         }
 
         public SmallSystemInput LoadSmallSystem() => Load(SmallSystemFilePath, () => new SmallSystemInput());

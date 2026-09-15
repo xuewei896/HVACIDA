@@ -26,6 +26,15 @@ namespace HVACIDA.Core.Services
         /// <summary>保存大系统输入(公共区参数窗与负荷计算窗都写这里)。</summary>
         void SaveLargeSystem(LargeSystemInput input);
 
+        /// <summary>
+        /// 读取大系统排烟计算参数(需求 2.2.3.1;"排烟计算"窗与"计算结果"窗共用)。
+        /// 不含公共区面积 —— 面积取自 <see cref="LargeSystemInput"/>(D55/D56)。
+        /// </summary>
+        LargeSmokeInput LoadLargeSmoke();
+
+        /// <summary>保存大系统排烟计算参数。</summary>
+        void SaveLargeSmoke(LargeSmokeInput input);
+
         /// <summary>读取小系统输入(不存在时返回默认实例)。</summary>
         SmallSystemInput LoadSmallSystem();
 

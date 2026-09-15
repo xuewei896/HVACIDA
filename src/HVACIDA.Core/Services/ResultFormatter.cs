@@ -85,6 +85,31 @@ namespace HVACIDA.Core.Services
             return sb.ToString();
         }
 
+        /// <summary>大系统排烟计算书(表格与界面同源,便于逐行核对)。</summary>
+        public static string FormatLargeSmoke(LargeSystemInput areas, LargeSmokeInput x, LargeSmokeResult r)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("【大系统排烟计算书】(需求 2.2.3.1)");
+            sb.AppendLine("口径:" + r.Note);
+            sb.AppendLine();
+            sb.AppendLine(Pad("区域", 18) + Pad("面积 m²", 12) + Pad("计算排烟量 m³/h", 18) +
+                          Pad("选型排烟量 m³/h", 18) + "单台风机风量 m³/h");
+            sb.AppendLine(new string('-', 78));
+            foreach (var z in r.Zones)
+            {
+                sb.AppendLine(Pad(z.ZoneName, 18) + Pad(Num(z.AreaM2), 12) + Pad(Num(z.CalculatedFlowM3H), 18) +
+                              Pad(Num(z.SelectionFlowM3H), 18) + Num(z.UnitFlowM3H));
+            }
+            sb.AppendLine(new string('-', 78));
+            sb.AppendLine("风机选型基准:" + r.GoverningZoneName + "(站厅/站台计算排烟量取大者)");
+            sb.AppendLine("排烟风机:" + Num(r.FanUnitCount) + " 台,单台选型风量 " + Num(r.UnitSelectionFlowM3H) + " m³/h");
+            sb.AppendLine("参考(公式文档口径,不含选型系数): 单台 = MAX(站厅,站台)/2 = " +
+                          Num(r.UnitFlowPerFormulaDocM3H) + " m³/h(与示例 E178 同口径)");
+            sb.AppendLine();
+            sb.AppendLine("⚠ " + r.PendingNote);
+            return sb.ToString();
+        }
+
         /// <summary>小系统结果文本。</summary>
         public static string FormatSmall(SmallSystemInput x, SmallSystemResult r)
         {
@@ -111,6 +136,24 @@ namespace HVACIDA.Core.Services
         private static string Num(double value)
         {
             return value.ToString("N1", C);
+        }
+
+        /// <summary>
+        /// 按<strong>显示宽度</strong>补齐(中日韩字符计 2 列),用于等宽字体下的表格列对齐。
+        /// 直接按字符数补齐会在"中文标签 + 数字"混排时错位。
+        /// </summary>
+        private static string Pad(string text, int width)
+        {
+            text = text ?? "";
+            int w = DisplayWidth(text);
+            return w >= width ? text + " " : text + new string(' ', width - w);
+        }
+
+        private static int DisplayWidth(string text)
+        {
+            int w = 0;
+            foreach (char c in text) w += c > 0x2E80 ? 2 : 1;
+            return w;
         }
 
         private static void AppendLine(StringBuilder sb, string label, double value, string unit)
