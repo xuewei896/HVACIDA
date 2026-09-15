@@ -80,7 +80,7 @@ dotnet build .\HVACIDA.sln
 | 界面文案纪律 | — | **不体现公式文档单元格编号**(D55/C39/E159…):只在悬停提示里可见,计算书正文亦不含;window-smoke 有防回归扫描 |
 | 2.1.2→2.2.3.1 气象联动 | `LargeSystemInputService` + `ProjectDesignSync`(C5/F4/F6 ← 项目信息) | ✅ 默认自动联动、可取消转手工;未填不覆盖 |
 | 2.2.1/2.2.3.1 模型取值 | `SpaceSnapshot` + `PublicAreaAggregator` + `RevitSpaceReader`(D55/D56/C13/C14) | 🟡 Core+UI+命令层就绪,Revit 实机待验 |
-| 2.2.3.2 小系统负荷 | 全空气一次回风窗 + 计算结果窗(SmallSystemLoadCalculator) | 🟡 仅一类实现,其余 5 类给待实现说明;**结果以表格呈现**(§4.6) |
+| 2.2.3.2 小系统负荷 | 六类系统计算窗 + 计算结果窗(SmallSystemLoadCalculator) | ✅ **六类全部实装**(全空气一次回风 / 多联机+新风 / 排风 / 送风排风排烟 / 加压送风 / 排烟);公式源《小系统空调负荷、送排风、排烟计算公式.docx》,已按文档示例复算(见 §6b 自检);**结果按「系统结果 + 房间明细 + 设备选型」三张表呈现**(§4.6) |
 | 排烟计算(2.2.3.1) | 排烟计算窗(`LargeSmokeCalculator`)+ 计算结果表格 | ✅ 已实现(计算 ×60 / 选型 ×1.2 / 2 台取大者;防烟分区口径待接入) |
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | TextReportGenerator(文本计算书,`%AppData%\HVACIDA\Reports`) | 🟡 文本版 |
