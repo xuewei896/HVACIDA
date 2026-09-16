@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -50,6 +50,7 @@ namespace HVACIDA.Smoke
             RunMaterialTakeoffChecks();
             RunSheetCatalogChecks();
             RunKnowledgeChecks();
+            RunLegendChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
@@ -1787,7 +1788,7 @@ namespace HVACIDA.Smoke
             try
             {
                 var book = MaterialTakeoffExcelExporter.Build(result);
-                CheckInt("材料表工作簿 3 页", book.SheetCount, 3);
+                CheckInt("材料表工作簿 4 页(含图例表)", book.SheetCount, 4);
                 string path = Path.Combine(dir, "材料表统计.xlsx");
                 book.Save(path);
                 string wb, s1, entries, detailXml, noteXml;
@@ -2001,6 +2002,58 @@ namespace HVACIDA.Smoke
             {
                 try { Directory.Delete(dir, true); } catch { }
             }
+            Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景19:图例表(复用材料表)+ 自动标注结果口径(需求 2.6)
+        // =====================================================================
+        private static void RunLegendChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景19:图例表(复用材料表)+ 自动标注结果");
+            Console.WriteLine("==================================================");
+
+            var service = new MaterialTakeoffService();
+            var items = new List<MaterialItem>
+            {
+                Duct("矩形风管", "1200×400", "m", 10),
+                Duct("矩形风管", "1200×400", "m", 20),
+                Duct("矩形风管", "1200×400", "m", 5),
+                Piece(MaterialCategory.DuctFitting, "弯头", "90°弯头", 2)
+            };
+            var result = service.Summarize(items);
+            var legend = MaterialLegendBuilder.Build(result);
+            CheckInt("图例行数 = 材料表行数(2)", legend.Count, 2);
+            CheckInt("图例按类别从 1 开始编号", legend[0].Index, 1);
+            Check("图例数量与材料表一致(35 m)", legend[0].Quantity, 35, 1e-9);
+            CheckText("图例类型含族与类型", legend[0].TypeName.Contains("矩形风管") ? "有" : legend[0].TypeName, "有");
+            CheckText("图例规格文字含类别/数量/单位",
+                legend[0].Spec.Contains("风管") && legend[0].Spec.Contains("35") && legend[0].Spec.Contains("m")
+                    ? "有" : legend[0].Spec, "有");
+
+            var table = MaterialLegendBuilder.ForLegend(legend);
+            CheckInt("图例表 1 个分区", table.Sections.Count, 1);
+            CheckText("图例表口径写明不自动在图纸上排版",
+                table.Note.Contains("不自动在图纸上排版图例") ? "有" : "缺", "有");
+            CheckText("图例表数量与材料表同源(35)",
+                table.Sections[0].Rows[0].Value.HasValue && Math.Abs(table.Sections[0].Rows[0].Value.Value - 35) < 1e-9
+                    ? "一致" : "不一致", "一致");
+            CheckText("文本图例含类别与标题", MaterialLegendBuilder.ToText(legend).Contains("图例表") ? "有" : "无", "有");
+            CheckInt("无材料表数据时图例为空", MaterialLegendBuilder.Build(new MaterialTakeoffResult()).Count, 0);
+            CheckInt("材料表 Excel 增图例表页(4 页)", MaterialTakeoffExcelExporter.Build(result).SheetCount, 4);
+
+            var tag = new AutoTagResult();
+            tag.Views.Add(new AutoTagViewResult { ViewName = "站厅层通风平面", Added = 12, Message = "已添加 12 个空间标注" });
+            tag.Views.Add(new AutoTagViewResult { ViewName = "站台层通风平面", Skipped = 8, Message = "已有同类标注,跳过" });
+            tag.AddedTotal = 12;
+            tag.SkippedTotal = 8;
+            CheckInt("标注结果:视图数 2", tag.ViewCount, 2);
+            CheckInt("标注结果:新增合计 12", tag.AddedTotal, 12);
+            CheckInt("标注结果:跳过合计 8", tag.SkippedTotal, 8);
+            CheckText("标注口径写明跳过已有标注", tag.Note.Contains("跳过") ? "有" : "缺", "有");
+            CheckText("范围说明写明只做空间名称编号标注",
+                tag.PendingNote.Contains("只做空间名称/编号标注") ? "有" : "缺", "有");
             Console.WriteLine();
         }
 

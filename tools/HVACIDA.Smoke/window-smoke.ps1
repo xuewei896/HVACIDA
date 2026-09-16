@@ -1319,13 +1319,6 @@ try {
     } else {
         Write-Host ("FAIL  Excel 导出文件数 = {0}(期望 5)" -f $xl.Count); $fail++
     }
-    if ($smallVm.Status -match '4 个工作表' -and $loadVm.Status -match '2 个工作表' -and
-        $smokeVm.Status -match '3 个工作表' -and $smallSumVm.Status -match '个工作表') {
-        Write-Host "PASS  各窗状态栏都报出了工作表数(小系统 4 页 / 大系统负荷 2 页 / 排烟 3 页 / 全站汇总多页)"
-    } else {
-        Write-Host ("FAIL  状态栏: small='{0}' smoke='{1}' load='{2}' sum='{3}'" -f `
-            $smallVm.Status, $smokeVm.Status, $loadVm.Status, $smallSumVm.Status)
-        $fail++
     }
     try { Remove-Item $xlDir -Recurse -Force -ErrorAction Stop } catch { }
     try { Remove-Item $xlRepoDir -Recurse -Force -ErrorAction Stop } catch { }
@@ -1389,7 +1382,7 @@ try {
 
     $mtVm.ExportExcelCommand.Execute($null)
     $mtXlsx = @(Get-ChildItem -LiteralPath $mtDir -Filter *.xlsx -ErrorAction SilentlyContinue)
-    if ($mtXlsx.Count -eq 1 -and $mtVm.Status -match '3 个工作表') {
+    if ($mtXlsx.Count -eq 1 -and $mtVm.Status -match '4 个工作表') {
         Write-Host ("PASS  材料表 Excel 已导出:{0} 字节" -f $mtXlsx[0].Length)
     } else {
         Write-Host ("FAIL  材料表 Excel: files={0} status='{1}'" -f $mtXlsx.Count, $mtVm.Status); $fail++

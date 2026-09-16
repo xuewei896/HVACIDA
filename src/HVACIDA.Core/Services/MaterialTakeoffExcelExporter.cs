@@ -31,6 +31,10 @@ namespace HVACIDA.Core.Services
             ExcelReportBuilder.AddTable(detail,
                 new List<string> { "类别", "族", "类型", "数量", "单位", "件数", "备注" }, rows);
 
+            // 图例表(需求 2.6):直接复用材料表结果生成,数量与明细页一致
+            var legend = MaterialLegendBuilder.Build(result);
+            ExcelReportBuilder.AddResultTable(workbook.AddSheet("图例表"), MaterialLegendBuilder.ForLegend(legend));
+
             ExcelReportBuilder.AddNoteSheet(workbook, "材料表统计", result.Note, result.PendingNote);
             return workbook;
         }
