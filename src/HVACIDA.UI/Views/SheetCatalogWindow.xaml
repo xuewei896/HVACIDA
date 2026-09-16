@@ -52,6 +52,8 @@
                     <Button Content="导出 DXF" Width="100" Height="30" Margin="8,0,0,0" Command="{Binding ExportDxfCommand}"/>
                     <Button Content="导出 PDF" Width="100" Height="30" Margin="8,0,0,0" Command="{Binding ExportPdfCommand}"
                             ToolTip="用系统打印机把图纸逐张打印为 PDF;本机没有 PDF 打印机时会逐张写明失败原因,不谎报成功"/>
+                    <Button Content="批量标注空间" Width="126" Height="30" Margin="8,0,0,0" Command="{Binding TagCommand}"
+                            ToolTip="在楼层/天花平面视图里给空间批量添加「名称 + 编号」标注;已有空间标注的视图跳过,新增/跳过/失败逐视图计数"/>
                     <Button Content="导出清单 Excel" Width="126" Height="30" Margin="8,0,0,0" Command="{Binding ExportExcelCommand}"
                             ToolTip="导出 .xlsx:概况与图框 / 逐张图纸 / 批量出图记录 / 口径与待补"/>
                 </StackPanel>
@@ -71,6 +73,8 @@
                 <RowDefinition Height="1.2*" MinHeight="130"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="0.7*" MinHeight="90"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="4,0,0,6">
@@ -124,6 +128,23 @@
                     <DataGridTextColumn Header="说明" Width="*" Binding="{Binding Message}"/>
                 </DataGrid.Columns>
             </DataGrid>
+
+            <TextBlock Grid.Row="8" Style="{StaticResource SectionTitle}"
+                       Text="四、自动标注结果(平面视图里的空间名称 + 编号;逐视图计数)"/>
+            <StackPanel Grid.Row="9">
+                <TextBlock Text="{Binding TagNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,0,0,4"/>
+                <DataGrid x:Name="TagGrid" Style="{StaticResource Grid}" MaxHeight="140"
+                          ItemsSource="{Binding TagRows}" AlternatingRowBackground="#F7FAFD"
+                          HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="视图" Width="220" Binding="{Binding ViewName}"/>
+                        <DataGridTextColumn Header="新增标注" Width="100" Binding="{Binding Added}"/>
+                        <DataGridTextColumn Header="跳过" Width="80" Binding="{Binding Skipped}"/>
+                        <DataGridTextColumn Header="失败" Width="80" Binding="{Binding Failed}"/>
+                        <DataGridTextColumn Header="说明" Width="*" Binding="{Binding Message}"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
         </Grid>
     </DockPanel>
 </Window>

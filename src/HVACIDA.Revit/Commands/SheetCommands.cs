@@ -60,6 +60,28 @@ namespace HVACIDA.Revit.Commands
                         continue;
                     }
 
+                    if (window.TagRequested)
+                    {
+                        viewModel.ClearRequests();
+                        var tagResult = new Core.Services.AutoTagResult();
+                        using (var transaction = new Transaction(doc, "HVACIDA 批量标注空间"))
+                        {
+                            transaction.Start();
+                            try
+                            {
+                                Services.RevitAutoTagger.TagSpaces(doc, tagResult);
+                                transaction.Commit();
+                            }
+                            catch
+                            {
+                                if (transaction.GetStatus() == TransactionStatus.Started) transaction.RollBack();
+                                throw;
+                            }
+                        }
+                        viewModel.ApplyTagResult(tagResult);
+                        continue;
+                    }
+
                     if (window.ReloadRequested) continue;
                     break;
                 }

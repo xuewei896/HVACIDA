@@ -32,6 +32,9 @@ namespace HVACIDA.UI.Views
         /// <summary>本次请求的导出格式。</summary>
         public string PendingFormat { get; private set; } = "";
 
+        /// <summary>【批量标注空间】已请求。</summary>
+        public bool TagRequested { get; private set; }
+
         protected override void OnClosing(CancelEventArgs e)
         {
             var viewModel = DataContext as SheetCatalogViewModel;
@@ -43,6 +46,7 @@ namespace HVACIDA.UI.Views
                     ExportRequested = true;
                     PendingFormat = viewModel.PendingFormat;
                 }
+                if (viewModel.TagRequested) TagRequested = true;
             }
             base.OnClosing(e);
         }

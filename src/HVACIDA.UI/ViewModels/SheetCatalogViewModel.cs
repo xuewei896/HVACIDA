@@ -45,6 +45,7 @@ namespace HVACIDA.UI.ViewModels
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HVACIDA", "Export");
 
             ReloadCommand = new RelayCommand(() => ReloadRequested = true);
+            TagCommand = new RelayCommand(() => TagRequested = true, () => _result.HasSheets);
             ExportDwgCommand = new RelayCommand(() => RequestExport("DWG"), () => _result.HasSheets);
             ExportDxfCommand = new RelayCommand(() => RequestExport("DXF"), () => _result.HasSheets);
             ExportPdfCommand = new RelayCommand(() => RequestExport("PDF"), () => _result.HasSheets);
@@ -109,6 +110,38 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>重新读取图纸(窗口关闭后由命令层读取并重开窗)。</summary>
         public ICommand ReloadCommand { get; }
 
+        /// <summary>批量标注空间(平面视图里给空间加「名称 + 编号」标注;已有标注的视图跳过)。</summary>
+        public ICommand TagCommand { get; }
+
+        /// <summary>已请求批量标注(命令层据此在事务里执行)。</summary>
+        public bool TagRequested
+        {
+            get => _tagRequested;
+            private set => Set(ref _tagRequested, value);
+        }
+
+        /// <summary>本次自动标注的逐视图结果。</summary>
+        public IList<AutoTagViewResult> TagRows => _tagResult == null ? new List<AutoTagViewResult>() : _tagResult.Views;
+
+        /// <summary>自动标注的口径与范围说明(界面红字,必须可见)。</summary>
+        public string TagNote => _tagResult == null || _tagResult.Views.Count == 0
+            ? ""
+            : _tagResult.Note + " " + _tagResult.PendingNote;
+
+        /// <summary>回注自动标注结果(命令层执行后调用)。</summary>
+        public void ApplyTagResult(AutoTagResult tagResult)
+        {
+            _tagResult = tagResult ?? new AutoTagResult();
+            OnPropertyChanged(nameof(TagRows));
+            OnPropertyChanged(nameof(TagNote));
+            Status = "自动标注完成:处理 " + _tagResult.ViewCount + " 个视图,新增标注 " + _tagResult.AddedTotal +
+                     " 个 / 跳过 " + _tagResult.SkippedTotal + " 个 / 失败 " + _tagResult.FailedTotal +
+                     " 个(逐视图见「自动标注结果」表)。";
+        }
+
+        private AutoTagResult _tagResult;
+        private bool _tagRequested;
+
         /// <summary>批量导出 DWG(逐张图纸,输出到 <see cref="OutputDirectory"/>)。</summary>
         public ICommand ExportDwgCommand { get; }
 
@@ -154,6 +187,7 @@ namespace HVACIDA.UI.ViewModels
             ReloadRequested = false;
             ExportRequested = false;
             PendingFormat = "";
+            TagRequested = false;
         }
 
         /// <summary>注入图纸清单(命令层读完模型后调用)。</summary>

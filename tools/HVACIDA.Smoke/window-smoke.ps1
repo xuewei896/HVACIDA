@@ -1474,6 +1474,36 @@ try {
     } else {
         Write-Host ("FAIL  图纸清单 Excel: files={0} status='{1}'" -f $shXlsx.Count, $shVm.Status); $fail++
     }
+    # ---- 自动标注(需求 2.6):请求协议 + 逐视图结果回注 + 窗口表 ----
+    $shVm.TagCommand.Execute($null)
+    if ($shVm.TagRequested -eq $true) { Write-Host "PASS  请求批量标注空间 → 置标记(命令层据此在事务里标注)" }
+    else { Write-Host "FAIL  TagRequested 未置位"; $fail++ }
+    $shVm.ClearRequests()
+    if ($shVm.TagRequested -eq $false) { Write-Host "PASS  标注请求执行后清标记" }
+    else { Write-Host "FAIL  标注标记未清"; $fail++ }
+
+    $tagRes = New-Object HVACIDA.Core.Services.AutoTagResult
+    $t1 = New-Object HVACIDA.Core.Services.AutoTagViewResult
+    $t1.ViewName = '站厅层通风平面'; $t1.Added = 12; $t1.Message = '新增 12 个空间标注'
+    $tagRes.Views.Add($t1)
+    $t2 = New-Object HVACIDA.Core.Services.AutoTagViewResult
+    $t2.ViewName = '站台层通风平面'; $t2.Skipped = 8; $t2.Message = '已有空间标注,整个视图跳过'
+    $tagRes.Views.Add($t2)
+    $tagRes.AddedTotal = 12; $tagRes.SkippedTotal = 8
+    $shVm.ApplyTagResult($tagRes)
+    if ($shVm.TagRows.Count -eq 2 -and $shVm.Status -match '新增标注 12' -and $shVm.TagNote -match '跳过') {
+        Write-Host ("PASS  自动标注结果回注:{0}" -f $shVm.Status)
+    } else {
+        Write-Host ("FAIL  标注结果: rows={0} status='{1}'" -f $shVm.TagRows.Count, $shVm.Status); $fail++
+    }
+
+    $shW2 = New-Object "$uiNs.SheetCatalogWindow" -ArgumentList $shVm
+    $shW2.Show(); $shW2.UpdateLayout()
+    $tagGrid = $shW2.FindName('TagGrid')
+    if ($tagGrid -ne $null -and $tagGrid.Columns.Count -eq 5 -and $tagGrid.Items.Count -eq 2) {
+        Write-Host ("PASS  图框窗自动标注表渲染:{0} 列 × {1} 行" -f $tagGrid.Columns.Count, $tagGrid.Items.Count)
+    } else { Write-Host "FAIL  自动标注表未渲染"; $fail++ }
+    $shW2.Close()
     try { Remove-Item $shDir -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
     Write-Host ("FAIL  图框窗自检  {0}" -f $_.Exception.Message)
