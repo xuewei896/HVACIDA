@@ -18,4 +18,11 @@
     <EmbeddedResource Include="Resources\weather-db.csv" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Excel(.xlsx)导出用的最小写入器:XLSX 就是 ZIP + XML 部件,.NET Framework 自带的 ZipArchive 即可,
+         故不引任何 NuGet(与"不引 netstandard 桥接"的基线一致)。 -->
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+
 </Project>

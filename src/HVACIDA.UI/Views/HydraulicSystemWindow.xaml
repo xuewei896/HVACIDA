@@ -63,9 +63,14 @@
                             Command="{Binding CalculateCommand}" IsDefault="True"
                             ToolTip="计算最不利环路阻力并把本次管网与系数保存到 hydraulic.xml(「水力计算 → 计算结果」窗读的就是这份数据)"/>
                     <Button Content="只保存" Width="86" Height="30" Margin="8,0,0,0" Command="{Binding SaveCommand}"/>
-                    <Button Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0" Command="{Binding ExportCommand}"/>
+                    <Button Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0" Command="{Binding ExportCommand}"
+                            ToolTip="导出文本计算书(单系统:汇总 + 逐段明细 + 阻力项 + 并联平衡 + 特性曲线 + 取值)"/>
+                    <Button Content="导出 Excel" Width="104" Height="30" Margin="8,0,0,0" Command="{Binding ExportExcelCommand}"
+                            ToolTip="导出 .xlsx 计算书:6 个工作表(汇总 / 管段明细 / 环路阻力项 / 并联环路平衡 / 阻力特性曲线 / 取值与口径)"/>
+                    <Button Content="删除本系统" Width="110" Height="30" Margin="8,0,0,0" Command="{Binding DeleteSystemCommand}"
+                            ToolTip="按「介质 + 系统编号」删除当前这一套(同介质其它编号的系统保留)"/>
                     <Button Content="清空本介质" Width="104" Height="30" Margin="8,0,0,0" Command="{Binding ClearCommand}"
-                            ToolTip="只清空本介质(风或水)的管网数据,不影响另一介质与系数集"/>
+                            ToolTip="清空该介质的全部系统(风或水),不影响另一介质与系数集"/>
                 </StackPanel>
                 <Button DockPanel.Dock="Right" Content="关 闭" Width="90" Height="30" IsCancel="True"/>
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
@@ -86,6 +91,12 @@
             <GroupBox Grid.Row="0" Header="一、系统参数与系数(来自模型的值可直接改;系数会随计算书一起输出)" Padding="6" Margin="0,0,0,8">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="168">
                     <WrapPanel>
+                        <StackPanel Orientation="Horizontal" Width="290">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="系统编号"
+                                       ToolTip="全站唯一标识(如 SAF-1-1 / CHWS-1)。保存按「介质 + 系统编号」:同编号覆盖、新编号追加;从模型读取后自动用系统名兜底"/>
+                            <TextBox Style="{StaticResource FieldInput}" Width="120"
+                                     Text="{Binding Input.SystemCode, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal" Width="290">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="系统名称"/>
                             <TextBox Style="{StaticResource FieldInput}" Width="120"

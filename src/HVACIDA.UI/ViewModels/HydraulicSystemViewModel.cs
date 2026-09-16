@@ -23,6 +23,7 @@ namespace HVACIDA.UI.ViewModels
     {
         private readonly HydraulicInputService _service;
         private readonly IHydraulicCalculator _calculator = new HydraulicCalculator();
+        private readonly ExcelReportGenerator _excel;
 
         private HydraulicInput _input;
         private readonly ObservableCollection<HydraulicSegment> _segments;
@@ -55,8 +56,19 @@ namespace HVACIDA.UI.ViewModels
         }
 
         public HydraulicSystemViewModel(HydraulicKind kind, IDataRepository repository, bool pickAvailable)
+            : this(kind, repository, pickAvailable, null)
+        {
+        }
+
+        /// <summary>
+        /// <paramref name="reportsDirectory"/> 用于自检时把导出的计算书写到临时目录(为空则用
+        /// <c>%AppData%\HVACIDA\Reports</c>,与文本计算书同目录)。
+        /// </summary>
+        public HydraulicSystemViewModel(HydraulicKind kind, IDataRepository repository, bool pickAvailable,
+            string reportsDirectory)
         {
             _service = new HydraulicInputService(repository);
+            _excel = new ExcelReportGenerator(reportsDirectory);
             IsPickAvailable = pickAvailable;
             _coefficients = _service.LoadCoefficients();
             _input = _service.Load(kind) ?? new HydraulicInput
@@ -75,6 +87,8 @@ namespace HVACIDA.UI.ViewModels
             CalculateCommand = new RelayCommand(CalculateAndSave);
             SaveCommand = new RelayCommand(Save);
             ExportCommand = new RelayCommand(Export, () => _result != null && _result.HasSegments);
+            ExportExcelCommand = new RelayCommand(ExportExcel, () => _result != null && _result.HasSegments);
+            DeleteSystemCommand = new RelayCommand(DeleteSystem);
             ClearCommand = new RelayCommand(Clear);
             AddSegmentCommand = new RelayCommand(AddSegment);
             RemoveSegmentCommand = new RelayCommand(RemoveSegment, () => _selectedSegment != null);
@@ -211,6 +225,12 @@ namespace HVACIDA.UI.ViewModels
         public ICommand CalculateCommand { get; }
         public ICommand SaveCommand { get; }
         public ICommand ExportCommand { get; }
+
+        /// <summary>导出 **Excel(.xlsx)计算书**(6 个工作表:汇总/管段明细/阻力项/并联平衡/特性曲线/取值与口径)。</summary>
+        public ICommand ExportExcelCommand { get; }
+
+        /// <summary>删除**当前编号**的这一套系统(按「介质 + 系统编号」;不影响同介质其它编号的系统)。</summary>
+        public ICommand DeleteSystemCommand { get; }
         public ICommand ClearCommand { get; }
         public ICommand AddSegmentCommand { get; }
         public ICommand RemoveSegmentCommand { get; }
@@ -259,6 +279,9 @@ namespace HVACIDA.UI.ViewModels
                 input.Kind = Kind;
                 if (input.ExtraFactor <= 0)
                     input.ExtraFactor = IsWater ? _coefficients.WaterExtraFactor : _coefficients.AirExtraFactor;
+                // 系统编号留空 → 用模型里的系统名兜底(否则多套系统会互相覆盖)
+                if (string.IsNullOrEmpty(input.SystemCode))
+                    input.SystemCode = string.IsNullOrEmpty(input.SystemName) ? "" : input.SystemName;
                 Input = input;
                 SyncCollections();
                 Calculate();
@@ -357,12 +380,10 @@ namespace HVACIDA.UI.ViewModels
                 }
                 else
                 {
-                    var project = _service.LoadProject();
-                    project.Coefficients = _coefficients;
-                    project[Kind] = _input;
-                    _service.SaveProject(project);
-                    saveNote = "本次计算已同时保存(coefficients + " + (IsWater ? "水系统" : "风系统") +
-                               "管网,共 " + _segments.Count + " 段):" + _service.StorageDirectory + "\\hydraulic.xml。";
+                    int systemCount = _service.Save(_input);
+                    _service.SaveCoefficients(_coefficients);
+                    saveNote = "本次计算已同时保存(系统编号「" + CodeText + "」," + _segments.Count +
+                               " 段;全站共 " + systemCount + " 套系统):" + _service.StorageDirectory + "\\hydraulic.xml。";
                 }
             }
             catch (Exception ex)
@@ -374,16 +395,18 @@ namespace HVACIDA.UI.ViewModels
             Status = saveNote + " " + Status;
         }
 
+        /// <summary>当前系统编号(空则显示"—")。</summary>
+        public string CodeText => string.IsNullOrEmpty(_input.SystemCode) ? "—" : _input.SystemCode;
+
         private void Save()
         {
             try
             {
                 SyncInput();
-                var project = _service.LoadProject();
-                project.Coefficients = _coefficients;
-                project[Kind] = _input;
-                _service.SaveProject(project);
-                Status = "已保存(系数集 + 本介质管网):" + _service.StorageDirectory + "\\hydraulic.xml";
+                int systemCount = _service.Save(_input);
+                _service.SaveCoefficients(_coefficients);
+                Status = "已保存(系数集 + 系统编号「" + CodeText + "」;全站共 " + systemCount + " 套系统):" +
+                         _service.StorageDirectory + "\\hydraulic.xml";
             }
             catch (Exception ex)
             {
@@ -400,11 +423,62 @@ namespace HVACIDA.UI.ViewModels
                 string path = generator.SaveTextReport(
                     IsWater ? "水系统水力计算书" : "风系统水力计算书",
                     ResultFormatter.FormatHydraulic(_input, _result, _coefficients));
-                Status = "计算书已生成: " + path;
+                Status = "文本计算书已生成: " + path;
             }
             catch (Exception ex)
             {
                 Status = "导出失败: " + ex.Message;
+            }
+        }
+
+        /// <summary>导出 Excel(.xlsx)计算书:6 页(汇总 / 管段明细 / 环路阻力项 / 并联环路平衡 / 阻力特性曲线 / 取值与口径)。</summary>
+        private void ExportExcel()
+        {
+            try
+            {
+                if (_result == null || !_result.HasSegments)
+                {
+                    Status = "还没有可导出的结果:请先【从模型读取该系统…】或手工加行。";
+                    return;
+                }
+
+                var workbook = HydraulicExcelExporter.BuildSystem(_input, _result, _coefficients);
+                string path = _excel.SaveWorkbook(
+                    (IsWater ? "水系统水力计算书_" : "风系统水力计算书_") + CodeText, workbook);
+                Status = "Excel 计算书已生成(" + workbook.SheetCount + " 个工作表): " + path;
+            }
+            catch (Exception ex)
+            {
+                Status = "导出 Excel 失败: " + ex.Message;
+            }
+        }
+
+        /// <summary>删除当前编号的这一套系统(按「介质 + 系统编号」;同介质其它编号的系统保留)。</summary>
+        private void DeleteSystem()
+        {
+            try
+            {
+                string code = _input.SystemCode ?? "";
+                if (!_service.Remove(Kind, code))
+                {
+                    Status = "没有可删除的系统:当前编号「" + CodeText + "」在 hydraulic.xml 里不存在(尚未保存过)。";
+                    return;
+                }
+
+                _input = new HydraulicInput
+                {
+                    Kind = Kind,
+                    MediumTempC = IsWater ? 10.0 : 20.0,
+                    ExtraFactor = IsWater ? _coefficients.WaterExtraFactor : _coefficients.AirExtraFactor
+                };
+                SyncCollections();
+                Calculate();
+                Status = "已删除系统「" + (string.IsNullOrEmpty(code) ? "—" : code) + "」(同介质其它编号的系统保留);" +
+                         "全站现有 " + _service.LoadProject().SystemCount + " 套系统。";
+            }
+            catch (Exception ex)
+            {
+                Status = "删除失败: " + ex.Message;
             }
         }
 

@@ -209,6 +209,9 @@ namespace HVACIDA.Core.Models
         /// <summary>系统阻力特性曲线(50%~130% 设计流量,每 10% 一点)。</summary>
         public List<HydraulicCurvePoint> Curve { get; set; } = new List<HydraulicCurvePoint>();
 
+        /// <summary>设计流量 m³/h(最不利环路上流量最大的那一段;阻力特性曲线与全站汇总量都按它)。</summary>
+        public double DesignFlowM3H { get; set; }
+
         /// <summary>最不利环路名称(末端名 / 说明)。</summary>
         public string CriticalPathName { get; set; } = "";
 

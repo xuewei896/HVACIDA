@@ -488,6 +488,7 @@ namespace HVACIDA.Core.Services
             }
             if (designFlow <= 0) return;
 
+            result.DesignFlowM3H = designFlow;
             double variable = result.TotalResistancePa - result.StaticPa;   // 随流量平方变化的那部分
             for (int pct = 50; pct <= 130; pct += 10)
             {

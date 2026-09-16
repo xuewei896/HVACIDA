@@ -45,10 +45,11 @@ namespace HVACIDA.Smoke
             RunLargeSmokeChecks();
             RunSmallSystemChecks();
             RunHydraulicChecks();
+            RunHydraulicSummaryChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算自检通过。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算(含多系统汇总与 Excel 导出)自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
@@ -1334,10 +1335,11 @@ namespace HVACIDA.Smoke
                 service.Save(air);
                 service.Save(water);
                 var reloaded = service.LoadProject();
-                CheckInt("落盘往返:风系统管段数", reloaded.Air.Segments.Count, 1);
-                CheckText("落盘往返:风系统名称", reloaded.Air.SystemName, "机械送风 1");
-                CheckInt("落盘往返:水系统设备/末端项数", reloaded.Water.Terminals.Count, 2);
-                CheckText("落盘往返:水系统机组阻力来源", reloaded.Water.Terminals[0].Source, "设备样本水阻 30 kPa");
+                CheckInt("落盘往返:风系统管段数", reloaded.Find(HydraulicKind.AirDuct, "").Segments.Count, 1);
+                CheckText("落盘往返:风系统名称", reloaded.Find(HydraulicKind.AirDuct, "").SystemName, "机械送风 1");
+                CheckInt("落盘往返:水系统设备/末端项数", reloaded.Find(HydraulicKind.WaterPipe, "").Terminals.Count, 2);
+                CheckText("落盘往返:水系统机组阻力来源",
+                    reloaded.Find(HydraulicKind.WaterPipe, "").Terminals[0].Source, "设备样本水阻 30 kPa");
                 Check("落盘往返:需求扬程一致", service.Calculate(HydraulicKind.WaterPipe).RequiredHeadM,
                     waterRated.RequiredHeadM, 1e-9);
 
@@ -1351,6 +1353,207 @@ namespace HVACIDA.Smoke
             }
 
             Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景14:水力计算 全站多系统汇总 + Excel(.xlsx)导出
+        //   期望值独立手算(与场景13 同一套公式):
+        //   风 1:Φ0.5、L=10、Q=3600、Σζ=1.0 → 段 21.2266 + 出口动压 15.6278 = 36.8543 → 需求 40.5398 Pa
+        //   风 2:Φ0.5、L=20、Q=7200、Σζ=1.0 → 段 103.6736 + 出口动压 62.5111 = 166.1847 → 需求 182.8032 Pa
+        //   水 1:Φ0.1、L=50、Q=36、Σζ=2.0(10 ℃)→ 段 11777.5915 → 需求 12955.3507 Pa = 扬程 1.3210 m
+        // =====================================================================
+        private static void RunHydraulicSummaryChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景14:水力计算 多系统汇总 + Excel(.xlsx)导出");
+            Console.WriteLine("==================================================");
+
+            var calc = new HydraulicCalculator();
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-HydSum-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var repository = new XmlProjectRepository(dir);
+                var service = new HydraulicInputService(repository, calc);
+
+                // ---------- 1) 按「介质 + 系统编号」upsert ----------
+                service.Save(BuildAirSystem("SAF-1", "机械送风 1", 3600, 10));
+                service.Save(BuildAirSystem("SAF-2", "机械送风 2", 7200, 20));
+                int count = service.Save(BuildWaterSystem("CHWS-1", "冷冻水供水", 36, 50));
+                CheckInt("多系统保存:全站 3 套", count, 3);
+                CheckInt("风系统 2 套", service.LoadAll(HydraulicKind.AirDuct).Count, 2);
+                CheckInt("水系统 1 套", service.LoadAll(HydraulicKind.WaterPipe).Count, 1);
+
+                service.Save(BuildAirSystem("SAF-1", "机械送风 1(改)", 3600, 10));
+                CheckInt("同编号 upsert 不增加套数", service.LoadProject().SystemCount, 3);
+                CheckText("同编号被覆盖", service.Load(HydraulicKind.AirDuct, "SAF-1").SystemName, "机械送风 1(改)");
+                CheckInt("删除一套系统", service.Remove(HydraulicKind.AirDuct, "SAF-2") ? 1 : 0, 1);
+                CheckInt("删除后剩 2 套", service.LoadProject().SystemCount, 2);
+                service.Save(BuildAirSystem("SAF-2", "机械送风 2", 7200, 20));
+
+                // ---------- 2) 逐系统现算 + 汇总(可加量求和 / 压力取最大) ----------
+                var summary = service.Summarize();
+                CheckInt("汇总行数 = 3", summary.Rows.Count, 3);
+                CheckInt("风系统数 = 2", summary.AirCount, 2);
+                CheckInt("水系统数 = 1", summary.WaterCount, 1);
+                CheckInt("汇总管段总数 = 3", summary.SegmentCount, 3);
+                Check("汇总风量合计 m³/h", summary.TotalAirFlowM3H, 3600 + 7200, 1e-6);
+                Check("汇总水量合计 m³/h", summary.TotalWaterFlowM3H, 36, 1e-6);
+                Check("汇总管段总长 m", summary.TotalLengthM, 10 + 20 + 50, 1e-6);
+                Check("最大需求全压 Pa(风 2 最大)", summary.MaxRequiredPressurePa, 182.8032, 1e-2);
+                Check("最大需求扬程 m(水 1)", summary.MaxRequiredHeadM, 1.3210, 1e-4);
+                CheckText("汇总口径写明压力不可相加", summary.Note.Contains("不可相加") ? "有" : summary.Note, "有");
+                CheckText("最大需求全压是逐系统取最大(不是求和)",
+                    Math.Abs(summary.MaxRequiredPressurePa - (40.5398 + 182.8032)) > 1.0 ? "取最大" : "像求和", "取最大");
+
+                // 汇总里的数字必须与单系统现算一致(汇总不重算);行序固定为"风在前、各按编号排序"
+                CheckText("汇总行序固定:风在前按编号", summary.Rows[0].SystemCode + "/" + summary.Rows[1].SystemCode,
+                    "SAF-1/SAF-2");
+                CheckText("汇总行序固定:水在后", summary.Rows[2].SystemCode, "CHWS-1");
+                var saf2 = service.Calculate(HydraulicKind.AirDuct, "SAF-2");
+                Check("汇总行与单系统现算一致", summary.Rows[1].RequiredPressurePa, saf2.RequiredPressurePa, 1e-9);
+                Check("单系统设计流量 m³/h", saf2.DesignFlowM3H, 7200, 1e-9);
+
+                // ---------- 3) 旧版单系统文件自动迁移 ----------
+                string legacyDir = Path.Combine(Path.GetTempPath(), "HVACIDA-HydLegacy-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Directory.CreateDirectory(legacyDir);
+                    var legacy = new HydraulicProject
+                    {
+                        Coefficients = HydraulicCoefficients.CreateDefault(),
+                        LegacyAir = BuildAirSystem("SAF-OLD", "旧版风系统", 3600, 10),
+                        LegacyWater = BuildWaterSystem("CHWS-OLD", "旧版水系统", 36, 50)
+                    };
+                    using (var stream = File.Create(Path.Combine(legacyDir, "hydraulic.xml")))
+                    {
+                        new System.Xml.Serialization.XmlSerializer(typeof(HydraulicProject)).Serialize(stream, legacy);
+                    }
+
+                    var legacyRepo = new XmlProjectRepository(legacyDir);
+                    var legacyService = new HydraulicInputService(legacyRepo, calc);
+                    var migrated = legacyService.LoadProject();
+                    CheckInt("旧版 Air/Water 迁进多系统容器", migrated.SystemCount, 2);
+                    CheckText("迁移保留了系统编号", migrated.Find(HydraulicKind.AirDuct, "SAF-OLD").SystemCode, "SAF-OLD");
+                    CheckInt("迁移发生了落盘", legacyService.LastLoadMigrated ? 1 : 0, 1);
+                    CheckInt("迁移后文件里已无 Air 元素(不再写回)",
+                        System.Text.RegularExpressions.Regex.IsMatch(
+                            File.ReadAllText(Path.Combine(legacyDir, "hydraulic.xml")), "<Air>|:Air>") ? 1 : 0, 0);
+                }
+                finally
+                {
+                    try { Directory.Delete(legacyDir, true); } catch { }
+                }
+
+                // ---------- 4) Excel 导出:结构 + 内容都要能验 ----------
+                var air1 = service.Load(HydraulicKind.AirDuct, "SAF-1");
+                var air1Result = service.Calculate(HydraulicKind.AirDuct, "SAF-1");
+                var book = HydraulicExcelExporter.BuildSystem(air1, air1Result, service.LoadCoefficients());
+                CheckInt("单系统工作簿 6 页", book.SheetCount, 6);
+
+                string bookPath = Path.Combine(dir, "单系统水力计算书.xlsx");
+                book.Save(bookPath);
+                CheckInt("xlsx 已写出", File.Exists(bookPath) ? 1 : 0, 1);
+
+                string workbookXml, sheet1Xml, entries;
+                ReadXlsx(bookPath, out workbookXml, out sheet1Xml, out entries);
+                CheckText("工作簿含 6 张表名",
+                    workbookXml.Contains("汇总") && workbookXml.Contains("管段明细") && workbookXml.Contains("环路阻力项") &&
+                    workbookXml.Contains("并联环路平衡") && workbookXml.Contains("阻力特性曲线") && workbookXml.Contains("取值与口径")
+                        ? "齐" : workbookXml, "齐");
+                CheckText("xlsx 是合法 ZIP(含工作簿与 6 张表)", entries, "条目 11 个");
+                CheckText("汇总页写出了需求全压(标签 + 数值单元格)",
+                    sheet1Xml.Contains("需求全压") && sheet1Xml.Contains("40.539770908214884") ? "有" : "缺", "有");
+
+                var summaryBook = HydraulicExcelExporter.BuildSummary(summary);
+                CheckInt("全站汇总工作簿页数 = 3 + 2×3 套系统", summaryBook.SheetCount, 9);
+                string summaryPath = Path.Combine(dir, "全站水力汇总.xlsx");
+                summaryBook.Save(summaryPath);
+                string sWorkbook, sSheet1, sEntries;
+                ReadXlsx(summaryPath, out sWorkbook, out sSheet1, out sEntries);
+                CheckText("全站工作簿含全站汇总/逐系统/取值与口径",
+                    sWorkbook.Contains("全站汇总") && sWorkbook.Contains("逐系统") && sWorkbook.Contains("取值与口径") ? "有" : sWorkbook, "有");
+                CheckText("全站工作簿含逐系统明细页(段-风-SAF-1)",
+                    sWorkbook.Contains("段-风-SAF-1") ? "有" : sWorkbook, "有");
+                CheckText("全站汇总页写明压力不可加",
+                    sSheet1.Contains("不可加") ? "有" : "缺", "有");
+
+                // ---------- 5) 全站汇总的文本计算书 ----------
+                string summaryText = ResultFormatter.FormatHydraulicSummary(summary);
+                CheckText("全站计算书含逐系统表", summaryText.Contains("逐系统") ? "有" : "无", "有");
+                CheckText("全站计算书含每套系统的完整计算书", summaryText.Contains("机械送风 2") ? "有" : "无", "有");
+                CheckText("全站计算书不含单元格编号",
+                    System.Text.RegularExpressions.Regex.IsMatch(summaryText, @"(?<![-A-Z])\b[A-Z]{1,2}[0-9]{2,3}\b") ? "有" : "无", "无");
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+
+            Console.WriteLine();
+        }
+
+        private static HydraulicInput BuildAirSystem(string code, string name, double flowM3H, double lengthM)
+        {
+            var input = new HydraulicInput
+            {
+                Kind = HydraulicKind.AirDuct,
+                SystemCode = code,
+                SystemName = name,
+                MediumTempC = 20,
+                FromModel = false
+            };
+            input.Segments.Add(new HydraulicSegment
+            {
+                Name = name + " 主管", Shape = HydraulicShape.Round, DiameterM = 0.5,
+                LengthM = lengthM, FlowM3H = flowM3H, LocalZetaSum = 1.0, OnCriticalPath = true
+            });
+            return input;
+        }
+
+        private static HydraulicInput BuildWaterSystem(string code, string name, double flowM3H, double lengthM)
+        {
+            var input = new HydraulicInput
+            {
+                Kind = HydraulicKind.WaterPipe,
+                SystemCode = code,
+                SystemName = name,
+                MediumTempC = 10,
+                FromModel = false
+            };
+            input.Segments.Add(new HydraulicSegment
+            {
+                Name = name + " 干管", Shape = HydraulicShape.Round, DiameterM = 0.1,
+                LengthM = lengthM, FlowM3H = flowM3H, LocalZetaSum = 2.0, OnCriticalPath = true
+            });
+            return input;
+        }
+
+        /// <summary>读 .xlsx(它是 ZIP):取 workbook.xml、sheet1.xml 与条目数摘要(供断言)。</summary>
+        private static void ReadXlsx(string path, out string workbookXml, out string sheet1Xml, out string entries)
+        {
+            workbookXml = "";
+            sheet1Xml = "";
+            entries = "";
+            using (var zip = System.IO.Compression.ZipFile.OpenRead(path))
+            {
+                var names = new System.Collections.Generic.List<string>();
+                foreach (var entry in zip.Entries)
+                {
+                    names.Add(entry.FullName);
+                    if (entry.FullName == "xl/workbook.xml") workbookXml = ReadEntry(entry);
+                    if (entry.FullName == "xl/worksheets/sheet1.xml") sheet1Xml = ReadEntry(entry);
+                }
+                entries = "条目 " + names.Count + " 个";
+            }
+        }
+
+        private static string ReadEntry(System.IO.Compression.ZipArchiveEntry entry)
+        {
+            using (var stream = entry.Open())
+            using (var reader = new System.IO.StreamReader(stream, Encoding.UTF8))
+            {
+                return reader.ReadToEnd();
+            }
         }
 
         private static LargeSystemInput BuildBusyScenario()

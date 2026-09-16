@@ -51,6 +51,56 @@ namespace HVACIDA.Core.Services
         }
 
         /// <summary>
+        /// **全站水力计算书**:全站合计(可加量)+ 逐系统一行(需求值 / 校核 / 并联平衡)+ 每套系统的完整计算书。
+        /// <para>口径与单系统一致:**逐系统各自算,汇总只相加可加量**;压力类只列不求和。</para>
+        /// </summary>
+        public static string FormatHydraulicSummary(HydraulicSummary summary)
+        {
+            if (summary == null) return "";
+            var sb = new StringBuilder();
+            sb.AppendLine("【全站水力计算书】(需求 2.3 / 2.4)");
+            sb.AppendLine();
+            sb.AppendLine(ResultTable.ForHydraulicSummary(summary).ToText());
+
+            if (summary.Rows.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("—— 逐系统(压力类不可加,逐套列出) ——");
+                sb.AppendLine(Pad("  介质", 10) + Pad("系统编号", 18) + Pad("系统名", 26) + Pad("段数", 8) +
+                              Pad("设计流量 m³/h", 15) + Pad("计算总阻力 Pa", 16) + Pad("需求值", 16) +
+                              Pad("校核", 10) + "最大不平衡 %");
+                foreach (var row in summary.Rows)
+                {
+                    string required = row.Kind == HydraulicKind.WaterPipe
+                        ? row.RequiredHeadM.ToString("N2") + " m"
+                        : row.RequiredPressurePa.ToString("N1") + " Pa";
+                    string check = double.IsNaN(row.Result == null ? double.NaN : row.Result.MarginPct)
+                        ? "未校核"
+                        : (row.Result.MarginPct < 0 ? "不足" : (row.Result.MarginPct < 10 ? "偏紧" : "满足"));
+                    sb.AppendLine(Pad(row.KindName, 10) +
+                                  Pad(string.IsNullOrEmpty(row.SystemCode) ? "—" : row.SystemCode, 18) +
+                                  Pad(row.SystemName, 26) +
+                                  Pad(row.SegmentCount.ToString(), 8) +
+                                  Pad(row.DesignFlowM3H.ToString("N0"), 15) +
+                                  Pad(row.TotalResistancePa.ToString("N1"), 16) +
+                                  Pad(required, 16) +
+                                  Pad(check, 10) +
+                                  (row.BranchCount > 0 ? row.MaxImbalancePct.ToString("0.#") : "—"));
+                }
+            }
+
+            foreach (var row in summary.Rows)
+            {
+                sb.AppendLine();
+                sb.AppendLine("==================== " + row.KindName + " " +
+                              (string.IsNullOrEmpty(row.SystemCode) ? "" : row.SystemCode) + " " + row.SystemName +
+                              " ====================");
+                sb.AppendLine(row.ResultText ?? "");
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// 水力计算书(风系统 / 水系统):系统与介质 + 最不利环路阻力 + 需求值 + 设备校核
         /// (由 <see cref="ResultTable.ForHydraulic"/> 渲染),再附**逐段明细**、环路阻力项与本次用到的局部阻力系数。
         /// </summary>

@@ -84,10 +84,10 @@ dotnet build .\HVACIDA.sln
 | 排烟计算(2.2.3.1) | 排烟计算窗(`LargeSmokeCalculator`)+ 计算结果表格 | ✅ 已实现(计算 ×60 / 选型 ×1.2 / 2 台取大者;防烟分区口径待接入) |
 | 结果获取时机 | **打开即算 + 计算即保存**(UI设计规范 §4.9) | ✅ 「计算结果」窗**打开就有结果**,不需要再点一次【计 算】;录入窗点【计 算】= 先落盘再算,故结果窗读到的必然是刚算的那一份;只是打开窗不写盘、空系统不落盘 |
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
-| 2.2.4 结果管理 | TextReportGenerator(文本计算书,`%AppData%\HVACIDA\Reports`) | 🟡 文本版 |
-| 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml** / **hydraulic.xml**) | 🟡 待换 SQLite(旧 small-system.xml 首次读取自动迁移) |
+| 2.2.4 结果管理 | 文本计算书(TextReportGenerator)+ **Excel 计算书**(`XlsxWriter` 自写最小 XLSX,零依赖) | ✅ 文本 + Excel(`%AppData%\HVACIDA\Reports`) |
+| 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml** / **hydraulic.xml** 多系统容器) | 🟡 待换 SQLite(旧 small-system.xml 与水力单系统文件首次读取自动迁移) |
 | 2.7 规范知识库 | DesignQaService(本地规则应答)+ 知识库窗口 | 🟡 规则版,待接 AI |
-| 2.3/2.4 水力计算 | 风系统 / 水系统录入窗 + 计算结果窗(`HydraulicCalculator` / `RevitHydraulicReader`) | ✅ 已实装:模型里选系统 → 读管网 → 连接件拓扑求**最不利环路** → 需求全压(Pa)/ 扬程(m)+ 设备校核;**并联环路平衡**(不平衡率 / 平衡阀 Kv / 阀权度 / 需增加 ζ)与**系统阻力特性曲线**;系数全部可见可改(§4.10) |
+| 2.3/2.4 水力计算 | 风系统 / 水系统录入窗 + **全站汇总窗**(`HydraulicCalculator` / `RevitHydraulicReader` / `HydraulicSummaryService`) | ✅ 已实装:模型里选系统 → 读管网 → 连接件拓扑求**最不利环路** → 需求全压(Pa)/ 扬程(m)+ 设备校核;**并联环路平衡**(Kv / 阀权度 / 需增加 ζ)、**系统阻力特性曲线**、**全站多系统汇总**(按「介质 + 系统编号」upsert)与 **Excel 导出**;系数全部可见可改(§4.10) |
 | 2.5 材料表、2.6 出图 | — | ⬜ 未开始(入口已就位,点击给口径说明) |
 
 ## 6. 关键 TODO(按技能规范)
@@ -100,7 +100,8 @@ dotnet build .\HVACIDA.sln
 3. SQLite 化:实现 `IDataRepository` 的 SQLite 版(需求:数据库 SQLite)。
 4. Revit 读取:空间面积/体积/高度→D55/D56/C13/C14 **已实现**(含链接模型、自动识别+手动拾取,实机待验);
    剩余:**墙长**(小系统"与土壤接触外墙长度")、**与土壤接触屋顶面积**、参数回写、批量空间分区。
-5. 计算书升级 Excel(EPPlus/OpenXML)与 PDF;出图/标注/图例。
+5. ~~计算书升级 Excel~~ **已实现**(水力计算书:Core 内自写最小 XLSX 写入器,单系统 6 页 / 全站汇总多页,**不引 EPPlus/OpenXML**);
+   剩余:PDF 导出、出图/标注/图例,以及把 Excel 导出推广到大系统负荷/排烟/小系统计算书。
 6. ~~按钮图标~~ 已实装(22 个图标 ×16/32px,`tools/HVACIDA.IconGen` 生成并内嵌 DLL,见 `docs/UI设计规范.md` §4.0.1);
    剩余:中英文界面、操作日志与撤销。
 7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、小系统、**空间聚合、气象联动**)、**水力计算(风/水,手算复算)**——
@@ -114,14 +115,15 @@ dotnet build .\HVACIDA.sln
 
 ## 6b. 四项自检(不需要打开 Revit)
 ```powershell
-# 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统 + 空间聚合 + 气象联动 + 水力计算)
+# 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统 + 空间聚合 + 气象联动
+#    + 水力计算 / 多系统汇总 / Excel 导出(解压 xlsx 校验工作表与单元格))
 & ".\tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe"
 
 # 2) 窗口装载自检:15 个 WPF 窗口真构造 + Show + Close(抓 XAML/绑定致命错误)
-#    + 静态绑定一致性(§5.2:12 个窗口约 450 条 {Binding} 路径逐条反射校验)
+#    + 静态绑定一致性(§5.2:12 个窗口约 470 条 {Binding} 路径逐条反射校验)
 #    + 气象联动/计算结果窗同源 + 公共区自动识别与手动拾取回填
 #    + 打开即算 / 计算即保存(打开就出结果、只是打开不写盘、点计算即落盘、空系统不落盘)
-#    + 水力计算窗(风/水两介质、管段表/系数表、汇总窗两行、「—」、并联环路平衡与阻力特性曲线表、端到端读数)
+#    + 水力计算窗(风/水两介质、管段表/系数表、全站多系统汇总 20 列、「—」、并联环路平衡与阻力特性曲线表、Excel 落盘)
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\window-smoke.ps1 `
   -UiDir .\src\HVACIDA.UI\bin\Release\net48
 

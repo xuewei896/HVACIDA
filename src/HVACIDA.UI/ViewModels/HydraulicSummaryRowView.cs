@@ -1,114 +1,110 @@
 using HVACIDA.Core.Models;
+using HVACIDA.Core.Services;
 
 namespace HVACIDA.UI.ViewModels
 {
     /// <summary>
-    /// 水力计算汇总表的一行(一个介质一行:风系统 / 水系统)。
+    /// 水力计算全站汇总表的一行(**一套系统**:风或水)。
     /// <para>
-    /// 「—」表示该系统不涉及该项(如风系统没有扬程、水系统没有出口动压),**不显示 0.00** ——
-    /// 与小系统汇总窗同一规矩:不涉及 ≠ 等于零。
+    /// 「—」表示该系统不涉及该项(如风系统没有扬程与静压、水系统没有出口动压)或结果不存在,
+    /// **不显示 0.00**;压力类**不能相加**,所以汇总表是"逐系统一行",合计只给可加量。
     /// </para>
     /// </summary>
     public class HydraulicSummaryRowView
     {
-        public HydraulicSummaryRowView(HydraulicKind kind, HydraulicInput input, HydraulicResult result)
+        public HydraulicSummaryRowView(HydraulicSummaryRow row)
         {
-            Kind = kind;
-            Input = input;
-            Result = result;
-            KindName = kind == HydraulicKind.WaterPipe ? "水系统" : "风系统";
+            Row = row;
         }
 
-        public HydraulicKind Kind { get; }
+        /// <summary>Core 的汇总行(输入 + 结果 + 指标)。</summary>
+        public HydraulicSummaryRow Row { get; }
 
-        public HydraulicInput Input { get; }
+        public HydraulicKind Kind => Row.Kind;
 
-        public HydraulicResult Result { get; }
+        public string KindName => Row.KindName;
 
-        public string KindName { get; }
+        private bool IsWater => Row.Kind == HydraulicKind.WaterPipe;
 
-        public string SystemName => Result == null || string.IsNullOrEmpty(Result.SystemName)
-            ? (Input == null || string.IsNullOrEmpty(Input.SystemName) ? "—" : Input.SystemName)
-            : Result.SystemName;
+        private HydraulicResult Result => Row.Result;
 
+        private bool HasResult => Row.Result != null && Row.Result.HasSegments;
+
+        /// <summary>系统编号(空显示「—」)。</summary>
+        public string SystemCode => string.IsNullOrEmpty(Row.SystemCode) ? "—" : Row.SystemCode;
+
+        public string SystemName => string.IsNullOrEmpty(Row.SystemName) ? "—" : Row.SystemName;
+
+        /// <summary>最不利环路末端名。</summary>
         public string CriticalPathName => Result == null || string.IsNullOrEmpty(Result.CriticalPathName)
             ? "—"
             : Result.CriticalPathName;
 
-        /// <summary>管段数(总 / 最不利环路上)。</summary>
-        public string SegmentText
-        {
-            get
-            {
-                if (Result == null || !Result.HasSegments) return "—";
-                return Result.CriticalSegmentCount + " / " + Result.Segments.Count;
-            }
-        }
+        /// <summary>环路段数 / 总段数。</summary>
+        public string SegmentText => HasResult ? Row.CriticalSegmentCount + " / " + Row.SegmentCount : "—";
 
-        public string FrictionText => Text(Result, r => r.FrictionTotalPa);
-        public string LocalText => Text(Result, r => r.LocalTotalPa);
+        /// <summary>管段总长 m(可加量)。</summary>
+        public string LengthText => HasResult ? Row.TotalLengthM.ToString("N1") + " m" : "—";
 
-        /// <summary>设备 + 末端阻力合计。</summary>
-        public string EquipmentText => Result == null ? "—" : Pa(Result.EquipmentTotalPa + Result.TerminalTotalPa);
+        /// <summary>设计流量 m³/h(可加量)。</summary>
+        public string FlowText => Row.DesignFlowM3H > 0 ? Row.DesignFlowM3H.ToString("N0") + " m³/h" : "—";
+
+        public string FrictionText => HasResult ? Pa(Result.FrictionTotalPa) : "—";
+
+        public string LocalText => HasResult ? Pa(Result.LocalTotalPa) : "—";
+
+        /// <summary>末端 + 设备阻力合计。</summary>
+        public string EquipmentText => HasResult ? Pa(Result.EquipmentTotalPa + Result.TerminalTotalPa) : "—";
 
         /// <summary>出口动压(风系统才有)。</summary>
-        public string OutletText => Result == null || Result.Kind == HydraulicKind.WaterPipe ? "—" : Pa(Result.OutletDynamicPa);
+        public string OutletText => !HasResult || IsWater ? "—" : Pa(Result.OutletDynamicPa);
 
-        /// <summary>静压(水系统才有;风系统为「—」)。</summary>
-        public string StaticText => Result == null || Result.Kind != HydraulicKind.WaterPipe ? "—" : Pa(Result.StaticPa);
+        /// <summary>静压(水系统才有)。</summary>
+        public string StaticText => !HasResult || !IsWater ? "—" : Pa(Result.StaticPa);
 
-        public string TotalText => Text(Result, r => r.TotalResistancePa);
+        public string TotalText => HasResult ? Pa(Result.TotalResistancePa) : "—";
 
-        /// <summary>需求值:风系统 = 需求全压(Pa);水系统 = 需求扬程(m)。</summary>
+        /// <summary>需求值:风 = 需求全压(Pa);水 = 需求扬程(m)。</summary>
         public string RequiredText
         {
             get
             {
-                if (Result == null) return "—";
-                return Result.Kind == HydraulicKind.WaterPipe
+                if (!HasResult) return "—";
+                return IsWater
                     ? Result.RequiredHeadM.ToString("N2") + " m"
                     : Result.RequiredPressurePa.ToString("N1") + " Pa";
             }
         }
 
-        /// <summary>额定值(模型读到的;读不到给「—」)。</summary>
+        /// <summary>设备额定值(模型里读到的;没有给「—」)。</summary>
         public string RatedText
         {
             get
             {
-                if (Result == null) return "—";
-                if (Result.Kind == HydraulicKind.WaterPipe)
-                    return Result.RatedHeadM > 0 ? Result.RatedHeadM.ToString("N2") + " m" : "—";
+                if (!HasResult) return "—";
+                if (IsWater) return Result.RatedHeadM > 0 ? Result.RatedHeadM.ToString("N2") + " m" : "—";
                 return Result.RatedPressurePa > 0 ? Result.RatedPressurePa.ToString("N1") + " Pa" : "—";
             }
         }
 
-        public string MarginText => Result == null || double.IsNaN(Result.MarginPct)
+        public string MarginText => !HasResult || double.IsNaN(Result.MarginPct)
             ? "—"
             : Result.MarginPct.ToString("N1") + " %";
 
-        /// <summary>并联支路数(条;没有拓扑数据给「—」)。</summary>
-        public string BranchText => Result == null || !Result.HasBranches ? "—" : Result.Branches.Count.ToString();
+        /// <summary>并联支路数(没有拓扑数据给「—」)。</summary>
+        public string BranchText => !HasResult || !Result.HasBranches ? "—" : Result.Branches.Count.ToString();
 
-        /// <summary>最大不平衡率 %(没有支路数据给「—」)。</summary>
-        public string ImbalanceText => Result == null || !Result.HasBranches
+        public string ImbalanceText => !HasResult || !Result.HasBranches
             ? "—"
             : Result.MaxImbalancePct.ToString("N1") + " %";
 
-        /// <summary>超出允许不平衡率的支路数(0 = 各并联环路基本平衡)。</summary>
-        public string UnbalancedText => Result == null || !Result.HasBranches
+        public string UnbalancedText => !HasResult || !Result.HasBranches
             ? "—"
             : Result.UnbalancedBranchCount.ToString();
 
-        public string VerdictText => Result == null || string.IsNullOrEmpty(Result.CheckVerdict)
+        public string VerdictText => !HasResult || string.IsNullOrEmpty(Result.CheckVerdict)
             ? "—"
             : Result.CheckVerdict;
-
-        private static string Text(HydraulicResult result, System.Func<HydraulicResult, double> selector)
-        {
-            if (result == null || !result.HasSegments) return "—";
-            return Pa(selector(result));
-        }
 
         private static string Pa(double value)
         {

@@ -14,4 +14,10 @@
     <ProjectReference Include="..\..\src\HVACIDA.Core\HVACIDA.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 场景14 要解压 xlsx 校验内容(Excel 导出是 ZIP + XML) -->
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+
 </Project>

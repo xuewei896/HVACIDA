@@ -34,8 +34,8 @@
         <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
             <StackPanel>
                 <TextBlock TextWrapping="Wrap" Foreground="#23486E">
-                    <Run Text="水力计算结果(风系统 / 水系统):"/><Run Text="{Binding SummaryTitle, Mode=OneWay}" FontWeight="Bold"/>
-                    <Run Text="   ·   数据源 hydraulic.xml;打开即算(与录入窗保存的管网同一份)"/>
+                    <Run Text="水力计算全站汇总(逐系统一行):"/><Run Text="{Binding SummaryTitle, Mode=OneWay}" FontWeight="Bold"/>
+                    <Run Text="   ·   数据源 hydraulic.xml;打开即算 —— 每套系统各自算,汇总只相加可加量(压力不可加)"/>
                 </TextBlock>
                 <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
             </StackPanel>
@@ -45,9 +45,11 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Button Content="计 算" Width="90" Height="30" Command="{Binding CalculateCommand}" IsDefault="True"
-                            ToolTip="重新读取 hydraulic.xml 里保存的管网并现算(本窗打开时已自动算过一次)"/>
+                            ToolTip="重新读取 hydraulic.xml 里的全部系统并逐系统现算(本窗打开时已自动算过一次)"/>
                     <Button Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0" Command="{Binding ExportCommand}"
-                            ToolTip="导出**选中介质**的水力计算书(汇总 + 逐段明细 + 阻力项 + 系数取值)"/>
+                            ToolTip="导出**选中系统**的文本计算书(汇总 + 逐段明细 + 阻力项 + 并联平衡 + 特性曲线 + 取值)"/>
+                    <Button Content="导出全站 Excel" Width="126" Height="30" Margin="8,0,0,0" Command="{Binding ExportExcelCommand}"
+                            ToolTip="导出全站汇总 .xlsx:全站汇总 / 逐系统 / 取值与口径 + 各系统的管段与并联平衡明细页"/>
                 </StackPanel>
                 <Button DockPanel.Dock="Right" Content="关 闭" Width="90" Height="30" IsCancel="True"/>
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
@@ -73,17 +75,20 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- 一、汇总表(一介质一行) -->
+            <!-- 一、汇总表(逐系统一行) -->
             <TextBlock Grid.Row="0" Style="{StaticResource SectionTitle}" Margin="4,0,0,4"
-                       Text="一、汇总(风系统 / 水系统各一行;「—」= 该介质不涉及该项,点某一行看逐段明细)"/>
+                       Text="一、全站汇总(逐系统一行;「—」= 该系统不涉及该项,点某一行看逐段明细)"/>
             <DataGrid Grid.Row="1" x:Name="SummaryGrid" Style="{StaticResource Grid}"
                       ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
                       SelectionMode="Single" AlternatingRowBackground="#F7FAFD" HorizontalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="介质" Width="80" Binding="{Binding KindName}"/>
+                    <DataGridTextColumn Header="介质" Width="76" Binding="{Binding KindName}"/>
+                    <DataGridTextColumn Header="系统编号" Width="120" Binding="{Binding SystemCode}"/>
                     <DataGridTextColumn Header="系统名称" Width="150" Binding="{Binding SystemName}"/>
-                    <DataGridTextColumn Header="最不利环路末端" Width="180" Binding="{Binding CriticalPathName}"/>
+                    <DataGridTextColumn Header="最不利环路末端" Width="160" Binding="{Binding CriticalPathName}"/>
                     <DataGridTextColumn Header="环路段数 / 总段数" Width="126" Binding="{Binding SegmentText}"/>
+                    <DataGridTextColumn Header="管段总长" Width="100" Binding="{Binding LengthText}"/>
+                    <DataGridTextColumn Header="设计流量" Width="110" Binding="{Binding FlowText}"/>
                     <DataGridTextColumn Header="沿程 Pa" Width="96" Binding="{Binding FrictionText}"/>
                     <DataGridTextColumn Header="局部 Pa" Width="96" Binding="{Binding LocalText}"/>
                     <DataGridTextColumn Header="末端+设备 Pa" Width="118" Binding="{Binding EquipmentText}"/>

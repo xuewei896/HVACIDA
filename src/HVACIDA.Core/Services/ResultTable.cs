@@ -437,6 +437,45 @@ namespace HVACIDA.Core.Services
             return t;
         }
 
+        // ================================================================== 水力计算 · 全站汇总
+
+        /// <summary>
+        /// 水力计算**全站汇总**表(需求 2.3 / 2.4):只给**可加量**的合计 + 压力类的最大值。
+        /// <para>
+        /// ⚠ 风机全压 / 水泵扬程**不能相加**(各系统管网相互独立),所以这里不做"看起来漂亮"的求和;
+        /// 逐系统明细走专用表格(见 <see cref="HydraulicSummary.Rows"/> 与计算书里的逐系统表)。
+        /// </para>
+        /// </summary>
+        public static ResultTable ForHydraulicSummary(HydraulicSummary s)
+        {
+            var t = new ResultTable
+            {
+                Title = "全站水力计算汇总",
+                Note = (s.Note ?? "") + (string.IsNullOrEmpty(s.PendingNote) ? "" : " " + s.PendingNote)
+            };
+
+            var total = t.Section("一、全站合计(可加量)");
+            total.Add("系统总数", "", s.SystemCount, "套", 0);
+            total.Add("风系统", "", s.AirCount, "套", 0);
+            total.Add("水系统", "", s.WaterCount, "套", 0);
+            total.Add("管段总数", "", s.SegmentCount, "段", 0);
+            total.Add("管段总长", "", s.TotalLengthM, "m", 1);
+            total.Add("风系统设计风量合计", "", s.TotalAirFlowM3H, "m³/h", 0);
+            total.Add("水系统设计水量合计", "", s.TotalWaterFlowM3H, "m³/h", 1);
+            total.Add("末端 / 设备阻力项", "", s.EquipmentCount, "项", 0);
+            total.Add("存在超限并联支路的系统数", "", s.UnbalancedSystemCount, "套", 0);
+            total.Add("未做设备校核的系统数", "", s.UncheckedSystemCount, "套", 0);
+
+            var pressure = t.Section("二、需求值(不可加:逐系统列出,此处只给最大值)");
+            pressure.Add("最大需求全压(风系统)", "", s.MaxRequiredPressurePa, "Pa", 1);
+            pressure.Add("最大需求扬程(水系统)", "", s.MaxRequiredHeadM, "m", 2);
+            pressure.AddText("为什么不求和",
+                "风机全压与水泵扬程对应的是各系统相互独立的管网,阻力不能相加;" +
+                "逐系统的计算总阻力 / 需求值 / 校核结论见「逐系统」表与各系统的计算书。");
+
+            return t;
+        }
+
         private static string Num(double v)
         {
             return v.ToString("0.##", CultureInfo.InvariantCulture);

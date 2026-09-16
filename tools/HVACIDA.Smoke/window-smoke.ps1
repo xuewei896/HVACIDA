@@ -1092,10 +1092,10 @@ try {
     }
     $hWater.CalculateCommand.Execute($null)
 
-    # ---- 计算结果窗:打开即算 / 两行汇总 / 「—」 / 选中行刷新 ----
+    # ---- 计算结果窗:打开即算 / 全站汇总 / 「—」 / 选中行刷新 ----
     $hr = New-Object "$vmNs.HydraulicResultViewModel" -ArgumentList $repoH
-    if ($hr.Rows.Count -eq 2 -and $hr.Table -ne $null -and $hr.Table.Sections.Count -eq 6 -and
-        $hr.SegmentRows.Count -ge 1 -and $hr.SummaryTitle -match '已拾取 2 个系统') {
+    if ($hr.Rows.Count -eq 2 -and $hr.Table -ne $null -and $hr.Table.Sections.Count -eq 2 -and
+        $hr.SegmentRows.Count -ge 1 -and $hr.SummaryTitle -match '全站共 2 套系统') {
         Write-Host ("PASS  水力计算结果窗打开即出结果:{0}" -f $hr.SummaryTitle)
     } else {
         Write-Host ("FAIL  水力结果窗: rows={0} table={1}" -f $hr.Rows.Count, ($hr.Table -ne $null))
@@ -1144,12 +1144,12 @@ try {
     $itemGridH = $hrW.FindName('ItemGrid')
     $branchGridH = $hrW.FindName('BranchGrid')
     $curveGridH = $hrW.FindName('CurveGrid')
-    if ($sumGridH -ne $null -and $sumGridH.Columns.Count -eq 17 -and $sumGridH.Items.Count -eq 2 -and
+    if ($sumGridH -ne $null -and $sumGridH.Columns.Count -eq 20 -and $sumGridH.Items.Count -eq 2 -and
         $segGridR -ne $null -and $segGridR.Columns.Count -eq 14 -and
         $itemGridH -ne $null -and $itemGridH.Columns.Count -eq 5 -and
         $branchGridH -ne $null -and $branchGridH.Columns.Count -eq 12 -and $branchGridH.Items.Count -eq 2 -and
         $curveGridH -ne $null -and $curveGridH.Columns.Count -eq 4 -and $curveGridH.Items.Count -eq 9) {
-        Write-Host ("PASS  水力结果窗渲染:汇总 {0} 列 × {1} 行 / 逐段 {2} 列 / 阻力项 {3} 列 / 并联平衡 {4} 列 × {5} 行 / 特性曲线 {6} 列 × {7} 点" -f `
+        Write-Host ("PASS  水力结果窗渲染:全站汇总 {0} 列 × {1} 行 / 逐段 {2} 列 / 阻力项 {3} 列 / 并联平衡 {4} 列 × {5} 行 / 特性曲线 {6} 列 × {7} 点" -f `
             $sumGridH.Columns.Count, $sumGridH.Items.Count, $segGridR.Columns.Count, $itemGridH.Columns.Count, `
             $branchGridH.Columns.Count, $branchGridH.Items.Count, $curveGridH.Columns.Count, $curveGridH.Items.Count)
     } else {
@@ -1157,11 +1157,45 @@ try {
     }
     $hrW.Close()
 
+    # ---- 多系统汇总 + Excel 导出(写到临时目录,不碰真实 %AppData%) ----
+    $hReports = Join-Path $env:TEMP ("HVACIDA-HydReports-" + [guid]::NewGuid().ToString('N'))
+    $hr2 = New-Object "$vmNs.HydraulicResultViewModel" -ArgumentList $repoH, $hReports
+    if ($hr2.Summary.SystemCount -eq 2 -and $hr2.Rows.Count -eq 2 -and $hr2.Table -ne $null -and
+        $hr2.Table.Sections.Count -eq 2 -and $hr2.SummaryTitle -match '全站共 2 套系统' -and
+        $hr2.Note -match '不可相加') {
+        Write-Host ("PASS  多系统汇总:{0}" -f $hr2.SummaryTitle)
+    } else {
+        $tableSections = -1
+        if ($hr2.Table -ne $null) { $tableSections = $hr2.Table.Sections.Count }
+        Write-Host ("FAIL  多系统汇总: systems={0} rows={1} tableSections={2}" -f `
+            $hr2.Summary.SystemCount, $hr2.Rows.Count, $tableSections)
+        $fail++
+    }
+
+    $hr2.ExportExcelCommand.Execute($null)
+    $xlsx = @(Get-ChildItem -LiteralPath $hReports -Filter *.xlsx -ErrorAction SilentlyContinue)
+    if ($xlsx.Count -eq 1 -and $hr2.Status -match 'Excel 已生成') {
+        Write-Host ("PASS  全站汇总 Excel 已导出:{0} 字节(状态:{1})" -f $xlsx[0].Length, $hr2.Status)
+    } else {
+        Write-Host ("FAIL  全站 Excel 导出: files={0} status='{1}'" -f $xlsx.Count, $hr2.Status); $fail++
+    }
+
+    # 录入窗的 Excel 导出(单系统 6 页)
+    $hAirExcel = New-Object "$vmNs.HydraulicSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.HydraulicKind]::AirDuct), $repoH, $true, $hReports
+    $hAirExcel.ExportExcelCommand.Execute($null)
+    $xlsx2 = @(Get-ChildItem -LiteralPath $hReports -Filter *.xlsx -ErrorAction SilentlyContinue)
+    if ($xlsx2.Count -eq 2 -and $hAirExcel.Status -match '6 个工作表') {
+        Write-Host ("PASS  单系统 Excel 已导出(6 页):{0}" -f $hAirExcel.Status)
+    } else {
+        Write-Host ("FAIL  单系统 Excel 导出: files={0} status='{1}'" -f $xlsx2.Count, $hAirExcel.Status); $fail++
+    }
+    try { Remove-Item $hReports -Recurse -Force -ErrorAction Stop } catch { }
+
     # ---- 空工程:汇总窗不摆结果;空系统不落盘 ----
     $tmpH2 = Join-Path $env:TEMP ("HVACIDA-Hyd-" + [guid]::NewGuid().ToString('N'))
     $repoH2 = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmpH2
     $hrEmpty = New-Object "$vmNs.HydraulicResultViewModel" -ArgumentList $repoH2
-    if ($hrEmpty.Rows.Count -eq 0 -and $hrEmpty.Table -eq $null -and $hrEmpty.Status -match '还没有从模型拾取过') {
+    if ($hrEmpty.Rows.Count -eq 0 -and $hrEmpty.Table -eq $null -and $hrEmpty.Status -match '还没有水力系统') {
         Write-Host "PASS  水力计算结果窗(空工程):汇总表为空、不摆结果、只给去拾取的指引"
     } else {
         Write-Host ("FAIL  空工程水力结果窗: rows={0}" -f $hrEmpty.Rows.Count); $fail++

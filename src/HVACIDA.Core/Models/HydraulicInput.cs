@@ -218,6 +218,12 @@ namespace HVACIDA.Core.Models
         /// <summary>系统名(模型里的系统名称,如「机械送风 1」「冷冻水供水」)。</summary>
         public string SystemName { get; set; } = "";
 
+        /// <summary>
+        /// 系统编号(全站唯一标识,如「SAF-1-1」「CHWS-1」)。
+        /// **upsert 键 = 介质 + 系统编号**:同介质同编号覆盖、否则追加;留空时界面按系统名兜底。
+        /// </summary>
+        public string SystemCode { get; set; } = "";
+
         /// <summary>系统类别名(送风 / 回风 / 排风 / 冷冻水 / 冷却水…)。</summary>
         public string SystemTypeName { get; set; } = "";
 
@@ -347,29 +353,145 @@ namespace HVACIDA.Core.Models
     }
 
     /// <summary>
-    /// 水力计算模块的落盘容器:(全局系数) + (最近一次从模型读到的风系统 / 水系统输入)。
+    /// 水力计算模块的落盘容器:**(全局系数) + (全站多套水力系统)**。
+    /// <para>
+    /// 一个车站通常有多套风系统(送风 / 排风 / 排烟…)与多套水系统(冷冻水 / 冷却水…),故容器按
+    /// **「介质 + 系统编号」**存多套(<see cref="Systems"/>),<see cref="Upsert"/> 同键覆盖。
+    /// 旧版单系统文件里的 <c>Air</c> / <c>Water</c> 两个元素会被**自动迁移**进 <see cref="Systems"/>
+    /// (见 <see cref="MigrateLegacy"/>),迁移后置空、不再写回。
+    /// </para>
+    /// <para>
     /// 结果不落盘 —— 与其它模块一致,打开「计算结果」窗时按输入**现算**(打开即算)。
+    /// </para>
     /// </summary>
     public class HydraulicProject
     {
-        /// <summary>系数集。</summary>
+        /// <summary>系数集(全站共用一份)。</summary>
         public HydraulicCoefficients Coefficients { get; set; } = HydraulicCoefficients.CreateDefault();
 
-        /// <summary>最近一次读取的风系统(未读取过为 null)。</summary>
-        public HydraulicInput Air { get; set; }
+        /// <summary>全站水力系统(风 + 水,按「介质 + 系统编号」区分)。</summary>
+        public List<HydraulicInput> Systems { get; set; } = new List<HydraulicInput>();
 
-        /// <summary>最近一次读取的水系统(未读取过为 null)。</summary>
-        public HydraulicInput Water { get; set; }
+        /// <summary>旧版单系统字段(风):**只用于读取旧文件**,迁移后置空。</summary>
+        [XmlElement("Air")]
+        public HydraulicInput LegacyAir { get; set; }
 
-        /// <summary>按介质取输入(没有则返回 null)。</summary>
+        /// <summary>旧版单系统字段(水):**只用于读取旧文件**,迁移后置空。</summary>
+        [XmlElement("Water")]
+        public HydraulicInput LegacyWater { get; set; }
+
+        /// <summary>系统数。</summary>
         [XmlIgnore]
-        public HydraulicInput this[HydraulicKind kind]
+        public int SystemCount => Systems == null ? 0 : Systems.Count;
+
+        /// <summary>按「介质 + 系统编号」找一套系统(找不到返回 null)。</summary>
+        public HydraulicInput Find(HydraulicKind kind, string systemCode)
         {
-            get { return kind == HydraulicKind.WaterPipe ? Water : Air; }
-            set
+            if (Systems == null) return null;
+            string code = systemCode ?? "";
+            foreach (var system in Systems)
             {
-                if (kind == HydraulicKind.WaterPipe) Water = value; else Air = value;
+                if (system == null) continue;
+                if (system.Kind != kind) continue;
+                if (string.Equals(system.SystemCode ?? "", code, StringComparison.Ordinal)) return system;
             }
+            return null;
+        }
+
+        /// <summary>取某介质的**第一套**系统(兼容入口:打开窗时先看已有数据)。</summary>
+        public HydraulicInput FirstOf(HydraulicKind kind)
+        {
+            if (Systems == null) return null;
+            foreach (var system in Systems)
+            {
+                if (system != null && system.Kind == kind) return system;
+            }
+            return null;
+        }
+
+        /// <summary>某介质的系统数。</summary>
+        public int CountOf(HydraulicKind kind)
+        {
+            if (Systems == null) return 0;
+            int n = 0;
+            foreach (var system in Systems)
+            {
+                if (system != null && system.Kind == kind) n++;
+            }
+            return n;
+        }
+
+        /// <summary>按「介质 + 系统编号」新增或覆盖(同类型其它编号的系统不受影响)。</summary>
+        public void Upsert(HydraulicInput input)
+        {
+            if (input == null) return;
+            if (Systems == null) Systems = new List<HydraulicInput>();
+            input.SystemCode = input.SystemCode ?? "";
+
+            for (int i = 0; i < Systems.Count; i++)
+            {
+                var existing = Systems[i];
+                if (existing == null) continue;
+                if (existing.Kind != input.Kind) continue;
+                if (!string.Equals(existing.SystemCode ?? "", input.SystemCode, StringComparison.Ordinal)) continue;
+                Systems[i] = input;
+                return;
+            }
+            Systems.Add(input);
+        }
+
+        /// <summary>按「介质 + 系统编号」删除,返回是否删掉了。</summary>
+        public bool Remove(HydraulicKind kind, string systemCode)
+        {
+            if (Systems == null) return false;
+            string code = systemCode ?? "";
+            for (int i = 0; i < Systems.Count; i++)
+            {
+                var existing = Systems[i];
+                if (existing == null) continue;
+                if (existing.Kind != kind) continue;
+                if (!string.Equals(existing.SystemCode ?? "", code, StringComparison.Ordinal)) continue;
+                Systems.RemoveAt(i);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>清空某介质的全部系统,返回清掉的套数。</summary>
+        public int RemoveAllOf(HydraulicKind kind)
+        {
+            if (Systems == null) return 0;
+            int removed = 0;
+            for (int i = Systems.Count - 1; i >= 0; i--)
+            {
+                var existing = Systems[i];
+                if (existing == null || existing.Kind != kind) continue;
+                Systems.RemoveAt(i);
+                removed++;
+            }
+            return removed;
+        }
+
+        /// <summary>
+        /// 把旧版单系统字段(Air / Water)搬进 <see cref="Systems"/>(只在读到旧文件时发生一次)。
+        /// </summary>
+        /// <returns>是否发生了迁移(调用方据此决定要不要立即落盘)。</returns>
+        public bool MigrateLegacy()
+        {
+            bool changed = false;
+            if (LegacyAir != null)
+            {
+                Upsert(LegacyAir);
+                LegacyAir = null;
+                changed = true;
+            }
+            if (LegacyWater != null)
+            {
+                Upsert(LegacyWater);
+                LegacyWater = null;
+                changed = true;
+            }
+            return changed;
         }
     }
 }
