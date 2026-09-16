@@ -193,6 +193,7 @@ Test-Window '水力计算 水系统 HydraulicSystemWindow(水)' {
 }
 Test-Window '水力计算结果 HydraulicResultWindow' { New-Object "$uiNs.HydraulicResultWindow" }
 Test-Window '出图 材料表统计 MaterialTakeoffWindow' { New-Object "$uiNs.MaterialTakeoffWindow" }
+Test-Window '出图 图框 SheetCatalogWindow' { New-Object "$uiNs.SheetCatalogWindow" }
 Test-Window '规范知识库 KnowledgeWindow'       { New-Object "$uiNs.KnowledgeWindow" }
 Test-Window '操作指南 InfoWindow(Guide)'      {
     $vm = [HVACIDA.UI.ViewModels.InfoViewModel]::Guide()
@@ -1354,6 +1355,94 @@ try {
     try { Remove-Item $mtDir -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
     Write-Host ("FAIL  材料表统计窗自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
+# =====================================================================
+# 出图 → 图框(图纸清单与批量出图,需求 2.6):空清单 / 请求协议 / 清单统计 / 出图记录 / 窗口 / Excel
+# =====================================================================
+try {
+    $shDir = Join-Path $env:TEMP ("HVACIDA-SheetRep-" + [guid]::NewGuid().ToString('N'))
+    $shVm = New-Object "$vmNs.SheetCatalogViewModel" -ArgumentList $shDir
+    if ($shVm.Table -eq $null -and $shVm.Sheets.Count -eq 0 -and $shVm.Status -match '没有读到图纸') {
+        Write-Host "PASS  图框窗(未读取):不摆结果,只给「没有读到图纸」的指引"
+    } else {
+        Write-Host ("FAIL  空图纸清单: table={0} status='{1}'" -f ($shVm.Table -ne $null), $shVm.Status); $fail++
+    }
+
+    $shVm.ReloadCommand.Execute($null)
+    if ($shVm.ReloadRequested -eq $true) { Write-Host "PASS  请求重新读取图纸 → 置标记" }
+    else { Write-Host "FAIL  ReloadRequested 未置位"; $fail++ }
+    $shVm.ClearRequests()
+    $shVm.ExportDwgCommand.Execute($null)
+    if ($shVm.ExportRequested -eq $true -and $shVm.PendingFormat -eq 'DWG') {
+        Write-Host "PASS  请求导出 DWG → 置标记并带格式(命令层据此在事务里导出)"
+    } else { Write-Host "FAIL  导出请求未置位"; $fail++ }
+    $shVm.ClearRequests()
+    if ($shVm.ExportRequested -eq $false -and $shVm.PendingFormat -eq '') { Write-Host "PASS  执行后清标记" }
+    else { Write-Host "FAIL  导出标记未清"; $fail++ }
+
+    # 注入「命令层从模型读到的」图纸清单(A-01 有 1 个视图、A-02 空图框)
+    $shItems = New-Object 'System.Collections.Generic.List[HVACIDA.Core.Models.SheetItem]'
+    $s1 = New-Object HVACIDA.Core.Models.SheetItem
+    $s1.SheetNumber = 'A-01'; $s1.SheetName = '设计说明'; $s1.TitleBlockFamily = '标准图框'
+    $s1.TitleBlockType = 'A1'; $s1.WidthMm = 841; $s1.HeightMm = 594
+    $v1 = New-Object HVACIDA.Core.Models.SheetViewItem
+    $v1.ViewName = '设计说明'; $v1.ViewType = 'DraftingView'; $v1.Scale = 100
+    $s1.Views.Add($v1)
+    $shItems.Add($s1)
+    $s2 = New-Object HVACIDA.Core.Models.SheetItem
+    $s2.SheetNumber = 'A-02'; $s2.SheetName = '预留'; $s2.TitleBlockFamily = '标准图框'
+    $s2.TitleBlockType = 'A2'; $s2.WidthMm = 594; $s2.HeightMm = 420
+    $shItems.Add($s2)
+    $shVm.ApplyCatalog($shItems, '自检注入:2 张图纸')
+    if ($shVm.Sheets.Count -eq 2 -and $shVm.Table -ne $null -and $shVm.Table.Sections.Count -eq 2 -and
+        $shVm.SummaryTitle -match '2 张图纸' -and $shVm.SummaryTitle -match '空图框 1 张') {
+        Write-Host ("PASS  图纸清单与统计:{0}" -f $shVm.SummaryTitle)
+    } else {
+        Write-Host ("FAIL  图纸清单: sheets={0} title='{1}'" -f $shVm.Sheets.Count, $shVm.SummaryTitle); $fail++
+    }
+
+    $recs = New-Object 'System.Collections.Generic.List[HVACIDA.Core.Models.SheetExportRecord]'
+    $r1 = New-Object HVACIDA.Core.Models.SheetExportRecord
+    $r1.SheetNumber = 'A-01'; $r1.Format = 'DWG'; $r1.Succeeded = $true; $r1.Message = '已导出'
+    $recs.Add($r1)
+    $r2 = New-Object HVACIDA.Core.Models.SheetExportRecord
+    $r2.SheetNumber = 'A-02'; $r2.Format = 'PDF'; $r2.Succeeded = $false; $r2.Message = '本机没有可用的 PDF 打印机'
+    $recs.Add($r2)
+    $shVm.ApplyExports($recs, $shVm.OutputDirectory)
+    if ($shVm.ExportRows.Count -eq 2 -and $shVm.Result.ExportSucceeded -eq 1 -and $shVm.Result.ExportFailed -eq 1 -and
+        $shVm.Status -match '失败 1 张') {
+        Write-Host ("PASS  批量出图记录回注:成功 1 / 失败 1({0})" -f $shVm.Status)
+    } else {
+        Write-Host ("FAIL  出图记录: rows={0} ok={1} fail={2}" -f $shVm.ExportRows.Count, $shVm.Result.ExportSucceeded, $shVm.Result.ExportFailed)
+        $fail++
+    }
+
+    $shW = New-Object "$uiNs.SheetCatalogWindow" -ArgumentList $shVm
+    $shW.Show(); $shW.UpdateLayout()
+    $sheetGrid = $shW.FindName('SheetGrid')
+    $exportGrid = $shW.FindName('ExportGrid')
+    if ($sheetGrid -ne $null -and $sheetGrid.Columns.Count -eq 8 -and $sheetGrid.Items.Count -eq 2 -and
+        $exportGrid -ne $null -and $exportGrid.Columns.Count -eq 6 -and $exportGrid.Items.Count -eq 2 -and
+        $shW.FindName('ResultTableHost').Table -ne $null) {
+        Write-Host ("PASS  图框窗渲染:图纸 {0} 列 × {1} 行 / 出图记录 {2} 列 × {3} 行 + 概况表" -f `
+            $sheetGrid.Columns.Count, $sheetGrid.Items.Count, $exportGrid.Columns.Count, $exportGrid.Items.Count)
+    } else {
+        Write-Host "FAIL  图框窗控件/绑定不符"; $fail++
+    }
+    $shW.Close()
+
+    $shVm.ExportExcelCommand.Execute($null)
+    $shXlsx = @(Get-ChildItem -LiteralPath $shDir -Filter *.xlsx -ErrorAction SilentlyContinue)
+    if ($shXlsx.Count -eq 1 -and $shVm.Status -match '4 个工作表') {
+        Write-Host ("PASS  图纸清单 Excel 已导出:{0} 字节" -f $shXlsx[0].Length)
+    } else {
+        Write-Host ("FAIL  图纸清单 Excel: files={0} status='{1}'" -f $shXlsx.Count, $shVm.Status); $fail++
+    }
+    try { Remove-Item $shDir -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  图框窗自检  {0}" -f $_.Exception.Message)
     $fail++
 }
 

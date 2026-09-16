@@ -48,6 +48,7 @@ namespace HVACIDA.Smoke
             RunHydraulicSummaryChecks();
             RunCalculationExcelChecks();
             RunMaterialTakeoffChecks();
+            RunSheetCatalogChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
@@ -1827,6 +1828,102 @@ namespace HVACIDA.Smoke
                 Category = category, CategoryName = MaterialTakeoffService.CategoryName(category),
                 FamilyName = family, TypeName = type, Unit = "个", Quantity = count, Count = count, Note = "按件数计"
             };
+        }
+
+        // =====================================================================
+        // 场景17:图纸清单与批量出图(需求 2.6)—— 排序 / 空图框 / 图框统计 / 导出记录 / Excel
+        // =====================================================================
+        private static void RunSheetCatalogChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景17:图纸清单与批量出图(图框统计 / 导出记录 / Excel)");
+            Console.WriteLine("==================================================");
+
+            var service = new SheetCatalogService();
+            var sheets = new List<SheetItem>
+            {
+                new SheetItem
+                {
+                    SheetNumber = "A-02", SheetName = "站厅层通风平面", TitleBlockFamily = "标准图框",
+                    TitleBlockType = "A1", WidthMm = 841, HeightMm = 594,
+                    Views = new List<SheetViewItem>
+                    {
+                        new SheetViewItem { ViewName = "站厅层通风平面", ViewType = "FloorPlan", Scale = 100 },
+                        new SheetViewItem { ViewName = "站厅层空调水", ViewType = "FloorPlan", Scale = 100 }
+                    }
+                },
+                new SheetItem
+                {
+                    SheetNumber = "A-01", SheetName = "设计说明", TitleBlockFamily = "标准图框",
+                    TitleBlockType = "A1", WidthMm = 841, HeightMm = 594,
+                    Views = new List<SheetViewItem> { new SheetViewItem { ViewName = "设计说明", ViewType = "DraftingView" } }
+                },
+                new SheetItem
+                {
+                    SheetNumber = "A-03", SheetName = "预留", TitleBlockFamily = "标准图框",
+                    TitleBlockType = "A2", WidthMm = 594, HeightMm = 420
+                }
+            };
+
+            var result = service.Summarize(sheets);
+            CheckInt("图纸数 = 3", result.SheetCount, 3);
+            CheckInt("空图框 = 1(A-03)", result.EmptySheetCount, 1);
+            CheckInt("视图总数 = 3", result.ViewCount, 3);
+            CheckText("按图纸编号排序", result.Sheets[0].SheetNumber, "A-01");
+            CheckInt("图框类型小计 = 2(A1 / A2)", result.TitleBlocks.Count, 2);
+            Check("A1 图框张数 = 2", result.TitleBlocks[0].SheetCount, 2, 1e-9);
+            CheckInt("A1 图框视图数 = 3", result.TitleBlocks[0].ViewCount, 3);
+            CheckText("图幅文字取图框尺寸", result.Sheets[0].SizeText, "841 × 594 mm");
+            CheckText("空图框判定", result.Sheets[2].IsEmpty ? "空" : "有视图", "空");
+            CheckText("待补提示报出空图框数", result.PendingNote.Contains("空图框") ? "有" : result.PendingNote, "有");
+
+            SheetCatalogService.AddExport(result, new SheetExportRecord
+            {
+                SheetNumber = "A-01", SheetName = "设计说明", Format = "DWG", Succeeded = true,
+                OutputPath = "A-01_设计说明.dwg"
+            });
+            SheetCatalogService.AddExport(result, new SheetExportRecord
+            {
+                SheetNumber = "A-03", SheetName = "预留", Format = "PDF", Succeeded = false,
+                Message = "本机没有可用的 PDF 打印机"
+            });
+            CheckInt("导出成功数 = 1", result.ExportSucceeded, 1);
+            CheckInt("导出失败数 = 1", result.ExportFailed, 1);
+            var table = SheetCatalogTable.ForSummary(result);
+            CheckInt("概况表 2 个分区(概况 + 图框统计)", table.Sections.Count, 2);
+            var report = SheetCatalogTable.ToText(result);
+            CheckText("文本清单含图纸编号与视图", report.Contains("A-02") && report.Contains("站厅层通风平面") ? "有" : "无", "有");
+            CheckText("文本清单含出图记录", report.Contains("批量出图") && report.Contains("成功") ? "有" : "无", "有");
+
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Sheets-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var book = SheetCatalogExcelExporter.Build(result);
+                CheckInt("图纸清单工作簿 4 页", book.SheetCount, 4);
+                string path = Path.Combine(dir, "图纸清单.xlsx");
+                book.Save(path);
+                string wb, s1, entries, detailXml, exportXml;
+                ReadXlsxSheets(path, out wb, out s1, out entries,
+                    new[] { "xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml" }, out detailXml, out exportXml);
+                CheckText("工作簿页名(概况与图框 / 逐张图纸 / 批量出图记录 / 口径与待补)",
+                    wb.Contains("概况与图框") && wb.Contains("逐张图纸") && wb.Contains("批量出图记录") &&
+                    wb.Contains("口径与待补") ? "齐" : wb, "齐");
+                CheckText("逐张图纸页写出图纸编号与图幅",
+                    detailXml.Contains("A-02") && detailXml.Contains("841") ? "有" : "缺", "有");
+                CheckText("批量出图记录页写出失败原因",
+                    exportXml.Contains("没有可用的 PDF 打印机") ? "有" : "缺", "有");
+                CheckText("工作表名合法", SheetNamesValid(wb) ? "合法" : wb, "合法");
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+
+            var empty = service.Summarize(new List<SheetItem>());
+            CheckInt("空清单:图纸数 0", empty.SheetCount, 0);
+            CheckText("空清单:给出指引而不摆结果",
+                empty.Note.Contains("没有读到图纸") ? "有" : empty.Note, "有");
+            Console.WriteLine();
         }
 
         private static LargeSystemInput BuildBusyScenario()

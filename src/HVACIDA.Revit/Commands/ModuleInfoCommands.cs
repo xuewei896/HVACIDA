@@ -21,13 +21,6 @@ namespace HVACIDA.Revit.Commands
         }
     }
 
-    /// <summary>出图 → 图框 / 图纸与批量出图(待实现,下一阶段)。</summary>
-    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowTitleBlockCommand : ModuleInfoCommandBase
-    {
-        protected override string ModuleKey => "titleblock";
-    }
-
     /// <summary>产品支持 → 问题反馈(待接入反馈服务)。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class ShowFeedbackCommand : ModuleInfoCommandBase
