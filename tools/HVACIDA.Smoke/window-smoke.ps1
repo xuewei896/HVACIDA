@@ -1319,7 +1319,6 @@ try {
     } else {
         Write-Host ("FAIL  Excel 导出文件数 = {0}(期望 5)" -f $xl.Count); $fail++
     }
-    }
     try { Remove-Item $xlDir -Recurse -Force -ErrorAction Stop } catch { }
     try { Remove-Item $xlRepoDir -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
