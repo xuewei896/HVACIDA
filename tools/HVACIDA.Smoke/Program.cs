@@ -49,6 +49,7 @@ namespace HVACIDA.Smoke
             RunCalculationExcelChecks();
             RunMaterialTakeoffChecks();
             RunSheetCatalogChecks();
+            RunKnowledgeChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
@@ -1923,6 +1924,83 @@ namespace HVACIDA.Smoke
             CheckInt("空清单:图纸数 0", empty.SheetCount, 0);
             CheckText("空清单:给出指引而不摆结果",
                 empty.Note.Contains("没有读到图纸") ? "有" : empty.Note, "有");
+            Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景18:规范 / 口径知识库(需求 2.7)—— 条目完整(带出处)、检索加权、答不出明说范围、Excel
+        // =====================================================================
+        private static void RunKnowledgeChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景18:规范/口径知识库(条目/检索/范围说明/Excel)");
+            Console.WriteLine("==================================================");
+
+            var entries = KnowledgeBase.All;
+            CheckText("条目数 ≥ 15", entries.Count >= 15 ? "够" : entries.Count.ToString(), "够");
+
+            int noSource = 0, noQuestion = 0, noAnswer = 0, noKeywords = 0;
+            foreach (var entry in entries)
+            {
+                if (string.IsNullOrEmpty(entry.Source)) noSource++;
+                if (string.IsNullOrEmpty(entry.Question)) noQuestion++;
+                if (string.IsNullOrEmpty(entry.Answer)) noAnswer++;
+                if (entry.Keywords.Count == 0) noKeywords++;
+            }
+            CheckInt("每条都带出处(0 = 正常)", noSource, 0);
+            CheckInt("每条都有典型问法(0 = 正常)", noQuestion, 0);
+            CheckInt("每条都有正文(0 = 正常)", noAnswer, 0);
+            CheckInt("每条都有关键词(0 = 正常)", noKeywords, 0);
+
+            var hit = KnowledgeBase.Answer("排烟风机怎么选?");
+            CheckText("命中排烟条", hit.HasAnswer && hit.Top != null && hit.Top.Id == "large-smoke"
+                ? "命中" : (hit.Top == null ? "无" : hit.Top.Id), "命中");
+            CheckText("答复含选型系数 1.2", hit.AnswerText.Contains("1.2") ? "有" : "缺", "有");
+            CheckText("答复挂出处", hit.AnswerText.Contains("出处:") ? "有" : "缺", "有");
+
+            var water = KnowledgeBase.Answer("水系统扬程怎么算?");
+            CheckText("命中水力条", water.HasAnswer && water.Top != null && water.Top.Id == "hydraulic-formula"
+                ? "命中" : (water.Top == null ? "无" : water.Top.Id), "命中");
+            CheckText("扬程答复含 ρg 口径", water.AnswerText.Contains("ρg") ? "有" : "缺", "有");
+
+            var outside = KnowledgeBase.Answer("混凝土强度等级怎么定");
+            CheckText("范围外问题:不命中(不编答案)", outside.HasAnswer ? "编了" : "未命中", "未命中");
+            CheckText("范围外:给出知识范围说明",
+                outside.ScopeNote.Contains("不在当前知识库范围内") ? "有" : outside.ScopeNote, "有");
+            CheckText("范围外:明确不编答案",
+                outside.ScopeNote.Contains("不会为范围外的问题编答案") ? "有" : "缺", "有");
+
+            var search = KnowledgeBase.Search("水力 扬程");
+            CheckText("检索按得分排序(水力条在首位)",
+                search.Count > 0 && search[0].Entry.Id == "hydraulic-formula" ? "对" : (search.Count == 0 ? "无" : search[0].Entry.Id), "对");
+            CheckInt("检索结果条数不超过上限 5",
+                KnowledgeBase.Search("小系统 排烟 水力 气象 材料表 图纸").Count <= KnowledgeBase.MaxMatches ? 1 : 0, 1);
+
+            CheckInt("规范依据分类非空", KnowledgeBase.ByCategory(KnowledgeCategory.Standard).Count > 0 ? 1 : 0, 1);
+            CheckInt("待补与局限分类非空", KnowledgeBase.ByCategory(KnowledgeCategory.Pending).Count > 0 ? 1 : 0, 1);
+            CheckInt("按编号取条目", KnowledgeBase.Find("hydraulic-formula") != null ? 1 : 0, 1);
+            CheckText("示例问题数 = 条目数", KnowledgeBase.SampleQuestions().Count == entries.Count ? "齐" : "缺", "齐");
+            CheckText("分类中文名", KnowledgeBase.CategoryName(KnowledgeCategory.Pending), "待补与局限");
+
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Kb-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var book = KnowledgeBaseExcelExporter.Build(entries);
+                CheckInt("知识库工作簿 2 页", book.SheetCount, 2);
+                string path = Path.Combine(dir, "知识库条目.xlsx");
+                book.Save(path);
+                string wb, s1, sheetEntries;
+                ReadXlsx(path, out wb, out s1, out sheetEntries);
+                CheckText("工作簿页名(条目清单 / 说明)",
+                    wb.Contains("条目清单") && wb.Contains("说明") ? "齐" : wb, "齐");
+                CheckText("条目清单页含标题与出处列",
+                    s1.Contains("出处") && s1.Contains("排烟") ? "有" : "缺", "有");
+                CheckText("工作表名合法", SheetNamesValid(wb) ? "合法" : wb, "合法");
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
             Console.WriteLine();
         }
 

@@ -209,14 +209,56 @@ Test-Window '待实现说明 InfoWindow(排烟计算)'   {
     New-Object "$uiNs.InfoWindow" -ArgumentList $vm
 }
 
-# 知识库问答闭环(不依赖窗口)
+# 知识库问答闭环 + 条目化知识库(需求 2.7)
 try {
-    $kvm = New-Object "$vmNs.KnowledgeViewModel"
+    $kbDir = Join-Path $env:TEMP ("HVACIDA-KbRep-" + [guid]::NewGuid().ToString('N'))
+    $kvm = New-Object "$vmNs.KnowledgeViewModel" -ArgumentList $kbDir
+    if ($kvm.Entries.Count -ge 15 -and $kvm.SelectedEntry -ne $null -and $kvm.SampleQuestions.Count -eq $kvm.Entries.Count) {
+        Write-Host ("PASS  知识库条目装载:{0} 条,示例问法与条目一一对应" -f $kvm.Entries.Count)
+    } else {
+        Write-Host ("FAIL  知识库条目装载: entries={0}" -f $kvm.Entries.Count); $fail++
+    }
+
     $kvm.Question = '排烟风机怎么选?'
     $kvm.Ask()
     $last = $kvm.Lines[$kvm.Lines.Count - 1].Text
     if ($last -match '1\.2') { Write-Host "PASS  知识库问答闭环(含选型系数 1.2)"; }
     else { Write-Host "FAIL  知识库问答闭环: $last"; $fail++ }
+    if ($kvm.AnswerText -match '出处:' -and $kvm.SelectedEntry -ne $null) {
+        Write-Host ("PASS  答复挂出处并联动选中条目:「{0}」" -f $kvm.DetailTitle)
+    } else { Write-Host "FAIL  答复未挂出处"; $fail++ }
+
+    $kvm.Question = '混凝土强度等级怎么定'
+    $kvm.Ask()
+    if ($kvm.AnswerText -eq '' -and $kvm.ScopeNote -match '不在当前知识库范围内' -and
+        $kvm.ScopeNote -match '不会为范围外的问题编答案') {
+        Write-Host "PASS  范围外问题:不编答案,给出知识范围与提问建议"
+    } else { Write-Host ("FAIL  范围外问题处理不当: len={0} scope='{1}'" -f $kvm.AnswerText.Length, $kvm.ScopeNote); $fail++ }
+
+    $kvm.PendingCategory = '待补与局限'
+    $kvm.CategoryCommand.Execute($null)
+    if ($kvm.CategoryFilter -eq '待补与局限' -and $kvm.Entries.Count -ge 1 -and
+        $kvm.Entries[0].CategoryName -eq '待补与局限') {
+        Write-Host ("PASS  按分类浏览:{0} → {1} 条" -f $kvm.CategoryFilter, $kvm.Entries.Count)
+    } else { Write-Host "FAIL  分类筛选不符"; $fail++ }
+    $kvm.PendingCategory = '全部'
+    $kvm.CategoryCommand.Execute($null)
+
+    $kbW = New-Object "$uiNs.KnowledgeWindow" -ArgumentList $kvm
+    $kbW.Show(); $kbW.UpdateLayout()
+    $entryGrid = $kbW.FindName('EntryGrid')
+    if ($entryGrid -ne $null -and $entryGrid.Columns.Count -eq 2 -and $entryGrid.Items.Count -ge 15 -and
+        $kbW.FindName('AnswerBox') -ne $null -and $kbW.FindName('ScopeBox') -ne $null) {
+        Write-Host ("PASS  知识库窗渲染:条目 {0} 列 × {1} 行 + 答复区 + 范围说明区" -f $entryGrid.Columns.Count, $entryGrid.Items.Count)
+    } else { Write-Host "FAIL  知识库窗控件/绑定不符"; $fail++ }
+    $kbW.Close()
+
+    $kvm.ExportExcelCommand.Execute($null)
+    $kbXlsx = @(Get-ChildItem -LiteralPath $kbDir -Filter *.xlsx -ErrorAction SilentlyContinue)
+    if ($kbXlsx.Count -eq 1 -and $kvm.Status -match '2 个工作表') {
+        Write-Host ("PASS  知识库 Excel 已导出:{0} 字节" -f $kbXlsx[0].Length)
+    } else { Write-Host ("FAIL  知识库 Excel: files={0} status='{1}'" -f $kbXlsx.Count, $kvm.Status); $fail++ }
+    try { Remove-Item $kbDir -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
     Write-Host ("FAIL  知识库问答闭环  {0}" -f $_.Exception.Message)
     $fail++

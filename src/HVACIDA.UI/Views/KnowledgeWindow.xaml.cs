@@ -1,11 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using HVACIDA.UI.ViewModels;
 
 namespace HVACIDA.UI.Views
 {
-    /// <summary>规范知识库窗(Ribbon「AI问答 → 规范知识库」)。</summary>
+    /// <summary>规范 / 口径知识库窗(Ribbon「AI问答 → 规范知识库」;需求 2.7)。</summary>
     public partial class KnowledgeWindow : Window
     {
         public KnowledgeWindow()
@@ -20,24 +19,29 @@ namespace HVACIDA.UI.Views
             DataContext = viewModel;
         }
 
-        /// <summary>点常用问题按钮 → 直接提问。</summary>
+        /// <summary>点「典型问法」按钮 → 填进问题框并直接提问。</summary>
         private void OnSampleClick(object sender, RoutedEventArgs e)
         {
-            var vm = DataContext as KnowledgeViewModel;
+            var viewModel = DataContext as KnowledgeViewModel;
             var button = sender as Button;
-            if (vm == null || button == null) return;
+            if (viewModel == null || button == null) return;
 
-            vm.Question = button.Content as string ?? "";
-            vm.Ask();
+            viewModel.Question = button.Content as string ?? "";
+            viewModel.Ask();
         }
 
-        /// <summary>输入框回车 = 提问。</summary>
-        private void OnQuestionKeyDown(object sender, KeyEventArgs e)
+        /// <summary>切换分类 → 过滤条目(取消 ComboBox 的选中提示,只做命令转发)。</summary>
+        private void OnCategoryChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (e.Key != Key.Enter) return;
-            var vm = DataContext as KnowledgeViewModel;
-            if (vm != null) vm.Ask();
-            e.Handled = true;
+            var viewModel = DataContext as KnowledgeViewModel;
+            var combo = sender as ComboBox;
+            if (viewModel == null || combo == null) return;
+
+            string category = combo.SelectedItem as string;
+            if (category == null) return;
+            viewModel.PendingCategory = category;
+            if (viewModel.CategoryCommand != null && viewModel.CategoryCommand.CanExecute(null))
+                viewModel.CategoryCommand.Execute(null);
         }
     }
 }
