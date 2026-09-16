@@ -192,6 +192,7 @@ Test-Window '水力计算 水系统 HydraulicSystemWindow(水)' {
     New-Object "$uiNs.HydraulicSystemWindow" -ArgumentList (New-Object "$vmNs.HydraulicSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.HydraulicKind]::WaterPipe))
 }
 Test-Window '水力计算结果 HydraulicResultWindow' { New-Object "$uiNs.HydraulicResultWindow" }
+Test-Window '出图 材料表统计 MaterialTakeoffWindow' { New-Object "$uiNs.MaterialTakeoffWindow" }
 Test-Window '规范知识库 KnowledgeWindow'       { New-Object "$uiNs.KnowledgeWindow" }
 Test-Window '操作指南 InfoWindow(Guide)'      {
     $vm = [HVACIDA.UI.ViewModels.InfoViewModel]::Guide()
@@ -1287,6 +1288,72 @@ try {
     try { Remove-Item $xlRepoDir -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
     Write-Host ("FAIL  计算书 Excel 导出自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
+# =====================================================================
+# 出图 → 明细表(材料表统计,需求 2.5):未读取不摆结果 / 重新读取协议 / 归并结果 / 窗口 / Excel
+# =====================================================================
+try {
+    $mtDir = Join-Path $env:TEMP ("HVACIDA-TakeoffRep-" + [guid]::NewGuid().ToString('N'))
+    $mtVm = New-Object "$vmNs.MaterialTakeoffViewModel" -ArgumentList $mtDir
+    if ($mtVm.Table -eq $null -and $mtVm.Rows.Count -eq 0 -and $mtVm.Status -match '没有读到任何构件') {
+        Write-Host "PASS  材料表窗(未读取模型):不摆结果,只给「没有读到任何构件」的指引"
+    } else {
+        Write-Host ("FAIL  空材料表: table={0} rows={1}" -f ($mtVm.Table -ne $null), $mtVm.Rows.Count); $fail++
+    }
+
+    $mtVm.ReloadCommand.Execute($null)
+    if ($mtVm.ReloadRequested -eq $true) { Write-Host "PASS  请求重新读取模型 → 置标记(命令层据此读模型)" }
+    else { Write-Host "FAIL  ReloadRequested 未置位"; $fail++ }
+    $mtVm.ClearReloadRequest()
+    if ($mtVm.ReloadRequested -eq $false) { Write-Host "PASS  读取后清标记" }
+    else { Write-Host "FAIL  重新读取标记未清"; $fail++ }
+
+    # 注入「命令层从模型读到的」构件(风管 3 段共 35 m + 管件 2 个)
+    $mtItems = New-Object 'System.Collections.Generic.List[HVACIDA.Core.Models.MaterialItem]'
+    foreach ($q in @(10, 20, 5)) {
+        $mi = New-Object HVACIDA.Core.Models.MaterialItem
+        $mi.Category = [HVACIDA.Core.Models.MaterialCategory]::Duct; $mi.CategoryName = '风管'
+        $mi.FamilyName = '矩形风管'; $mi.TypeName = '1200×400'; $mi.Unit = 'm'
+        $mi.Quantity = $q; $mi.Count = 1; $mi.Note = '长度取定位线曲线长度'
+        $mtItems.Add($mi)
+    }
+    $mf = New-Object HVACIDA.Core.Models.MaterialItem
+    $mf.Category = [HVACIDA.Core.Models.MaterialCategory]::DuctFitting; $mf.CategoryName = '风管管件'
+    $mf.FamilyName = '弯头'; $mf.TypeName = '90°弯头'; $mf.Unit = '个'
+    $mf.Quantity = 2; $mf.Count = 2; $mf.Note = '按件数计'
+    $mtItems.Add($mf)
+    $mtVm.ApplyTakeoff($mtItems, '自检注入:风管 3 段 + 管件 2 个')
+    if ($mtVm.Rows.Count -eq 2 -and $mtVm.Table -ne $null -and $mtVm.Table.Sections.Count -eq 2 -and
+        $mtVm.SummaryTitle -match '4 个构件 / 2 种类型 / 2 个类别' -and
+        [math]::Abs($mtVm.Rows[0].TotalQuantity - 35) -lt 1e-9) {
+        Write-Host ("PASS  材料表归并:{0};风管合计 35 m、管件 2 个" -f $mtVm.SummaryTitle)
+    } else {
+        Write-Host ("FAIL  材料表归并: rows={0} title='{1}'" -f $mtVm.Rows.Count, $mtVm.SummaryTitle); $fail++
+    }
+
+    $mtW = New-Object "$uiNs.MaterialTakeoffWindow" -ArgumentList $mtVm
+    $mtW.Show(); $mtW.UpdateLayout()
+    $tkGrid = $mtW.FindName('TakeoffGrid')
+    if ($tkGrid -ne $null -and $tkGrid.Columns.Count -eq 7 -and $tkGrid.Items.Count -eq 2 -and
+        $mtW.FindName('ResultTableHost').Table -ne $null) {
+        Write-Host ("PASS  材料表窗渲染:明细 {0} 列 × {1} 行 + 类别小计表" -f $tkGrid.Columns.Count, $tkGrid.Items.Count)
+    } else {
+        Write-Host "FAIL  材料表窗控件/绑定不符"; $fail++
+    }
+    $mtW.Close()
+
+    $mtVm.ExportExcelCommand.Execute($null)
+    $mtXlsx = @(Get-ChildItem -LiteralPath $mtDir -Filter *.xlsx -ErrorAction SilentlyContinue)
+    if ($mtXlsx.Count -eq 1 -and $mtVm.Status -match '3 个工作表') {
+        Write-Host ("PASS  材料表 Excel 已导出:{0} 字节" -f $mtXlsx[0].Length)
+    } else {
+        Write-Host ("FAIL  材料表 Excel: files={0} status='{1}'" -f $mtXlsx.Count, $mtVm.Status); $fail++
+    }
+    try { Remove-Item $mtDir -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  材料表统计窗自检  {0}" -f $_.Exception.Message)
     $fail++
 }
 

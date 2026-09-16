@@ -47,6 +47,7 @@ namespace HVACIDA.Smoke
             RunHydraulicChecks();
             RunHydraulicSummaryChecks();
             RunCalculationExcelChecks();
+            RunMaterialTakeoffChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
@@ -1726,6 +1727,106 @@ namespace HVACIDA.Smoke
                 }
                 entries = "条目 " + count + " 个";
             }
+        }
+
+        // =====================================================================
+        // 场景16:材料表统计(需求 2.5)—— 归并键含单位、类别小计遇混合单位不累加
+        // =====================================================================
+        private static void RunMaterialTakeoffChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景16:材料表统计(归并口径 / 类别小计 / Excel)");
+            Console.WriteLine("==================================================");
+
+            var service = new MaterialTakeoffService();
+            var items = new List<MaterialItem>
+            {
+                Duct("矩形风管", "1200×400", "m", 10),
+                Duct("矩形风管", "1200×400", "m", 20),
+                Duct("矩形风管", "1200×400", "m", 5),
+                // 同一类型的这一段没取到长度曲线 → 按 1 件计(单位不同,故不能与上面的米相加)
+                Duct("矩形风管", "1200×400", "个", 1),
+                Piece(MaterialCategory.DuctFitting, "弯头", "90°弯头", 2),
+                Piece(MaterialCategory.DuctFitting, "弯头", "90°弯头", 1),
+                new MaterialItem
+                {
+                    Category = MaterialCategory.Insulation, CategoryName = "保温", FamilyName = "风管保温",
+                    TypeName = "30 mm 玻璃棉", Unit = "m", Quantity = 20, Count = 1, Note = "长度沿宿主管道量取"
+                }
+            };
+
+            var result = service.Summarize(items);
+            CheckInt("归并后类型数 = 4(m 段 / 个段 / 管件 / 保温)", result.Rows.Count, 4);
+            CheckInt("读到构件数 = 7", result.ItemCount, 7);
+            Check("构件总件数 = 8(风管 4 件 + 管件 3 件 + 保温 1 件)", result.TotalCount, 8, 1e-9);
+            CheckText("按类别排序(风管在最前)", result.Rows[0].CategoryName, "风管");
+            Check("风管 m 行合计 = 35", result.Rows[0].TotalQuantity, 35, 1e-9);
+            Check("风管 m 行件数 = 3", result.Rows[0].TotalCount, 3, 1e-9);
+            Check("风管 个 行合计 = 1(不与米相加)", result.Rows[1].TotalQuantity, 1, 1e-9);
+            CheckText("风管 个 行的单位", result.Rows[1].Unit, "个");
+            Check("管件归并后合计 = 3", result.Rows[2].TotalQuantity, 3, 1e-9);
+            Check("保温合计 = 20 m", result.Rows[3].TotalQuantity, 20, 1e-9);
+
+            var ductTotal = result.CategoryTotals[0];
+            CheckText("风管类别小计:混合单位不累加", ductTotal.Unit, "混合单位(不累加)");
+            Check("风管类别小计数量 = 0(不累加)", ductTotal.TotalQuantity, 0, 1e-9);
+            Check("风管类别小计件数 = 4", ductTotal.TotalCount, 4, 1e-9);
+            CheckInt("风管类别类型数 = 2", ductTotal.TypeCount, 2);
+            CheckText("口径说明写明单位进归并键", result.Note.Contains("单位进归并键") ? "有" : result.Note, "有");
+
+            var table = MaterialTakeoffTable.ForSummary(result);
+            CheckInt("类别小计表 2 个分区(概况 + 类别小计)", table.Sections.Count, 2);
+            var report = MaterialTakeoffTable.ToText(result);
+            CheckText("文本材料表含类别与类型", report.Contains("风管") && report.Contains("矩形风管") ? "有" : "无", "有");
+            CheckText("文本材料表不含单元格编号",
+                System.Text.RegularExpressions.Regex.IsMatch(report, @"(?<![-A-Z])\b[A-Z]{1,2}[0-9]{2,3}\b") ? "有" : "无", "无");
+
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Takeoff-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var book = MaterialTakeoffExcelExporter.Build(result);
+                CheckInt("材料表工作簿 3 页", book.SheetCount, 3);
+                string path = Path.Combine(dir, "材料表统计.xlsx");
+                book.Save(path);
+                string wb, s1, entries, detailXml, noteXml;
+                ReadXlsxSheets(path, out wb, out s1, out entries,
+                    new[] { "xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml" }, out detailXml, out noteXml);
+                CheckText("工作簿页名(类别小计 / 逐类型明细 / 口径与待补)",
+                    wb.Contains("类别小计") && wb.Contains("逐类型明细") && wb.Contains("口径与待补") ? "齐" : wb, "齐");
+                CheckText("类别小计页写出混合单位口径", s1.Contains("混合单位") ? "有" : "缺", "有");
+                CheckText("逐类型明细页写出族名与数量 35",
+                    detailXml.Contains("矩形风管") && detailXml.Contains("35") ? "有" : "缺", "有");
+                CheckText("工作表名合法", SheetNamesValid(wb) ? "合法" : wb, "合法");
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+
+            var empty = service.Summarize(new List<MaterialItem>());
+            CheckInt("空清单:不产生行", empty.Rows.Count, 0);
+            CheckText("空清单:给出指引而不摆结果",
+                empty.Note.Contains("没有读到任何构件") ? "有" : empty.Note, "有");
+            Console.WriteLine();
+        }
+
+        private static MaterialItem Duct(string family, string type, string unit, double quantity)
+        {
+            return new MaterialItem
+            {
+                Category = MaterialCategory.Duct, CategoryName = "风管", FamilyName = family, TypeName = type,
+                Unit = unit, Quantity = quantity, Count = 1,
+                Note = unit == "m" ? "长度取定位线曲线长度" : "未取到长度曲线,按 1 件计(请在模型里核对)"
+            };
+        }
+
+        private static MaterialItem Piece(MaterialCategory category, string family, string type, double count)
+        {
+            return new MaterialItem
+            {
+                Category = category, CategoryName = MaterialTakeoffService.CategoryName(category),
+                FamilyName = family, TypeName = type, Unit = "个", Quantity = count, Count = count, Note = "按件数计"
+            };
         }
 
         private static LargeSystemInput BuildBusyScenario()

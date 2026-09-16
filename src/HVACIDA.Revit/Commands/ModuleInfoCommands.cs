@@ -21,14 +21,7 @@ namespace HVACIDA.Revit.Commands
         }
     }
 
-    /// <summary>出图 → 明细表 / 材料表统计(待实现)。</summary>
-    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
-    public class ShowScheduleCommand : ModuleInfoCommandBase
-    {
-        protected override string ModuleKey => "schedule";
-    }
-
-    /// <summary>出图 → 图框 / 图纸与批量出图(待实现)。</summary>
+    /// <summary>出图 → 图框 / 图纸与批量出图(待实现,下一阶段)。</summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class ShowTitleBlockCommand : ModuleInfoCommandBase
     {

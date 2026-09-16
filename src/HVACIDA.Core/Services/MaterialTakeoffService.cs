@@ -168,7 +168,8 @@ namespace HVACIDA.Core.Services
                 if (string.IsNullOrEmpty(category.Unit) || category.Unit.StartsWith("混合"))
                 {
                     totals.Add(category.CategoryName + "(件数)", "", category.TotalCount, "件", 0);
-                    totals.AddText(category.CategoryName + " 计量", "该类别下存在多种计量单位,数量不累加(见逐类型明细)");
+                    totals.AddText(category.CategoryName + " 计量",
+                        "该类别下存在多种计量单位(混合单位),数量不累加 —— 见逐类型明细;件数仍可合计");
                 }
                 else
                 {
