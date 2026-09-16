@@ -1,4 +1,4 @@
-﻿# HVACIDA — Revit 2020 地铁暖通智能设计辅助插件(骨架版)
+# HVACIDA — Revit 2020 地铁暖通智能设计辅助插件(骨架版)
 
 依据 `HVACIDA_需求分析文档.md`(310 行)从零搭建的可编译骨架。当前里程碑:**能编译、能出 Ribbon 页、能打开三个 WPF 功能窗;大系统负荷主计算链已按《大系统负荷计算公式.docx》移植,并通过北京站算例《大系统负荷计算公式-示例.xls》30 项逐格一致校验(tools/HVACIDA.Smoke)**。
 
@@ -86,7 +86,7 @@ dotnet build .\HVACIDA.sln
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | 文本计算书(TextReportGenerator)+ **Excel 计算书**(`XlsxWriter` 自写最小 XLSX,零依赖) | ✅ 文本 + Excel:**大系统负荷 / 排烟 / 小系统 / 水力**各模块均可导出(`%AppData%\HVACIDA\Reports`) |
 | 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml** / **hydraulic.xml** 多系统容器) | 🟡 待换 SQLite(旧 small-system.xml 与水力单系统文件首次读取自动迁移) |
-| 2.7 规范知识库 | `KnowledgeBase`(本项目口径 + **规范条文检索** + **Revit 操作指南**,三类同窗可检索/筛选)+ 知识库窗口 | ✅ 条目化、每条带出处;规范条文覆盖 GB 50736 / GB 50015 / GB 51251 / GB 50016 / GB 50013 / GB 50014 / GB 50974 / GB 50157 / GB 51298 / GB 50243 / GB 50242 / GB/T 50114 等;**只给检索线索与要点,不编条文号与数值**(以标准原文为准);Revit 操作指南 15 节覆盖建模/空间/MEP/标注/出图/协同/排错;⬜ 未接在线大模型 |
+| 2.7 规范知识库 | `KnowledgeBase`(本项目口径 + **规范条文检索** + **Revit 操作指南**,三类同窗可检索/筛选)+ **标准条文电子版导入** + **ima 在线知识库(可选)** + 知识库窗口 | ✅ 条目化、每条带出处;规范条文覆盖 GB 50736 / GB 50015 / GB 51251 / GB 50016 / GB 50013 / GB 50014 / GB 50974 / GB 50157 / GB 51298 / GB 50243 / GB 50242 / GB/T 50114 等;**只给检索线索与要点,不编条文号与数值**(以标准原文为准);Revit 操作指南 15 节覆盖建模/空间/MEP/标注/出图/协同/排错;✅ 用户手上的条文电子版(txt/md/csv/docx)放进 `%AppData%\HVACIDA\规范条文` 即成为**可检索的条文原文**;✅ **ima 在线知识库**按腾讯 ima 开放接口检索(需 Client ID + API Key + 知识库 ID,见 §6e),未配凭证时只用本地库并直说;⬜ 未接在线大模型 |
 | 2.3/2.4 水力计算 | 风系统 / 水系统录入窗 + **全站汇总窗**(`HydraulicCalculator` / `RevitHydraulicReader` / `HydraulicSummaryService`) | ✅ 已实装:模型里选系统 → 读管网 → 连接件拓扑求**最不利环路** → 需求全压(Pa)/ 扬程(m)+ 设备校核;**并联环路平衡**(Kv / 阀权度 / 需增加 ζ)、**系统阻力特性曲线**、**全站多系统汇总**(按「介质 + 系统编号」upsert)与 **Excel 导出**;系数全部可见可改(§4.10) |
 | 2.5 材料表统计(出图→明细表) | 材料表窗(`MaterialTakeoffService` / `RevitMaterialTakeoffReader`) | ✅ 读模型 11 类构件(风管/水管/管件/附件/末端/设备/保温)→ 归并键含**单位**(长度与件数不相加)→ 类别小计 + 逐类型明细 + Excel 3 页(§4.11) |
 | 2.6 图纸与批量出图(出图→图框) | 图框窗(`SheetCatalogService` / `RevitSheetReader` / `RevitSheetExporter` / `RevitAutoTagger`) | ✅ 图纸清单(编号/名称/图框/图幅 mm/视图数)+ **空图框计数** + **批量导出 DWG/DXF**(Revit 导出接口)+ **PDF**(系统打印机,**依赖本机 PDF 驱动,没有就逐张报失败**)+ 清单 Excel 4 页(§4.12);✅ **空间自动标注**(名称+编号,已有标注跳过)、✅ **图例表**(复用材料表);⬜ 风管/水管尺寸与设备编号标注、图例自动排版 |
@@ -105,7 +105,7 @@ dotnet build .\HVACIDA.sln
    Core 内自写最小 XLSX 写入器,**不引 EPPlus/OpenXML**);剩余:PDF 导出、出图/标注/图例,以及 Excel 里的图表(把阻力特性曲线画出来)。
 6. ~~按钮图标~~ 已实装(22 个图标 ×16/32px,`tools/HVACIDA.IconGen` 生成并内嵌 DLL,见 `docs/UI设计规范.md` §4.0.1);
    剩余:中英文界面、操作日志与撤销。
-7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、小系统、**空间聚合、气象联动**)、**水力计算(风/水,手算复算)**——
+7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、**条文导入、ima 在线知识库接入**、小系统、**空间聚合、气象联动**)、**水力计算(风/水,手算复算)**——
    `tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe`。
 8. 水力计算待补(需求 2.3 / 2.4 已能算,下面几条要按项目补):
    ① **局部阻力系数取的是手册常用值**(不是唯一值),项目应按手册图表或**设备样本**替换 `HydraulicLocalLossTable` 的取值;
@@ -117,7 +117,8 @@ dotnet build .\HVACIDA.sln
 ## 6b. 四项自检(不需要打开 Revit)
 ```powershell
 # 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统 + 空间聚合 + 气象联动
-#    + 水力计算 / 多系统汇总 / Excel 导出(解压 xlsx 校验工作表与单元格))
+#    + 水力计算 / 多系统汇总 / Excel 导出(解压 xlsx 校验工作表与单元格)
+#    + 条文电子版导入 / ima 在线知识库接入(JSON 读取器·凭证口径·应答解读·断网分支,离线可跑))
 & ".\tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe"
 
 # 2) 窗口装载自检:15 个 WPF 窗口真构造 + Show + Close(抓 XAML/绑定致命错误)
@@ -181,6 +182,27 @@ python tools\docx2md\docx_to_markdown.py "通风空调智能设计助手.docx" `
 > 已知问题(已记录,不影响计算):源文件里 **2 处海拔疑似笔误** —— 西藏山南地区标 9280 m、
 > 青海黄南州标 8500 m;由**气压列反证**其真值约为 4280 m / 3400 m(相应高度的大气压才对得上)。
 > `HVACIDA.Smoke` 场景10 断言"气压/海拔不一致的**只有**这 2 个已知台站",防止列位串行被放过。
+
+## 6e. ima 在线知识库(可选,腾讯 ima 开放接口)
+
+「AI问答 → 规范知识库」窗里可以再挂一个 ima 知识库:**勾选启用并填好凭证后**,同一个提问会**同时**查本地知识库与 ima。
+
+| 项 | 说明 |
+|---|---|
+| 接口 | `POST https://ima.qq.com/openapi/wiki/v1/search_knowledge`(检索)、`.../get_knowledge_base`(连通性测试);请求头 `ima-openapi-clientid` / `ima-openapi-apikey`;应答统一 `{ retcode, errmsg, data }` |
+| 凭证 | **Client ID + API Key + 知识库 ID 三样**(前两样在 ima 开放平台申请,知识库 ID 取自知识库本身) |
+| ⚠ shareId | **分享链接里的 shareId 不能当接口凭证** —— 插件**不拿它鉴权**,只用它(需整条 `https://` 链接)在浏览器里打开分享页;只填一个 shareId 时插件会直说"缺 Client ID / API Key / 知识库 ID",**不发请求、不假装查到** |
+| 落盘 | `%AppData%\HVACIDA\ima.xml`(凭证属本机个人信息,与工程数据分开存;**API Key 明文**,文件与界面都写明"勿外发/勿提交") |
+| 返回内容 | 命中条目的**标题 + `highlight_content` 命中片段**,**不是**条文全文 —— 界面、答复区、说明都标注"引用请回 ima 打开原文核对" |
+| 失败口径 | 未启用 / 凭证不全 / 网络不通 / `retcode≠0`:一律**照实显示原因**(含 errmsg 原样透传与错误码释义),**不抛异常、不拿本地条目冒充在线结果、不编内容** |
+| 依赖 | 全部用 .NET 自带类型(`HttpWebRequest` + **自写最小 JSON 读取器** `Json.cs`),**不引任何 NuGet**;只在用户显式启用且凭证齐全时才发网络请求 |
+| 自检 | `HVACIDA.Smoke` 场景22:JSON 读取器(含转义/缺失字段/语法错误)、retcode 与 errmsg 解读、shareId 不当凭证的口径门禁、设置落盘往返、断网分支(连本机空端口)**全部离线可跑** |
+
+> 接口形态来自社区把 ima 开放接口整理成 skill 包的公开资料([openakita kb-api.md](https://github.com/openakita/openakita/blob/main/skills/tencent-ima/references/kb-api.md)、
+> [ruiyongwang/dlh api.md](https://github.com/ruiyongwang/dlh/blob/main/skills/ima-notes/knowledge-base/references/api.md)),
+> **本机未联网比对腾讯官方文档**:字段名或权限模型若有出入,插件表现为"接口返回失败 + 照实显示 errmsg"。
+> 若你手上只有 ima 的**分享知识库**而没有开放平台凭证,等价做法是:在 ima 里导出/复制条文原文 → 放进 `%AppData%\HVACIDA\规范条文` → 点【重新导入条文】。
+
 ## 7. 与 AI 协作(DSH 技能)
 
 `.dsh\skills\revit-hvac-2020\SKILL.md` 已被 DSH 自动发现;任何会话写本项目代码前都会加载它

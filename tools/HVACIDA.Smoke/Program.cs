@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,6 +22,8 @@ namespace HVACIDA.Smoke
     /// 场景10:全国省市气象数据库(GB 50736-2012 附录A,294 台站);
     /// 场景11:大系统排烟计算(面积×60 / 选型×1.2 / 2 台 / 取大者);
     /// 场景12:小系统六类系统 —— 按《小系统空调负荷、送排风、排烟计算公式.docx》示例逐格复算。
+    /// 场景21:标准条文电子版导入(txt/md/csv/docx → 条文原文可检索);
+    /// 场景22:ima 在线知识库接入(OpenAPI 应答解读 / 凭证口径 / 设置往返 / 断网分支)。
     /// 退出码 0 = 全部通过;1 = 存在偏差。
     /// </summary>
     internal static class Program
@@ -53,10 +55,11 @@ namespace HVACIDA.Smoke
             RunLegendChecks();
             RunClauseAndGuideChecks();
             RunClauseImportChecks();
+            RunImaChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算(含多系统汇总与 Excel 导出)/计算书 Excel 导出推广自检通过。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算(含多系统汇总与 Excel 导出)/计算书 Excel 导出推广/条文导入/ima 在线知识库接入自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
@@ -2223,6 +2226,190 @@ namespace HVACIDA.Smoke
             {
                 try { Directory.Delete(dir, true); } catch { }
             }
+            Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景22:ima 在线知识库接入(JSON 读取器 / 凭证口径 / 应答解读 / 设置往返 / 断网分支)
+        //   说明:本场景**不依赖真实网络**也能跑 —— 命中与错误分支用样例应答解读(纯函数),
+        //   只有最后一小段故意连一个本机空端口,验证"网络不通时照实报错、不抛异常、不编结果"。
+        // =====================================================================
+        private static void RunImaChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景22:ima 在线知识库接入(开放接口:search_knowledge / get_knowledge_base)");
+            Console.WriteLine("==================================================");
+
+            // ---------- 1) 自写 JSON 读取器 ----------
+            string searchJson =
+                "{\"retcode\":0,\"errmsg\":\"成功\",\"data\":{\"info_list\":[" +
+                "{\"media_id\":\"m1\",\"title\":\"GB 50736-2012 民用建筑供暖通风与空气调节设计规范\"," +
+                "\"parent_folder_id\":\"f0\",\"highlight_content\":\"室内设计温度 18~24 ℃\"}," +
+                "{\"media_id\":\"m2\",\"title\":\"含\\\"引号\\\" 与换行\\n标题\",\"parent_folder_id\":\"f1\"}]," +
+                "\"is_end\":false,\"next_cursor\":\"c1\"}}";
+            var json = JsonValue.Parse(searchJson);
+            CheckInt("JSON:retcode", json.Get("retcode").AsInt(-1), 0);
+            var infoList = json.Get("data").Get("info_list");
+            CheckInt("JSON:info_list 条数", infoList.Count, 2);
+            CheckText("JSON:取标题", infoList.Get(0).Get("title").AsString(""),
+                "GB 50736-2012 民用建筑供暖通风与空气调节设计规范");
+            CheckText("JSON:取命中片段", infoList.Get(0).Get("highlight_content").AsString(""), "室内设计温度 18~24 ℃");
+            CheckText("JSON:转义还原(引号)", infoList.Get(1).Get("title").AsString(""), "含\"引号\" 与换行\n标题");
+            CheckText("JSON:缺字段返回默认值(不抛)", infoList.Get(1).Get("highlight_content").AsString("(无)"), "(无)");
+            CheckText("JSON:嵌套取值", json.Get("data").Get("next_cursor").AsString(""), "c1");
+            CheckText("JSON:转义输出", JsonValue.Escape("a\"b\\c\n中"), "a\\\"b\\\\c\\n中");
+
+            bool syntaxFailed = false;
+            try { JsonValue.Parse("{\"retcode\":}"); }
+            catch (FormatException) { syntaxFailed = true; }
+            CheckText("JSON:语法错误抛 FormatException", syntaxFailed ? "抛了" : "没抛", "抛了");
+
+            // ---------- 2) 检索应答解读(纯函数,不发网络) ----------
+            var search = ImaOpenApiClient.InterpretSearch(searchJson, "室内设计温度");
+            CheckText("检索:成功", search.Success ? "成功" : "失败", "成功");
+            CheckInt("检索:命中条数", search.Count, 2);
+            CheckText("检索:标题", search.Hits[0].Title.Contains("GB 50736") ? "有" : search.Hits[0].Title, "有");
+            CheckText("检索:片段", search.Hits[0].Highlight.Contains("18~24") ? "有" : search.Hits[0].Highlight, "有");
+            CheckText("检索:第二页提示(is_end=false)", search.HasMore ? "还有" : "没有了", "还有");
+            CheckText("检索:提示写明是片段不是全文", search.Note.Contains("片段") ? "有" : search.Note, "有");
+            CheckText("检索:出处标注 ima 在线", search.Hits[0].SourceText.Contains("ima 知识库(在线检索)") ? "有" : search.Hits[0].SourceText, "有");
+
+            var empty = ImaOpenApiClient.InterpretSearch(
+                "{\"retcode\":0,\"errmsg\":\"成功\",\"data\":{\"info_list\":[],\"is_end\":true}}", "不存在的东西");
+            CheckText("检索:0 条也算成功(但不冒充有结果)",
+                empty.Success && empty.Count == 0 ? "成功0条" : "异常", "成功0条");
+            CheckText("检索:0 条时提示写明没命中", empty.Note.Contains("没有匹配") ? "有" : empty.Note, "有");
+
+            var denied = ImaOpenApiClient.InterpretSearch("{\"retcode\":110030,\"errmsg\":\"无权限\"}", "任意问题");
+            CheckText("检索:retcode≠0 判失败", denied.Success ? "成功" : "失败", "失败");
+            CheckInt("检索:透传 retcode", denied.RetCode, 110030);
+            CheckText("检索:errmsg 原样带出", denied.ErrorMessage, "无权限");
+            CheckText("错误码释义:110030", ImaOpenApiClient.DescribeRetCode(110030, "无权限").Contains("无权限") ? "有" : "无", "有");
+            CheckText("错误码释义:未收录码不自造含义",
+                ImaOpenApiClient.DescribeRetCode(999999, "服务端说的").Contains("未收录") &&
+                ImaOpenApiClient.DescribeRetCode(999999, "服务端说的").Contains("服务端说的") ? "有" : "无", "有");
+
+            var broken = ImaOpenApiClient.InterpretSearch("<html>网关错误页</html>", "任意问题");
+            CheckText("检索:非法 JSON 不抛异常,判失败", broken.Success ? "成功" : "失败", "失败");
+            CheckText("检索:非法 JSON 说明原因", broken.ErrorMessage.Contains("合法 JSON") ? "有" : broken.ErrorMessage, "有");
+
+            // ---------- 3) 连通性测试应答解读 ----------
+            var conn = ImaOpenApiClient.InterpretConnection(
+                "{\"retcode\":0,\"errmsg\":\"成功\",\"data\":{\"infos\":{\"kb1\":{\"name\":\"地铁暖通规范库\"," +
+                "\"description\":\"测试用\"}}}}", "kb1");
+            CheckText("连通:成功", conn.Success ? "成功" : "失败", "成功");
+            CheckText("连通:带回知识库名称", conn.Note.Contains("地铁暖通规范库") ? "有" : conn.Note, "有");
+            CheckText("连通:提示写明引用以 ima 原文为准", conn.Note.Contains("原文") ? "有" : conn.Note, "有");
+
+            var connMiss = ImaOpenApiClient.InterpretConnection(
+                "{\"retcode\":0,\"errmsg\":\"成功\",\"data\":{\"infos\":{}}}", "kb-not-exist");
+            CheckText("连通:ID 对不上时明说查不到",
+                connMiss.Success && connMiss.Note.Contains("没有知识库") ? "有" : connMiss.Note, "有");
+
+            // ---------- 4) 设置落盘往返 ----------
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Ima-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string path = Path.Combine(dir, "ima.xml");
+                var saved = new ImaKnowledgeSettings
+                {
+                    Enabled = true,
+                    ClientId = "cid-123",
+                    ApiKey = "secret-abc",
+                    KnowledgeBaseId = "kb-456",
+                    ShareId = "https://ima.qq.com/share/xyz",
+                    Limit = 20
+                };
+                string written = ImaSettingsStore.Save(saved, path);
+                CheckText("设置:写入路径", written, path);
+                CheckText("设置:文件已生成", File.Exists(path) ? "有" : "无", "有");
+
+                string raw = File.ReadAllText(path, Encoding.UTF8);
+                CheckText("设置:文件里写明 API Key 为明文提醒",
+                    raw.Contains(ImaSettingsStore.PlainTextWarning) ? "有" : "无", "有");
+                CheckText("设置:文件里写明 shareId 不是凭证", raw.Contains("不是接口凭证") ? "有" : "无", "有");
+                CheckText("设置:文件里含中文提示不丢字(UTF-8)", raw.Contains("知识库") ? "有" : "无", "有");
+
+                string note;
+                var loaded = ImaSettingsStore.Load(path, out note);
+                CheckText("设置:往返 Enabled", loaded.Enabled ? "true" : "false", "true");
+                CheckText("设置:往返 ClientId", loaded.ClientId, "cid-123");
+                CheckText("设置:往返 ApiKey", loaded.ApiKey, "secret-abc");
+                CheckText("设置:往返 KnowledgeBaseId", loaded.KnowledgeBaseId, "kb-456");
+                CheckText("设置:往返分享链接", loaded.ShareId, "https://ima.qq.com/share/xyz");
+                CheckInt("设置:往返 Limit", loaded.Limit, 20);
+                CheckText("设置:凭证齐全判定", loaded.IsConfigured ? "齐" : loaded.MissingCredentialText(), "齐");
+                CheckText("设置:状态一句话", ImaSettingsStore.Summary(loaded).Contains("已启用") ? "有" : "无", "有");
+
+                var missing = ImaSettingsStore.Load(Path.Combine(dir, "没有这个文件.xml"), out note);
+                CheckText("设置:文件不存在时给默认值(未启用)且不抛", missing.Enabled ? "启用了" : "未启用", "未启用");
+                CheckText("设置:文件不存在时说明原因", note.Contains("还没有 ima 设置文件") ? "有" : note, "有");
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+
+            // ---------- 5) shareId 不当凭证(口径硬约束) ----------
+            var shareOnly = new ImaKnowledgeSettings
+            {
+                Enabled = true,
+                ShareId = "AbCdEf123456"          // 只有 shareId,没有凭证
+            };
+            CheckText("口径:只填 shareId 不算配置好", shareOnly.IsConfigured ? "算" : "不算", "不算");
+            var shareOnlyResult = ImaOpenApiClient.Search(shareOnly, "排烟风机");
+            CheckText("口径:只填 shareId 时不发请求,判失败", shareOnlyResult.Success ? "成功" : "失败", "失败");
+            CheckText("口径:失败原因写明缺 Client ID/API Key/知识库 ID",
+                shareOnlyResult.Note.Contains("Client ID") && shareOnlyResult.Note.Contains("知识库 ID") ? "有" : shareOnlyResult.Note, "有");
+            CheckText("口径:凭证说明写明 shareId 不能当凭证",
+                ImaKnowledgeSettings.CredentialHelp.Contains("shareId") &&
+                ImaKnowledgeSettings.CredentialHelp.Contains("不能当接口凭证") ? "有" : "无", "有");
+            CheckText("口径:shareId 单独一个值不猜网址(不打开)",
+                ImaSettingsStore.ResolveShareUrl("AbCdEf123456"), "");
+            CheckText("口径:完整链接可以打开",
+                ImaSettingsStore.ResolveShareUrl(" https://ima.qq.com/share/xyz "), "https://ima.qq.com/share/xyz");
+
+            var disabled = new ImaKnowledgeSettings
+            {
+                Enabled = false,
+                ClientId = "c",
+                ApiKey = "k",
+                KnowledgeBaseId = "b",
+                Endpoint = "http://127.0.0.1:9/"      // 只为让"测试连接不受启用开关阻挡"这条断言不发外网请求
+            };
+            CheckText("口径:未勾选启用时不发请求",
+                ImaOpenApiClient.Search(disabled, "任意问题").Note.Contains("未启用") ? "有" : "无", "有");
+            CheckText("口径:测试连接不受「未勾选启用」阻挡(测试本身是显式动作)",
+                ImaOpenApiClient.TestConnection(disabled, 1500).ErrorMessage != "未启用" ? "放行" : "被挡", "放行");
+            CheckText("口径:空问题不发请求",
+                ImaOpenApiClient.Search(shareOnly, "   ").ErrorMessage, "问题为空");
+
+            // ---------- 6) 接口地址解析 ----------
+            CheckText("地址:默认官方地址", ImaOpenApiClient.ResolveEndpoint(new ImaKnowledgeSettings()),
+                "https://ima.qq.com/openapi/wiki/v1/");
+            CheckText("地址:自定义地址自动补斜杠",
+                ImaOpenApiClient.ResolveEndpoint(new ImaKnowledgeSettings { Endpoint = "http://127.0.0.1:9" }),
+                "http://127.0.0.1:9/");
+            CheckText("片段拼装:没有命中时不编内容", ImaOpenApiClient.FormatHits(new List<ImaKnowledgeHit>()), "");
+
+            // ---------- 7) 网络不通:照实报错、不抛异常、不编结果 ----------
+            var offline = new ImaKnowledgeSettings
+            {
+                Enabled = true,
+                ClientId = "cid",
+                ApiKey = "key",
+                KnowledgeBaseId = "kb",
+                Endpoint = "http://127.0.0.1:9/",   // 本机空端口:连接必然失败(拒绝或超时)
+                Limit = 5
+            };
+            var offlineResult = ImaOpenApiClient.Search(offline, "排烟风机风量怎么算", 3000);
+            CheckText("断网:判失败(不抛异常)", offlineResult.Success ? "成功" : "失败", "失败");
+            CheckInt("断网:命中 0 条(不编结果)", offlineResult.Count, 0);
+            CheckText("断网:提示写明在线检索没成功且只用本地结果",
+                offlineResult.Note.Contains("ima 在线检索没有成功") && offlineResult.Note.Contains("没有编造在线内容")
+                    ? "有" : offlineResult.Note, "有");
+            Console.WriteLine("     (断网分支实际原因:" + offlineResult.ErrorMessage + ")");
+
             Console.WriteLine();
         }
 

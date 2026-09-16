@@ -1,6 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Globalization;
 using System.Windows.Input;
 using HVACIDA.Core.Models;
 using HVACIDA.Core.Services;
@@ -30,6 +32,13 @@ namespace HVACIDA.UI.ViewModels
         private KnowledgeEntry _selectedEntry;
         private IList<KnowledgeEntry> _entries;
 
+        // ---- ima 在线知识库(需求 2.7 扩展):凭证只落本机,未启用就用本地知识库 ----
+        private ImaKnowledgeSettings _imaSettings = new ImaKnowledgeSettings();
+        private string _imaStatus = "";
+        private string _imaNote = "";
+        private string _imaLimitText = "10";
+        private bool _imaPanelExpanded = true;
+
         public KnowledgeViewModel()
             : this(null)
         {
@@ -54,6 +63,12 @@ namespace HVACIDA.UI.ViewModels
             ExportExcelCommand = new RelayCommand(ExportExcel);
             ReloadClausesCommand = new RelayCommand(ReloadClauses);
             CategoryCommand = new RelayCommand(() => ApplyCategory(PendingCategory));
+            SaveImaCommand = new RelayCommand(SaveImaSettings);
+            TestImaCommand = new RelayCommand(TestImaConnection);
+            OpenImaShareCommand = new RelayCommand(OpenImaShare);
+            SearchImaCommand = new RelayCommand(SearchImaOnly);
+
+            LoadImaSettings();
 
             Status = "共 " + _entries.Count + " 条条目(本项目已定口径 / 规范条文 / Revit 操作指南)。可以直接提问,也可以按分类浏览。";
             if (_entries.Count > 0) SelectedEntry = _entries[0];
@@ -148,6 +163,126 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>条文目录(界面显示,便于用户把文件放进去)。</summary>
         public string ClauseDirectory => ClauseDocumentReader.DefaultDirectory;
 
+        // ==================================================================
+        // ima 在线知识库(腾讯 ima 开放接口)
+        //
+        // ⚠ 只有「Client ID + API Key + 知识库 ID」三样齐全**且**用户勾选启用,
+        //   才会在提问时发网络请求;否则只用本地知识库,并在界面上直说没配。
+        //   shareId / 分享链接只用于「在浏览器打开分享页」,**不当凭证用**。
+        // ==================================================================
+
+        /// <summary>ima 凭证说明(界面原样显示,避免用户以为 shareId 能当钥匙)。</summary>
+        public string ImaCredentialHelp => ImaKnowledgeSettings.CredentialHelp;
+
+        /// <summary>ima 设置文件路径(明文保存 API Key,界面要提醒)。</summary>
+        public string ImaSettingsPath => ImaSettingsStore.DefaultPath;
+
+        /// <summary>是否启用 ima 在线知识库(默认关)。</summary>
+        public bool ImaEnabled
+        {
+            get => _imaSettings.Enabled;
+            set
+            {
+                if (_imaSettings.Enabled == value) return;
+                _imaSettings.Enabled = value;
+                OnPropertyChanged(nameof(ImaEnabled));
+            }
+        }
+
+        /// <summary>ima 开放平台 Client ID。</summary>
+        public string ImaClientId
+        {
+            get => _imaSettings.ClientId;
+            set
+            {
+                if (_imaSettings.ClientId == value) return;
+                _imaSettings.ClientId = value ?? "";
+                OnPropertyChanged(nameof(ImaClientId));
+            }
+        }
+
+        /// <summary>ima 开放平台 API Key(本机明文保存)。</summary>
+        public string ImaApiKey
+        {
+            get => _imaSettings.ApiKey;
+            set
+            {
+                if (_imaSettings.ApiKey == value) return;
+                _imaSettings.ApiKey = value ?? "";
+                OnPropertyChanged(nameof(ImaApiKey));
+            }
+        }
+
+        /// <summary>知识库 ID(接口参数 knowledge_base_id;不是 shareId)。</summary>
+        public string ImaKnowledgeBaseId
+        {
+            get => _imaSettings.KnowledgeBaseId;
+            set
+            {
+                if (_imaSettings.KnowledgeBaseId == value) return;
+                _imaSettings.KnowledgeBaseId = value ?? "";
+                OnPropertyChanged(nameof(ImaKnowledgeBaseId));
+            }
+        }
+
+        /// <summary>ima 分享链接(只用于打开网页;shareId 单独一个值无法打开,插件不猜地址)。</summary>
+        public string ImaShareLink
+        {
+            get => _imaSettings.ShareId;
+            set
+            {
+                if (_imaSettings.ShareId == value) return;
+                _imaSettings.ShareId = value ?? "";
+                OnPropertyChanged(nameof(ImaShareLink));
+            }
+        }
+
+        /// <summary>单次最多显示的命中条数(接口没有条数参数,只在本地截取)。</summary>
+        public string ImaLimitText
+        {
+            get => _imaLimitText;
+            set => Set(ref _imaLimitText, value ?? "");
+        }
+
+        /// <summary>ima 设置 / 调用状态(界面顶部显示)。</summary>
+        public string ImaStatus
+        {
+            get => _imaStatus;
+            private set => Set(ref _imaStatus, value);
+        }
+
+        /// <summary>本次 ima 检索的提示(命中多少条 / 为什么没命中)。</summary>
+        public string ImaNote
+        {
+            get => _imaNote;
+            private set => Set(ref _imaNote, value);
+        }
+
+        /// <summary>ima 命中条目(在线检索结果;**片段**不是全文)。</summary>
+        public ObservableCollection<ImaKnowledgeHit> ImaHits { get; } = new ObservableCollection<ImaKnowledgeHit>();
+
+        /// <summary>是否显示 ima 命中表(没查过就不摆空表)。</summary>
+        public bool HasImaHits => ImaHits.Count > 0;
+
+        /// <summary>ima 设置面板是否展开(首次使用、还没配好时默认展开,配好后收起少占地方)。</summary>
+        public bool ImaPanelExpanded
+        {
+            get => _imaPanelExpanded;
+            set => Set(ref _imaPanelExpanded, value);
+        }
+
+        /// <summary>保存 ima 设置(只落本机 ima.xml,不发请求)。</summary>
+        public ICommand SaveImaCommand { get; }
+
+        /// <summary>测试 ima 连接(拉一次知识库信息,分清"凭证不对"还是"网络不通")。</summary>
+        public ICommand TestImaCommand { get; }
+
+        /// <summary>在浏览器里打开 ima 分享页(需要完整 http(s) 链接)。</summary>
+        public ICommand OpenImaShareCommand { get; }
+
+        /// <summary>单独用 ima 知识库检索一次(不影响本地检索结果)。</summary>
+        public ICommand SearchImaCommand { get; }
+
         /// <summary>切换分类(界面把选中项写进 <see cref="PendingCategory"/> 后执行本命令)。</summary>
         public ICommand CategoryCommand { get; }
 
@@ -181,6 +316,13 @@ namespace HVACIDA.UI.ViewModels
                 {
                     Lines.Add(new ChatLine(false, answer.ScopeNote));
                     Status = "知识库范围内没有这个问题 —— 已给出覆盖范围与提问建议(不编答案)。";
+                }
+
+                // 启用了 ima 在线知识库才发网络请求;没启用/没配凭证时这里什么都不做(界面已在上面写明)
+                if (_imaSettings.Enabled)
+                {
+                    var ima = ImaOpenApiClient.Search(_imaSettings, query);
+                    ApplyImaResult(ima, true);
                 }
             }
             catch (Exception ex)
@@ -266,8 +408,155 @@ namespace HVACIDA.UI.ViewModels
                 Status = "导出 Excel 失败: " + ex.Message;
             }
         }
-    }
 
+        // ==================================================================
+        // ima 在线知识库:设置读写 / 连通性测试 / 打开分享页 / 单独检索
+        // ==================================================================
+
+        /// <summary>打开知识库窗时读一次本机 ima 设置(读失败不影响本地知识库)。</summary>
+        private void LoadImaSettings()
+        {
+            string note;
+            _imaSettings = ImaSettingsStore.Load(ImaSettingsStore.DefaultPath, out note);
+            _imaLimitText = _imaSettings.Limit.ToString(CultureInfo.InvariantCulture);
+            ImaStatus = _imaSettings.Enabled || _imaSettings.IsConfigured
+                ? ImaSettingsStore.Summary(_imaSettings)
+                : "ima 在线知识库:未启用 —— 只用本地知识库。" + ImaKnowledgeSettings.CredentialHelp;
+            ImaNote = note;
+            _imaPanelExpanded = !(_imaSettings.Enabled && _imaSettings.IsConfigured);
+
+            OnPropertyChanged(nameof(ImaEnabled));
+            OnPropertyChanged(nameof(ImaClientId));
+            OnPropertyChanged(nameof(ImaApiKey));
+            OnPropertyChanged(nameof(ImaKnowledgeBaseId));
+            OnPropertyChanged(nameof(ImaShareLink));
+            OnPropertyChanged(nameof(ImaLimitText));
+            OnPropertyChanged(nameof(ImaPanelExpanded));
+        }
+
+        /// <summary>保存设置(把界面上的值收进设置对象后落盘;本方法不发网络请求)。</summary>
+        private void SaveImaSettings()
+        {
+            try
+            {
+                int limit;
+                if (!int.TryParse(_imaLimitText, NumberStyles.Integer, CultureInfo.InvariantCulture, out limit) || limit <= 0)
+                {
+                    limit = 10;
+                }
+                if (limit > 50) limit = 50;         // 界面填 9999 也不至于把表格拖死
+                _imaSettings.Limit = limit;
+                _imaLimitText = limit.ToString(CultureInfo.InvariantCulture);
+                OnPropertyChanged(nameof(ImaLimitText));
+
+                string path = ImaSettingsStore.Save(_imaSettings);
+                ImaStatus = "ima 设置已保存(" + path + "):" + ImaSettingsStore.Summary(_imaSettings);
+                ImaNote = "已保存。" + ImaKnowledgeSettings.CredentialHelp;
+            }
+            catch (Exception ex)
+            {
+                ImaStatus = "保存 ima 设置失败:" + ex.Message;
+            }
+        }
+
+        /// <summary>测试连接:只拉一次知识库信息,用来分清"凭证/权限不对"还是"网络不通"。</summary>
+        private void TestImaConnection()
+        {
+            try
+            {
+                SaveImaSettings();                  // 先落盘,免得"改了凭证没保存"被当成插件不生效
+                if (!_imaSettings.IsConfigured)
+                {
+                    ImaStatus = "ima 凭证不全,没法测试 —— " + _imaSettings.MissingCredentialText();
+                    return;
+                }
+                var result = ImaOpenApiClient.TestConnection(_imaSettings);
+                ImaStatus = result.Success
+                    ? "ima 连接测试:" + result.Note
+                    : "ima 连接测试失败:" + result.ErrorMessage + " —— " + result.Note;
+                ImaNote = result.Note;
+            }
+            catch (Exception ex)
+            {
+                ImaStatus = "测试 ima 连接失败:" + ex.Message;
+            }
+        }
+
+        /// <summary>用默认浏览器打开 ima 分享页(只有完整 http(s) 链接才打开;shareId 单独一个值不猜地址)。</summary>
+        private void OpenImaShare()
+        {
+            try
+            {
+                string url = ImaSettingsStore.ResolveShareUrl(_imaSettings.ShareId);
+                if (url.Length == 0)
+                {
+                    ImaStatus = "没有打开分享页:请把 ima 的**完整分享链接**(https:// 开头)贴进「分享链接」框。" +
+                                "只给 shareId 一个值的话,插件不知道对应的网址,不猜地址。";
+                    return;
+                }
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                ImaStatus = "已用默认浏览器打开 ima 分享页:" + url;
+            }
+            catch (Exception ex)
+            {
+                ImaStatus = "打开分享页失败:" + ex.Message + "(可以把链接复制到浏览器)";
+            }
+        }
+
+        /// <summary>只用 ima 在线知识库检索一次(不动本地知识库的结果)。</summary>
+        private void SearchImaOnly()
+        {
+            try
+            {
+                string query = (_question ?? "").Trim();
+                if (query.Length == 0)
+                {
+                    ImaStatus = "请先输入问题,再点【用 ima 检索】。";
+                    return;
+                }
+                var result = ImaOpenApiClient.Search(_imaSettings, query);
+                ApplyImaResult(result, false);
+            }
+            catch (Exception ex)
+            {
+                ImaStatus = "ima 检索失败:" + ex.Message;
+            }
+        }
+
+        /// <summary>把 ima 检索结果摆到界面上:命中就列标题与片段,失败就照实说(不冒充本地结果)。</summary>
+        private void ApplyImaResult(ImaKnowledgeSearchResult result, bool appendToAnswer)
+        {
+            ImaHits.Clear();
+            if (result.Success)
+            {
+                foreach (var hit in result.Hits) ImaHits.Add(hit);
+            }
+            OnPropertyChanged(nameof(HasImaHits));
+
+            ImaNote = result.Success ? result.Note : ("ima 在线知识库没有给出结果:" + result.ErrorMessage);
+            ImaStatus = result.Success
+                ? "ima 在线知识库:" + result.Note
+                : "ima 在线知识库:" + result.ErrorMessage + " —— " + result.Note + "(本次只用本地知识库的结果)";
+
+            if (!appendToAnswer) return;
+
+            string section;
+            if (result.Success)
+            {
+                section = result.Count > 0
+                    ? "\n\n—— ima 在线知识库(在线检索) ——\n" + ImaOpenApiClient.FormatHits(result.Hits) +
+                      "注:" + result.Note
+                    : "\n\n—— ima 在线知识库(在线检索) ——\n" + result.Note;
+            }
+            else
+            {
+                section = "\n\n—— ima 在线知识库(没有取到结果) ——\n" +
+                          result.ErrorMessage + "。" + result.Note;
+            }
+            AnswerText = AnswerText + section;
+            Lines.Add(new ChatLine(false, section.Trim()));
+        }
+    }
     /// <summary>对话记录的一行。</summary>
     public sealed class ChatLine
     {
