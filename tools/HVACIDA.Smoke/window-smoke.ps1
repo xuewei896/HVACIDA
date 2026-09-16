@@ -213,8 +213,9 @@ Test-Window '待实现说明 InfoWindow(排烟计算)'   {
 try {
     $kbDir = Join-Path $env:TEMP ("HVACIDA-KbRep-" + [guid]::NewGuid().ToString('N'))
     $kvm = New-Object "$vmNs.KnowledgeViewModel" -ArgumentList $kbDir
-    if ($kvm.Entries.Count -ge 15 -and $kvm.SelectedEntry -ne $null -and $kvm.SampleQuestions.Count -eq $kvm.Entries.Count) {
-        Write-Host ("PASS  知识库条目装载:{0} 条,示例问法与条目一一对应" -f $kvm.Entries.Count)
+    if ($kvm.Entries.Count -ge 50 -and $kvm.SelectedEntry -ne $null -and $kvm.SampleQuestions.Count -ge 15 -and
+        ($kvm.Categories -contains '规范条文')) {
+        Write-Host ("PASS  知识库条目装载:{0} 条(本项目口径 + 规范条文 + Revit 操作指南,可按分类筛选)" -f $kvm.Entries.Count)
     } else {
         Write-Host ("FAIL  知识库条目装载: entries={0}" -f $kvm.Entries.Count); $fail++
     }
@@ -247,7 +248,7 @@ try {
     $kbW = New-Object "$uiNs.KnowledgeWindow" -ArgumentList $kvm
     $kbW.Show(); $kbW.UpdateLayout()
     $entryGrid = $kbW.FindName('EntryGrid')
-    if ($entryGrid -ne $null -and $entryGrid.Columns.Count -eq 2 -and $entryGrid.Items.Count -ge 15 -and
+    if ($entryGrid -ne $null -and $entryGrid.Columns.Count -eq 2 -and $entryGrid.Items.Count -ge 50 -and
         $kbW.FindName('AnswerBox') -ne $null -and $kbW.FindName('ScopeBox') -ne $null) {
         Write-Host ("PASS  知识库窗渲染:条目 {0} 列 × {1} 行 + 答复区 + 范围说明区" -f $entryGrid.Columns.Count, $entryGrid.Items.Count)
     } else { Write-Host "FAIL  知识库窗控件/绑定不符"; $fail++ }

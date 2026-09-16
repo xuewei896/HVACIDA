@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -73,13 +73,18 @@ namespace HVACIDA.Revit.Commands
     {
     }
 
-    /// <summary>AI问答 → 操作指南。</summary>
+    /// <summary>
+    /// AI问答 → 操作指南:**Revit 软件操作指南**(不只本插件),按分组浏览 + 关键词检索。
+    /// 打开可检索的知识库窗并定位到「操作步骤」分类(内容取自 Core 的 <c>RevitOperationGuide</c>)。
+    /// </summary>
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class ShowGuideCommand : IExternalCommand
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            return CommandHost.Show(() => new UI.Views.InfoWindow(UI.ViewModels.InfoViewModel.Guide()), ref message);
+            return CommandHost.Show(
+                () => new UI.Views.KnowledgeWindow(new UI.ViewModels.KnowledgeViewModel(null, "操作步骤")),
+                ref message);
         }
     }
 

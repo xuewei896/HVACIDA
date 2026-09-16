@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using HVACIDA.Core.Models;
@@ -31,8 +31,53 @@ namespace HVACIDA.Core.Services
 
         private static readonly List<KnowledgeEntry> Entries = BuildEntries();
 
+        private static readonly List<KnowledgeEntry> AllEntries = BuildAll();
+
+        /// <summary>
+        /// 知识库 = **本项目已定口径** + **规范条文检索**(<see cref="StandardClauseLibrary"/>)+
+        /// **Revit 操作指南**(<see cref="RevitOperationGuide"/>)—— 三者在同一个窗里可检索、可按分类筛选。
+        /// </summary>
+        private static List<KnowledgeEntry> BuildAll()
+        {
+            var all = new List<KnowledgeEntry>(BuildEntries());
+
+            // 规范条文:把「标准 + 章节线索 + 要点概述 + 边界」转成条目(分类「规范条文」)
+            foreach (var clause in StandardClauseLibrary.All)
+            {
+                var entry = Entry(clause.Id, KnowledgeCategory.Clause, clause.Title, clause.Question,
+                    clause.Summary + "\n\n章节线索:" + clause.ClauseHint + "\n" + clause.BoundaryNote,
+                    clause.SourceText, clause.Keywords.ToArray());
+                entry.Question = clause.Question;
+                all.Add(entry);
+            }
+
+            // Revit 操作指南:按分组转成条目(分类「操作步骤」)
+            foreach (var section in RevitOperationGuide.All)
+            {
+                var text = new System.Text.StringBuilder();
+                text.AppendLine(section.Summary);
+                text.AppendLine();
+                for (int i = 0; i < section.Steps.Count; i++)
+                {
+                    text.AppendLine((i + 1) + ". " + section.Steps[i]);
+                }
+                if (!string.IsNullOrEmpty(section.Note))
+                {
+                    text.AppendLine();
+                    text.AppendLine("注意:" + section.Note);
+                }
+                var entry = Entry("revit-" + section.Id, KnowledgeCategory.Operation,
+                    "Revit 操作 · " + section.Title, section.Title + " 在 Revit 里怎么操作?",
+                    text.ToString(), "Autodesk Revit 2020 官方帮助 + 本项目实践(操作类,不含设计取值)",
+                    section.Keywords.ToArray());
+                entry.Question = section.Title + " 在 Revit 里怎么操作?";
+                all.Add(entry);
+            }
+            return all;
+        }
+
         /// <summary>全部条目(按分类 + 标题排序,界面列表直接绑它)。</summary>
-        public static IList<KnowledgeEntry> All => Entries;
+        public static IList<KnowledgeEntry> All => AllEntries;
 
         /// <summary>分类中文名。</summary>
         public static string CategoryName(KnowledgeCategory category)
@@ -44,6 +89,7 @@ namespace HVACIDA.Core.Services
                 case KnowledgeCategory.Operation: return "操作步骤";
                 case KnowledgeCategory.Data: return "数据与存储";
                 case KnowledgeCategory.Pending: return "待补与局限";
+                case KnowledgeCategory.Clause: return "规范条文";
                 default: return "其它";
             }
         }
@@ -52,7 +98,7 @@ namespace HVACIDA.Core.Services
         public static IList<KnowledgeEntry> ByCategory(KnowledgeCategory category)
         {
             var result = new List<KnowledgeEntry>();
-            foreach (var entry in Entries)
+            foreach (var entry in AllEntries)
             {
                 if (entry.Category == category) result.Add(entry);
             }
@@ -81,31 +127,31 @@ namespace HVACIDA.Core.Services
             string text = query.Trim();
             var tokens = Tokenize(text);
 
-            foreach (var entry in Entries)
+            foreach (var entry in AllEntries)
             {
+                // 打分口径(按"种类"计分,不按 token 个数累积 —— 否则关键词多的条目会凭数量压过真正对口的条目)
                 int score = 0;
                 var hits = new List<string>();
 
-                if (Contains(entry.Title, text)) { score += 3; hits.Add("标题"); }
+                bool titleHit = Contains(entry.Title, text);
+                bool keywordHit = false;
+                bool bodyHit = false;
                 foreach (var token in tokens)
                 {
                     if (string.IsNullOrEmpty(token)) continue;
-                    if (Contains(entry.Title, token)) { score += 2; if (!hits.Contains("标题")) hits.Add("标题"); }
-                    foreach (var keyword in entry.Keywords)
+                    if (!titleHit && Contains(entry.Title, token)) titleHit = true;
+                    if (!keywordHit)
                     {
-                        if (Contains(keyword, token) || Contains(token, keyword))
+                        foreach (var keyword in entry.Keywords)
                         {
-                            score += 2;
-                            if (!hits.Contains("关键词")) hits.Add("关键词");
-                            break;
+                            if (Contains(keyword, token) || Contains(token, keyword)) { keywordHit = true; break; }
                         }
                     }
-                    if (Contains(entry.Answer, token) || Contains(entry.Question, token))
-                    {
-                        score += 1;
-                        if (!hits.Contains("正文")) hits.Add("正文");
-                    }
+                    if (!bodyHit && (Contains(entry.Answer, token) || Contains(entry.Question, token))) bodyHit = true;
                 }
+                if (titleHit) { score += 3; hits.Add("标题"); }
+                if (keywordHit) { score += 2; hits.Add("关键词"); }
+                if (bodyHit) { score += 1; hits.Add("正文"); }
 
                 if (score <= 0) continue;
                 matches.Add(new KnowledgeMatch
@@ -120,6 +166,9 @@ namespace HVACIDA.Core.Services
             {
                 int byScore = b.Score.CompareTo(a.Score);
                 if (byScore != 0) return byScore;
+                // 同分时:**本项目已定口径 → 规范条文 → 规范依据 → 操作步骤 → 数据 → 待补**(工程口径优先于软件操作)
+                int byCategory = Rank(a.Entry.Category).CompareTo(Rank(b.Entry.Category));
+                if (byCategory != 0) return byCategory;
                 return string.Compare(a.Entry.Title, b.Entry.Title, StringComparison.Ordinal);
             });
             if (matches.Count > MaxMatches) matches.RemoveRange(MaxMatches, matches.Count - MaxMatches);
@@ -200,6 +249,24 @@ namespace HVACIDA.Core.Services
 
         // ================================================================== 内部
 
+        /// <summary>供其它检索入口(如规范条文库)复用的分词方法。</summary>
+        public static List<string> TokenizeForSearch(string text)
+        {
+            return Tokenize(text);
+        }
+        /// <summary>同分时的类别优先序:工程口径优先于软件操作(避免"操作指南"压过"算法口径")。</summary>
+        private static int Rank(KnowledgeCategory category)
+        {
+            switch (category)
+            {
+                case KnowledgeCategory.Caliber: return 0;
+                case KnowledgeCategory.Clause: return 1;
+                case KnowledgeCategory.Standard: return 2;
+                case KnowledgeCategory.Operation: return 3;
+                case KnowledgeCategory.Data: return 4;
+                default: return 5;
+            }
+        }
         /// <summary>把查询切成检索片段:先按标点/空白切,再对较长的中文片段取 2~4 字滑窗。</summary>
         private static List<string> Tokenize(string text)
         {

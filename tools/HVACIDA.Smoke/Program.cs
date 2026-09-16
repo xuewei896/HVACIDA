@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -51,6 +51,7 @@ namespace HVACIDA.Smoke
             RunSheetCatalogChecks();
             RunKnowledgeChecks();
             RunLegendChecks();
+            RunClauseAndGuideChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
@@ -1980,7 +1981,7 @@ namespace HVACIDA.Smoke
             CheckInt("规范依据分类非空", KnowledgeBase.ByCategory(KnowledgeCategory.Standard).Count > 0 ? 1 : 0, 1);
             CheckInt("待补与局限分类非空", KnowledgeBase.ByCategory(KnowledgeCategory.Pending).Count > 0 ? 1 : 0, 1);
             CheckInt("按编号取条目", KnowledgeBase.Find("hydraulic-formula") != null ? 1 : 0, 1);
-            CheckText("示例问题数 = 条目数", KnowledgeBase.SampleQuestions().Count == entries.Count ? "齐" : "缺", "齐");
+            CheckText("示例问法条数 ≥ 15(界面快捷按钮只取本项目口径条目)", KnowledgeBase.SampleQuestions().Count >= 15 ? "够" : KnowledgeBase.SampleQuestions().Count.ToString(), "够");
             CheckText("分类中文名", KnowledgeBase.CategoryName(KnowledgeCategory.Pending), "待补与局限");
 
             string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Kb-" + Guid.NewGuid().ToString("N"));
@@ -2054,6 +2055,85 @@ namespace HVACIDA.Smoke
             CheckText("标注口径写明跳过已有标注", tag.Note.Contains("跳过") ? "有" : "缺", "有");
             CheckText("范围说明写明只做空间名称编号标注",
                 tag.PendingNote.Contains("只做空间名称/编号标注") ? "有" : "缺", "有");
+            Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景20:规范条文检索库 + Revit 操作指南(需求 2.7 范围扩大)
+        //   纪律:条文库只给「标准 + 章节线索 + 要点概述」,**不编条文号也不编数值**
+        // =====================================================================
+        private static void RunClauseAndGuideChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景20:规范条文检索库 + Revit 操作指南");
+            Console.WriteLine("==================================================");
+
+            var clauses = StandardClauseLibrary.All;
+            CheckText("规范条文条目数 ≥ 20", clauses.Count >= 20 ? "够" : clauses.Count.ToString(), "够");
+            int noCode = 0, noHint = 0, noSummary = 0, noBoundary = 0, withClauseNo = 0;
+            foreach (var clause in clauses)
+            {
+                if (string.IsNullOrEmpty(clause.StandardCode) || string.IsNullOrEmpty(clause.StandardName)) noCode++;
+                if (string.IsNullOrEmpty(clause.ClauseHint)) noHint++;
+                if (string.IsNullOrEmpty(clause.Summary)) noSummary++;
+                if (string.IsNullOrEmpty(clause.BoundaryNote)) noBoundary++;
+                if (System.Text.RegularExpressions.Regex.IsMatch(clause.ClauseHint, @"第\s*\d+\.\d+")) withClauseNo++;
+            }
+            CheckInt("每条都有标准编号与名称(0 = 正常)", noCode, 0);
+            CheckInt("每条都有章节线索(0 = 正常)", noHint, 0);
+            CheckInt("每条都有要点概述(0 = 正常)", noSummary, 0);
+            CheckInt("每条都有边界说明(以标准原文为准)(0 = 正常)", noBoundary, 0);
+            CheckInt("章节线索里没有出现具体条文号 X.Y(0 = 正常)", withClauseNo, 0);
+            CheckText("全局边界说明写明不含条文号与数值",
+                StandardClauseLibrary.ScopeNote.Contains("不含具体条文号") && StandardClauseLibrary.ScopeNote.Contains("以标准原文") ? "有" : "缺", "有");
+
+            var standards = StandardClauseLibrary.Standards();
+            CheckText("收录标准数 ≥ 12", standards.Count >= 12 ? "够" : standards.Count.ToString(), "够");
+            CheckText("收录 GB 50736(暖通主规范)",
+                StandardClauseLibrary.Search("GB 50736").Count > 0 ? "有" : "无", "有");
+            CheckText("收录 GB 50015(建筑给水排水)",
+                StandardClauseLibrary.Search("GB 50015").Count > 0 ? "有" : "无", "有");
+            CheckText("收录 GB 51251(防烟排烟)",
+                StandardClauseLibrary.Search("GB 51251").Count > 0 ? "有" : "无", "有");
+            CheckInt("给排水专业条目非空", StandardClauseLibrary.ByDiscipline(CodeDiscipline.Plumbing).Count > 0 ? 1 : 0, 1);
+            CheckInt("防烟排烟条目非空", StandardClauseLibrary.ByDiscipline(CodeDiscipline.Fire).Count > 0 ? 1 : 0, 1);
+            CheckInt("地铁专项条目非空", StandardClauseLibrary.ByDiscipline(CodeDiscipline.Metro).Count > 0 ? 1 : 0, 1);
+            CheckText("按主题检索:排烟风机", StandardClauseLibrary.Search("排烟风机").Count > 0 ? "有" : "无", "有");
+            CheckText("按主题检索:给水用水定额", StandardClauseLibrary.Search("用水定额").Count > 0 ? "有" : "无", "有");
+
+            // 并入知识库:三类条目同窗可检索
+            var all = KnowledgeBase.All;
+            int clauseCount = 0, opCount = 0, caliberCount = 0;
+            foreach (var entry in all)
+            {
+                if (entry.Category == KnowledgeCategory.Clause) clauseCount++;
+                if (entry.Category == KnowledgeCategory.Operation) opCount++;
+                if (entry.Category == KnowledgeCategory.Caliber) caliberCount++;
+            }
+            CheckInt("知识库里的规范条文条目 = 条文库条数", clauseCount, clauses.Count);
+            CheckText("知识库里的 Revit 操作条目 ≥ 14", opCount >= 14 ? "够" : opCount.ToString(), "够");
+            CheckText("本项目已定口径条目仍保留 ≥ 9", caliberCount >= 9 ? "够" : caliberCount.ToString(), "够");
+            CheckText("分类中文名含「规范条文」", KnowledgeBase.CategoryName(KnowledgeCategory.Clause), "规范条文");
+            var answer = KnowledgeBase.Answer("防烟分区怎么划分");
+            CheckText("问规范条文能命中并挂出处",
+                answer.HasAnswer && answer.AnswerText.Contains("GB") && answer.AnswerText.Contains("出处:") ? "命中" : "未命中", "命中");
+
+            var sections = RevitOperationGuide.All;
+            CheckText("Revit 操作指南章节 ≥ 14", sections.Count >= 14 ? "够" : sections.Count.ToString(), "够");
+            int noSteps = 0, noGroup = 0;
+            foreach (var section in sections)
+            {
+                if (section.Steps.Count == 0) noSteps++;
+                if (string.IsNullOrEmpty(section.Group)) noGroup++;
+            }
+            CheckInt("每节都有操作步骤(0 = 正常)", noSteps, 0);
+            CheckInt("每节都有分组(0 = 正常)", noGroup, 0);
+            CheckText("分组数 ≥ 5", RevitOperationGuide.Groups().Count >= 5 ? "够" : RevitOperationGuide.Groups().Count.ToString(), "够");
+            CheckText("检索:空间", RevitOperationGuide.Search("空间").Count > 0 ? "有" : "无", "有");
+            CheckText("检索:图纸打印", RevitOperationGuide.Search("打印").Count > 0 ? "有" : "无", "有");
+            CheckText("检索:工作共享", RevitOperationGuide.Search("工作共享").Count > 0 ? "有" : "无", "有");
+            CheckText("指南边界说明写明不含设计取值",
+                RevitOperationGuide.ScopeNote.Contains("不含设计取值") ? "有" : "缺", "有");
             Console.WriteLine();
         }
 

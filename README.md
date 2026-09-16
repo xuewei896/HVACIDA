@@ -86,7 +86,7 @@ dotnet build .\HVACIDA.sln
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | 文本计算书(TextReportGenerator)+ **Excel 计算书**(`XlsxWriter` 自写最小 XLSX,零依赖) | ✅ 文本 + Excel:**大系统负荷 / 排烟 / 小系统 / 水力**各模块均可导出(`%AppData%\HVACIDA\Reports`) |
 | 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml** / **hydraulic.xml** 多系统容器) | 🟡 待换 SQLite(旧 small-system.xml 与水力单系统文件首次读取自动迁移) |
-| 2.7 规范知识库 | DesignQaService(本地规则应答)+ 知识库窗口 | 🟡 规则版,待接 AI |
+| 2.7 规范知识库 | `KnowledgeBase`(本项目口径 + **规范条文检索** + **Revit 操作指南**,三类同窗可检索/筛选)+ 知识库窗口 | ✅ 条目化、每条带出处;规范条文覆盖 GB 50736 / GB 50015 / GB 51251 / GB 50016 / GB 50013 / GB 50014 / GB 50974 / GB 50157 / GB 51298 / GB 50243 / GB 50242 / GB/T 50114 等;**只给检索线索与要点,不编条文号与数值**(以标准原文为准);Revit 操作指南 15 节覆盖建模/空间/MEP/标注/出图/协同/排错;⬜ 未接在线大模型 |
 | 2.3/2.4 水力计算 | 风系统 / 水系统录入窗 + **全站汇总窗**(`HydraulicCalculator` / `RevitHydraulicReader` / `HydraulicSummaryService`) | ✅ 已实装:模型里选系统 → 读管网 → 连接件拓扑求**最不利环路** → 需求全压(Pa)/ 扬程(m)+ 设备校核;**并联环路平衡**(Kv / 阀权度 / 需增加 ζ)、**系统阻力特性曲线**、**全站多系统汇总**(按「介质 + 系统编号」upsert)与 **Excel 导出**;系数全部可见可改(§4.10) |
 | 2.5 材料表统计(出图→明细表) | 材料表窗(`MaterialTakeoffService` / `RevitMaterialTakeoffReader`) | ✅ 读模型 11 类构件(风管/水管/管件/附件/末端/设备/保温)→ 归并键含**单位**(长度与件数不相加)→ 类别小计 + 逐类型明细 + Excel 3 页(§4.11) |
 | 2.6 图纸与批量出图(出图→图框) | 图框窗(`SheetCatalogService` / `RevitSheetReader` / `RevitSheetExporter` / `RevitAutoTagger`) | ✅ 图纸清单(编号/名称/图框/图幅 mm/视图数)+ **空图框计数** + **批量导出 DWG/DXF**(Revit 导出接口)+ **PDF**(系统打印机,**依赖本机 PDF 驱动,没有就逐张报失败**)+ 清单 Excel 4 页(§4.12);✅ **空间自动标注**(名称+编号,已有标注跳过)、✅ **图例表**(复用材料表);⬜ 风管/水管尺寸与设备编号标注、图例自动排版 |

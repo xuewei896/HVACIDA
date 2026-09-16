@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
@@ -36,6 +36,15 @@ namespace HVACIDA.UI.ViewModels
         }
 
         public KnowledgeViewModel(string reportsDirectory)
+            : this(reportsDirectory, null)
+        {
+        }
+
+        /// <summary>
+        /// <paramref name="initialCategory"/> 用于「AI问答 → 操作指南」键:打开即定位到「操作步骤」(Revit 操作指南);
+        /// 为空则显示全部。
+        /// </summary>
+        public KnowledgeViewModel(string reportsDirectory, string initialCategory)
         {
             _excel = new ExcelReportGenerator(reportsDirectory);
             _entries = KnowledgeBase.All;
@@ -45,8 +54,13 @@ namespace HVACIDA.UI.ViewModels
             ExportExcelCommand = new RelayCommand(ExportExcel);
             CategoryCommand = new RelayCommand(() => ApplyCategory(PendingCategory));
 
-            Status = "共 " + _entries.Count + " 条知识库条目(每条都带出处)。可以直接提问,也可以按分类浏览。";
+            Status = "共 " + _entries.Count + " 条条目(本项目已定口径 / 规范条文 / Revit 操作指南)。可以直接提问,也可以按分类浏览。";
             if (_entries.Count > 0) SelectedEntry = _entries[0];
+            if (!string.IsNullOrEmpty(initialCategory))
+            {
+                PendingCategory = initialCategory;
+                ApplyCategory(initialCategory);
+            }
         }
 
         /// <summary>对话记录(用户问句 + 系统答复交替)。</summary>
@@ -58,7 +72,7 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>分类筛选选项。</summary>
         public IList<string> Categories => new List<string>
         {
-            "全部", "已定口径", "规范依据", "操作步骤", "数据与存储", "待补与局限"
+            "全部", "已定口径", "规范条文", "规范依据", "操作步骤", "数据与存储", "待补与局限"
         };
 
         public string CategoryFilter

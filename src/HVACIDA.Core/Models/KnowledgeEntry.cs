@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HVACIDA.Core.Models
@@ -19,7 +19,10 @@ namespace HVACIDA.Core.Models
         Data = 3,
 
         /// <summary>待补 / 局限(明确"还没做、别当成做了")。</summary>
-        Pending = 4
+        Pending = 4,
+
+        /// <summary>规范条文检索(通风空调 / 给排水相关标准;只给检索线索与要点,不编条文号与数值)。</summary>
+        Clause = 5
     }
 
     /// <summary>
