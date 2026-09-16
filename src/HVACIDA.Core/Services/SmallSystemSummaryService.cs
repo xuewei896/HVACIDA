@@ -37,6 +37,12 @@ namespace HVACIDA.Core.Services
 
         /// <summary>计算书文本(导出全站计算书时拼接)。</summary>
         public string ResultText { get; set; } = "";
+
+        /// <summary>该系统的输入(Excel 全站汇总里附每套系统的明细页时用;不参与 XML 持久化)。</summary>
+        public SmallSystemInput Input { get; set; }
+
+        /// <summary>该系统的计算结果(同上)。</summary>
+        public SmallSystemResult Result { get; set; }
     }
 
     /// <summary>
@@ -107,6 +113,8 @@ namespace HVACIDA.Core.Services
                 var row = new SmallSystemSummaryRow
                 {
                     SystemType = system.SystemType,
+                    Input = system,
+                    Result = result,
                     TypeName = ResultTable.SystemTypeName(system.SystemType),
                     SystemCode = system.SystemCode ?? "",
                     RoomCount = result.Rooms.Count,

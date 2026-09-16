@@ -55,6 +55,9 @@
                             Command="{Binding SaveCommand}"/>
                     <Button Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0"
                             Command="{Binding ExportCommand}"/>
+                    <Button Content="导出 Excel" Width="104" Height="30" Margin="8,0,0,0"
+                            Command="{Binding ExportExcelCommand}"
+                            ToolTip="导出 .xlsx:负荷汇总(7 个分区 66 行)+ 口径与待补"/>
                     <Button Content="恢复默认参数" Width="120" Height="30" Margin="8,0,0,0"
                             Command="{Binding ResetCommand}"/>
                 </StackPanel>

@@ -16,6 +16,7 @@ namespace HVACIDA.UI.ViewModels
     {
         private readonly ILargeSystemLoadCalculator _calculator;
         private readonly LargeSystemInputService _service;
+        private readonly ExcelReportGenerator _excel;
         private LargeSystemInput _input;
         private string _resultText = "";
         private string _status = "";
@@ -33,14 +34,25 @@ namespace HVACIDA.UI.ViewModels
         /// (公共区几何 + 高峰客流在那边录入,这里继续补其余各节)。
         /// </summary>
         public LargeSystemViewModel(IDataRepository repository)
+            : this(repository, null)
+        {
+        }
+
+        /// <summary>
+        /// <paramref name="reportsDirectory"/> 用于自检时把导出的计算书写到临时目录
+        /// (为空则用 <c>%AppData%\HVACIDA\Reports</c>,与文本计算书同目录)。
+        /// </summary>
+        public LargeSystemViewModel(IDataRepository repository, string reportsDirectory)
         {
             _calculator = new LargeSystemLoadCalculator();
             _service = new LargeSystemInputService(repository);
+            _excel = new ExcelReportGenerator(reportsDirectory);
             _input = _service.Load();
             ApplyWeatherNotes(_service.LastWeatherSync);
 
             CalculateCommand = new RelayCommand(CalculateAndPersist, () => true);
             ExportCommand = new RelayCommand(ExportReport, () => _lastResult != null);
+            ExportExcelCommand = new RelayCommand(ExportExcel, () => _lastResult != null);
             ResetCommand = new RelayCommand(Reset);
             SaveCommand = new RelayCommand(Save);
             SyncWeatherCommand = new RelayCommand(() =>
@@ -70,6 +82,9 @@ namespace HVACIDA.UI.ViewModels
 
         /// <summary>导出计算书命令(需先计算)。</summary>
         public ICommand ExportCommand { get; }
+
+        /// <summary>导出 **Excel(.xlsx)** 计算书(负荷汇总 66 行 + 口径与待补)。</summary>
+        public ICommand ExportExcelCommand { get; }
 
         /// <summary>恢复公式文档默认参数。</summary>
         public ICommand ResetCommand { get; }
@@ -190,6 +205,27 @@ namespace HVACIDA.UI.ViewModels
 
             Calculate();
             Status = saveNote + " " + Status;
+        }
+
+        /// <summary>导出 Excel(.xlsx)计算书:负荷汇总(7 个分区)+ 口径与待补。</summary>
+        private void ExportExcel()
+        {
+            try
+            {
+                if (_lastResult == null)
+                {
+                    Status = "还没有可导出的结果:请先点【计 算】。";
+                    return;
+                }
+
+                var workbook = LargeSystemExcelExporter.BuildLoad(Input, _lastResult);
+                string path = _excel.SaveWorkbook("大系统负荷计算书", workbook);
+                Status = "Excel 计算书已生成(" + workbook.SheetCount + " 个工作表): " + path;
+            }
+            catch (System.Exception ex)
+            {
+                Status = "导出 Excel 失败: " + ex.Message;
+            }
         }
 
         /// <summary>内部重算(不写盘):构造函数、恢复默认走这里。</summary>

@@ -50,6 +50,8 @@
                             ToolTip="重新读取整个小系统工程并逐系统汇总(本窗打开时已自动汇总过一次;点它用于别处又保存了新系统后刷新)"/>
                     <Button Content="导出全站汇总计算书" Width="164" Height="30" Margin="8,0,0,0" Command="{Binding ExportCommand}"
                             ToolTip="导出汇总表 + 每一套小系统各自的完整计算书(文本)"/>
+                    <Button Content="导出全站 Excel" Width="126" Height="30" Margin="8,0,0,0" Command="{Binding ExportExcelCommand}"
+                            ToolTip="导出 .xlsx:逐系统一行 + 全站合计 + 每套系统的房间与设备明细页 + 口径与待补"/>
                 </StackPanel>
                 <Button DockPanel.Dock="Right" Content="关 闭" Width="96" Height="30" IsCancel="True"/>
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"

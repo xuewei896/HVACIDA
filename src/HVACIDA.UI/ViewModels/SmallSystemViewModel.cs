@@ -25,6 +25,7 @@ namespace HVACIDA.UI.ViewModels
     {
         private readonly ISmallSystemLoadCalculator _calculator;
         private readonly SmallSystemInputService _inputService;
+        private readonly ExcelReportGenerator _excel;
 
         private SmallSystemInput _input;
         private readonly ObservableCollection<SmallRoomInput> _rooms;
@@ -70,9 +71,20 @@ namespace HVACIDA.UI.ViewModels
         /// </para>
         /// </summary>
         public SmallSystemViewModel(SmallSystemType systemType, IDataRepository repository, bool pickAvailable)
+            : this(systemType, repository, pickAvailable, null)
+        {
+        }
+
+        /// <summary>
+        /// <paramref name="reportsDirectory"/> 用于自检时把导出的计算书写到临时目录
+        /// (为空则用 <c>%AppData%\HVACIDA\Reports</c>)。
+        /// </summary>
+        public SmallSystemViewModel(SmallSystemType systemType, IDataRepository repository, bool pickAvailable,
+            string reportsDirectory)
         {
             _calculator = new SmallSystemLoadCalculator();
             _inputService = new SmallSystemInputService(repository);
+            _excel = new ExcelReportGenerator(reportsDirectory);
             IsPickAvailable = pickAvailable;
 
             var saved = _inputService.Load(systemType, "");
@@ -89,6 +101,7 @@ namespace HVACIDA.UI.ViewModels
             CalculateCommand = new RelayCommand(CalculateAndPersist);
             SaveCommand = new RelayCommand(Save);
             ExportCommand = new RelayCommand(Export, () => _lastResult != null);
+            ExportExcelCommand = new RelayCommand(ExportExcel, () => _lastResult != null);
             ResetCommand = new RelayCommand(Reset);
 
             Calculate();
@@ -226,6 +239,9 @@ namespace HVACIDA.UI.ViewModels
         public ICommand SaveCommand { get; }
 
         public ICommand ExportCommand { get; }
+
+        /// <summary>导出 **Excel(.xlsx)** 计算书(系统结果 + 房间明细 + 设备选型 + 口径与待补)。</summary>
+        public ICommand ExportExcelCommand { get; }
 
         /// <summary>恢复公式文档默认参数(房间列表保留)。</summary>
         public ICommand ResetCommand { get; }
@@ -450,6 +466,29 @@ namespace HVACIDA.UI.ViewModels
 
             Calculate();
             Status = saveNote + " " + Status;
+        }
+
+        /// <summary>导出 Excel(.xlsx)计算书:系统结果 + 房间明细 + 设备选型 + 口径与待补。</summary>
+        private void ExportExcel()
+        {
+            try
+            {
+                if (_lastResult == null)
+                {
+                    Status = "还没有可导出的结果:请先点【计 算】。";
+                    return;
+                }
+
+                var workbook = SmallSystemExcelExporter.BuildSystem(_input, _lastResult);
+                string path = _excel.SaveWorkbook(
+                    "小系统计算书_" + SystemTypeName + (string.IsNullOrEmpty(_input.SystemCode) ? "" : "_" + _input.SystemCode),
+                    workbook);
+                Status = "Excel 计算书已生成(" + workbook.SheetCount + " 个工作表): " + path;
+            }
+            catch (Exception ex)
+            {
+                Status = "导出 Excel 失败: " + ex.Message;
+            }
         }
 
         /// <summary>内部重算(不写盘):构造函数、拾取回填、恢复默认走这里。</summary>

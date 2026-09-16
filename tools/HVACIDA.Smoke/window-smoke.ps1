@@ -1246,6 +1246,50 @@ try {
     $fail++
 }
 
+# =====================================================================
+# 计算书 Excel 导出(大系统负荷 / 排烟 / 小系统 / 小系统全站汇总):写到临时目录,不碰真实 %AppData%
+# =====================================================================
+try {
+    $xlDir = Join-Path $env:TEMP ("HVACIDA-XlReports-" + [guid]::NewGuid().ToString('N'))
+    $xlRepoDir = Join-Path $env:TEMP ("HVACIDA-XlRepo-" + [guid]::NewGuid().ToString('N'))
+    $repoX = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $xlRepoDir
+
+    $loadVm = New-Object "$vmNs.LargeSystemViewModel" -ArgumentList $repoX, $xlDir
+    $loadVm.ExportExcelCommand.Execute($null)
+    $smokeVm = New-Object "$vmNs.LargeSmokeViewModel" -ArgumentList $repoX, $xlDir
+    $smokeVm.ExportExcelCommand.Execute($null)
+    $largeResultVm = New-Object "$vmNs.LargeResultViewModel" -ArgumentList $repoX, $xlDir
+    $largeResultVm.ExportExcelCommand.Execute($null)
+
+    $smallVm = New-Object "$vmNs.SmallSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn), $repoX, $false, $xlDir
+    $smallVm.Input.SystemCode = 'AHU-XL1'
+    $smallVm.Rooms.Add([HVACIDA.Core.Models.SmallRoomInput]::Create('弱电间1', 50, 5.9)) | Out-Null
+    $smallVm.SaveCommand.Execute($null)
+    $smallVm.ExportExcelCommand.Execute($null)
+    $smallSumVm = New-Object "$vmNs.SmallResultViewModel" -ArgumentList $repoX, $xlDir
+    $smallSumVm.ExportExcelCommand.Execute($null)
+
+    $xl = @(Get-ChildItem -LiteralPath $xlDir -Filter *.xlsx -ErrorAction SilentlyContinue)
+    if ($xl.Count -eq 5) {
+        Write-Host ("PASS  五个模块的 Excel 计算书都写出了(共 {0} 个 .xlsx)" -f $xl.Count)
+    } else {
+        Write-Host ("FAIL  Excel 导出文件数 = {0}(期望 5)" -f $xl.Count); $fail++
+    }
+    if ($smallVm.Status -match '4 个工作表' -and $loadVm.Status -match '2 个工作表' -and
+        $smokeVm.Status -match '3 个工作表' -and $smallSumVm.Status -match '个工作表') {
+        Write-Host "PASS  各窗状态栏都报出了工作表数(小系统 4 页 / 大系统负荷 2 页 / 排烟 3 页 / 全站汇总多页)"
+    } else {
+        Write-Host ("FAIL  状态栏: small='{0}' smoke='{1}' load='{2}' sum='{3}'" -f `
+            $smallVm.Status, $smokeVm.Status, $loadVm.Status, $smallSumVm.Status)
+        $fail++
+    }
+    try { Remove-Item $xlDir -Recurse -Force -ErrorAction Stop } catch { }
+    try { Remove-Item $xlRepoDir -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  计算书 Excel 导出自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
 # 待实现模块遍历:22 个模块都应能生成说明窗
 try {
     $n = 0

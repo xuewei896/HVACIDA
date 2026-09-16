@@ -46,10 +46,11 @@ namespace HVACIDA.Smoke
             RunSmallSystemChecks();
             RunHydraulicChecks();
             RunHydraulicSummaryChecks();
+            RunCalculationExcelChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算(含多系统汇总与 Excel 导出)自检通过。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算(含多系统汇总与 Excel 导出)/计算书 Excel 导出推广自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
@@ -1553,6 +1554,177 @@ namespace HVACIDA.Smoke
             using (var reader = new System.IO.StreamReader(stream, Encoding.UTF8))
             {
                 return reader.ReadToEnd();
+            }
+        }
+
+        // =====================================================================
+        // 场景15:计算书 Excel 导出推广(大系统负荷 / 排烟 / 小系统 / 小系统全站汇总)
+        //   断言方式:写出 .xlsx → 解压 → 校验工作表名与"关键单元格确实写进去了",
+        //   且写出的数值与 Core 结果表里的**同一个数**逐字符一致(导出器不另算数字)。
+        // =====================================================================
+        private static void RunCalculationExcelChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景15:计算书 Excel 导出(大系统负荷 / 排烟 / 小系统 / 全站汇总)");
+            Console.WriteLine("==================================================");
+
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Xlsx-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                // ---------- 1) 大系统负荷 ----------
+                var loadInput = BuildBeijingSample();
+                var loadResult = new LargeSystemLoadCalculator().Calculate(loadInput);
+                var loadBook = LargeSystemExcelExporter.BuildLoad(loadInput, loadResult);
+                CheckInt("大系统负荷工作簿 2 页(负荷汇总 + 口径)", loadBook.SheetCount, 2);
+
+                string loadPath = Path.Combine(dir, "大系统负荷计算书.xlsx");
+                loadBook.Save(loadPath);
+                string wb, s1, entries;
+                ReadXlsx(loadPath, out wb, out s1, out entries);
+                CheckText("大系统工作簿页名", wb.Contains("负荷汇总") && wb.Contains("口径与待补") ? "齐" : wb, "齐");
+                CheckText("工作表名都合法(≤31 字符、无非法字符)", SheetNamesValid(wb) ? "合法" : wb, "合法");
+
+                double? cooling = null;
+                var loadTable = ResultTable.ForLargeSystem(loadInput, loadResult);
+                foreach (var section in loadTable.Sections)
+                {
+                    foreach (var row in section.Rows)
+                    {
+                        if (row.Value.HasValue && row.Label.Contains("总制冷量")) cooling = row.Value;
+                    }
+                }
+                CheckText("Excel 里的总制冷量与结果表逐字符一致",
+                    cooling.HasValue && s1.Contains(cooling.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
+                        ? "一致" : "不一致", "一致");
+
+                // ---------- 2) 大系统排烟 ----------
+                var smokeInput = new LargeSmokeInput();
+                var smokeResult = new LargeSmokeCalculator().Calculate(loadInput, smokeInput);
+                var smokeBook = LargeSystemExcelExporter.BuildSmoke(smokeInput, smokeResult);
+                CheckInt("排烟工作簿 3 页(分区 + 选型 + 口径)", smokeBook.SheetCount, 3);
+
+                string smokePath = Path.Combine(dir, "大系统排烟计算书.xlsx");
+                smokeBook.Save(smokePath);
+                string swb, ss1, sentries;
+                ReadXlsx(smokePath, out swb, out ss1, out sentries);
+                CheckText("排烟分区表含区域名与单台风量列",
+                    ss1.Contains(smokeResult.Zones[0].ZoneName) && ss1.Contains("单台风机风量") ? "有" : "缺", "有");
+                CheckText("排烟分区表写出计算排烟量数值",
+                    ss1.Contains(smokeResult.Zones[0].CalculatedFlowM3H.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
+                        ? "有" : "缺", "有");
+
+                // ---------- 3) 小系统(单系统)----------
+                var smallInput = new SmallSystemInput
+                {
+                    SystemType = SmallSystemType.AllAirOnceReturn,
+                    SystemCode = "AHU-X101",
+                    IndoorTempC = 27, SupplyTempDiffC = 10, DuctTempRiseC = 1.5,
+                    LightingIndexWm2 = 20, WallMoistureEmission = 2, OutdoorWetBulbC = 28.2
+                };
+                smallInput.Rooms.Add(SmallRoomInput.Create("弱电间1", 50, 5.9));
+                smallInput.Rooms.Add(SmallRoomInput.Create("弱电间2", 30, 5.9));
+                var smallResult = new SmallSystemLoadCalculator().Calculate(smallInput);
+                var smallBook = SmallSystemExcelExporter.BuildSystem(smallInput, smallResult);
+                CheckInt("小系统工作簿 4 页(系统结果/房间明细/设备选型/口径)", smallBook.SheetCount, 4);
+
+                string smallPath = Path.Combine(dir, "小系统计算书.xlsx");
+                smallBook.Save(smallPath);
+                string xwb, xs1, xentries, roomXml, equipXml;
+                ReadXlsxSheets(smallPath, out xwb, out xs1, out xentries,
+                    new[] { "xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml" }, out roomXml, out equipXml);
+                CheckText("小系统房间明细页含房间名与面积",
+                    roomXml.Contains("弱电间1") && roomXml.Contains("50") ? "有" : "缺", "有");
+                CheckText("小系统设备选型页含设备代码", equipXml.Contains("AHU-X101") ? "有" : "缺", "有");
+                CheckText("小系统工作簿页名",
+                    xwb.Contains("系统结果") && xwb.Contains("房间明细") && xwb.Contains("设备选型") &&
+                    xwb.Contains("口径与待补") ? "齐" : xwb, "齐");
+
+                // ---------- 4) 小系统全站汇总(多系统 + 每套明细页)----------
+                string sumDir = Path.Combine(Path.GetTempPath(), "HVACIDA-SmallSum-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var sumRepo = new XmlProjectRepository(sumDir);
+                    var sumService = new SmallSystemInputService(sumRepo);
+                    var a1 = new SmallSystemInput { SystemType = SmallSystemType.AllAirOnceReturn, SystemCode = "AHU-A101" };
+                    a1.Rooms.Add(SmallRoomInput.Create("弱电间1", 50, 5.9));
+                    sumService.Save(a1);
+                    var a2 = new SmallSystemInput { SystemType = SmallSystemType.AllAirOnceReturn, SystemCode = "AHU-A201" };
+                    a2.Rooms.Add(SmallRoomInput.Create("强电间1", 80, 4.55));
+                    sumService.Save(a2);
+                    var ef = new SmallSystemInput { SystemType = SmallSystemType.ExhaustVentilation, SystemCode = "EAF-A601" };
+                    var room = SmallRoomInput.Create("男卫", 5.83, 5.9);
+                    room.RoomType = "男卫生间";
+                    ef.Rooms.Add(room);
+                    sumService.Save(ef);
+
+                    var summary = new SmallSystemSummaryService(new SmallSystemLoadCalculator()).Summarize(sumService.LoadProject());
+                    var sumBook = SmallSystemExcelExporter.BuildSummary(summary);
+                    // 3 页(逐系统 / 全站合计 / 口径与待补) + 3 套 × 2 页明细 = 9
+                    CheckInt("小系统全站汇总工作簿 9 页", sumBook.SheetCount, 9);
+
+                    string sumPath = Path.Combine(dir, "小系统全站汇总.xlsx");
+                    sumBook.Save(sumPath);
+                    string sumWb, sumS1, sumEntries;
+                    ReadXlsx(sumPath, out sumWb, out sumS1, out sumEntries);
+                    CheckText("汇总工作簿含逐系统/全站合计/口径与每套明细页",
+                        sumWb.Contains("逐系统") && sumWb.Contains("全站合计") && sumWb.Contains("口径与待补") &&
+                        sumWb.Contains("房-AHU-A101") && sumWb.Contains("设-EAF-A601") ? "齐" : sumWb, "齐");
+                    CheckText("逐系统页含系统编号与逐系统冷负荷",
+                        sumS1.Contains("AHU-A101") &&
+                        sumS1.Contains(summary.Rows[0].TotalCoolingKw.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
+                            ? "有" : "缺", "有");
+                    CheckText("汇总工作簿工作表名都合法", SheetNamesValid(sumWb) ? "合法" : sumWb, "合法");
+                }
+                finally
+                {
+                    try { Directory.Delete(sumDir, true); } catch { }
+                }
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+
+            Console.WriteLine();
+        }
+
+        /// <summary>校验 workbook.xml 里的工作表名符合 Excel 约束(≤31 字符、不含 []:*?/\)。</summary>
+        private static bool SheetNamesValid(string workbookXml)
+        {
+            foreach (System.Text.RegularExpressions.Match match in
+                System.Text.RegularExpressions.Regex.Matches(workbookXml, "name=\"([^\"]*)\""))
+            {
+                string name = match.Groups[1].Value;
+                if (name.Length == 0 || name.Length > 31) return false;
+                foreach (char c in name)
+                {
+                    if (c == '[' || c == ']' || c == ':' || c == '*' || c == '?' || c == '/' || c == '\\') return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>读 .xlsx 中 workbook、sheet1 与两张指定工作表的内容(供逐页断言)。</summary>
+        private static void ReadXlsxSheets(string path, out string workbookXml, out string sheet1Xml, out string entries,
+            string[] wanted, out string sheetA, out string sheetB)
+        {
+            sheetA = "";
+            sheetB = "";
+            workbookXml = "";
+            sheet1Xml = "";
+            entries = "";
+            using (var zip = System.IO.Compression.ZipFile.OpenRead(path))
+            {
+                int count = 0;
+                foreach (var entry in zip.Entries)
+                {
+                    count++;
+                    if (entry.FullName == "xl/workbook.xml") workbookXml = ReadEntry(entry);
+                    if (entry.FullName == "xl/worksheets/sheet1.xml") sheet1Xml = ReadEntry(entry);
+                    if (wanted != null && wanted.Length > 0 && entry.FullName == wanted[0]) sheetA = ReadEntry(entry);
+                    if (wanted != null && wanted.Length > 1 && entry.FullName == wanted[1]) sheetB = ReadEntry(entry);
+                }
+                entries = "条目 " + count + " 个";
             }
         }
 

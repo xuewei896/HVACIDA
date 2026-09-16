@@ -15,8 +15,8 @@ namespace HVACIDA.UI.ViewModels
     {
         private readonly LargeSystemInputService _service;
         private readonly IDataRepository _repository;
-        private readonly ILargeSystemLoadCalculator _calculator;
-        private readonly ILargeSmokeCalculator _smokeCalculator = new LargeSmokeCalculator();
+        private readonly ILargeSystemLoadCalculator _calculator;        private readonly ILargeSmokeCalculator _smokeCalculator = new LargeSmokeCalculator();
+        private readonly ExcelReportGenerator _excel;
         private LargeSystemInput _input;
         private LargeSystemResult _lastResult;
         private LargeSmokeResult _lastSmoke;
@@ -33,13 +33,24 @@ namespace HVACIDA.UI.ViewModels
         }
 
         public LargeResultViewModel(IDataRepository repository)
+            : this(repository, null)
+        {
+        }
+
+        /// <summary>
+        /// <paramref name="reportsDirectory"/> 用于自检时把导出的计算书写到临时目录
+        /// (为空则用 <c>%AppData%\HVACIDA\Reports</c>)。
+        /// </summary>
+        public LargeResultViewModel(IDataRepository repository, string reportsDirectory)
         {
             _repository = repository ?? new XmlProjectRepository();
             _service = new LargeSystemInputService(_repository);
             _calculator = new LargeSystemLoadCalculator();
+            _excel = new ExcelReportGenerator(reportsDirectory);
             _input = _service.Load();
             CalculateCommand = new RelayCommand(Calculate);
             ExportCommand = new RelayCommand(Export, () => _lastResult != null);
+            ExportExcelCommand = new RelayCommand(ExportExcel, () => _lastResult != null);
 
             // 打开即算:本窗名为「计算结果」,打开就该有结果,不该让用户进来再点一次【计 算】。
             // Calculate 只读 large-system.xml / large-smoke.xml(不写盘、不动模型),放在构造函数里没有副作用;
@@ -56,6 +67,9 @@ namespace HVACIDA.UI.ViewModels
         public ICommand CalculateCommand { get; }
 
         public ICommand ExportCommand { get; }
+
+        /// <summary>导出 **Excel(.xlsx)** 计算书(负荷汇总 + 排烟分区 / 选型 + 口径与待补)。</summary>
+        public ICommand ExportExcelCommand { get; }
 
         public string ResultText
         {
@@ -95,6 +109,29 @@ namespace HVACIDA.UI.ViewModels
         {
             get => _status;
             private set => Set(ref _status, value);
+        }
+
+        /// <summary>导出 Excel(.xlsx)计算书:负荷汇总 + 排烟分区宽表 + 排烟选型 + 口径与待补。</summary>
+        private void ExportExcel()
+        {
+            try
+            {
+                if (_lastResult == null)
+                {
+                    Status = "还没有可导出的结果:请先点【计 算】。";
+                    return;
+                }
+
+                // 排烟参数在导出时重读一次(与 Calculate 用的是同一份 large-smoke.xml)
+                var smokeInput = _repository.LoadLargeSmoke();
+                var workbook = LargeSystemExcelExporter.BuildLoadAndSmoke(Input, _lastResult, smokeInput, _lastSmoke);
+                string path = _excel.SaveWorkbook("大系统计算结果", workbook);
+                Status = "Excel 计算书已生成(" + workbook.SheetCount + " 个工作表): " + path;
+            }
+            catch (System.Exception ex)
+            {
+                Status = "导出 Excel 失败: " + ex.Message;
+            }
         }
 
         private void Calculate()

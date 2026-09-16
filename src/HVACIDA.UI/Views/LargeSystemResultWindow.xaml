@@ -47,6 +47,9 @@
                         ToolTip="重新读取已保存的参数并计算(本窗打开时已自动算过一次;点它用于别处又改了参数后刷新)"/>
                 <Button DockPanel.Dock="Left" Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0"
                         Command="{Binding ExportCommand}"/>
+                <Button DockPanel.Dock="Left" Content="导出 Excel" Width="104" Height="30" Margin="8,0,0,0"
+                        Command="{Binding ExportExcelCommand}"
+                        ToolTip="导出 .xlsx:负荷汇总 + 排烟分区 + 排烟选型 + 口径与待补"/>
                 <Button DockPanel.Dock="Right" Content="关 闭" Width="96" Height="30" IsCancel="True"/>
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
                            TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>

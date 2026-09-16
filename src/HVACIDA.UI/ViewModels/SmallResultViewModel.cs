@@ -27,6 +27,7 @@ namespace HVACIDA.UI.ViewModels
         private readonly SmallSystemInputService _inputService;
         private readonly ISmallSystemLoadCalculator _calculator;
         private readonly SmallSystemSummaryService _summaryService;
+        private readonly ExcelReportGenerator _excel;
 
         private SmallSystemProject _project = new SmallSystemProject();
         private SmallSystemSummary _summary = new SmallSystemSummary();
@@ -50,13 +51,24 @@ namespace HVACIDA.UI.ViewModels
         }
 
         public SmallResultViewModel(IDataRepository repository)
+            : this(repository, null)
+        {
+        }
+
+        /// <summary>
+        /// <paramref name="reportsDirectory"/> 用于自检时把导出的计算书写到临时目录
+        /// (为空则用 <c>%AppData%\HVACIDA\Reports</c>)。
+        /// </summary>
+        public SmallResultViewModel(IDataRepository repository, string reportsDirectory)
         {
             _inputService = new SmallSystemInputService(repository);
             _calculator = new SmallSystemLoadCalculator();
             _summaryService = new SmallSystemSummaryService(_calculator);
+            _excel = new ExcelReportGenerator(reportsDirectory);
 
             CalculateCommand = new RelayCommand(Calculate);
             ExportCommand = new RelayCommand(Export, () => _summary != null && _summary.Rows.Count > 0);
+            ExportExcelCommand = new RelayCommand(ExportExcel, () => _summary != null && _summary.Rows.Count > 0);
 
             Calculate();
         }
@@ -185,7 +197,32 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>导出**全站汇总计算书**(汇总表 + 每套系统各自的完整计算书)。</summary>
         public ICommand ExportCommand { get; }
 
+        /// <summary>导出**全站汇总 Excel(.xlsx)**(逐系统 + 全站合计 + 每套系统的房间与设备明细 + 口径)。</summary>
+        public ICommand ExportExcelCommand { get; }
+
         // ================================================================== 实现
+
+        /// <summary>导出全站汇总 Excel(.xlsx):逐系统一行 + 全站合计 + 每套系统的房间/设备明细页 + 口径与待补。</summary>
+        private void ExportExcel()
+        {
+            try
+            {
+                if (_summary == null || _summary.Rows.Count == 0)
+                {
+                    Status = "还没有可导出的汇总:请先在「小系统」各窗录入并点【保 存 参 数】。";
+                    return;
+                }
+
+                var workbook = SmallSystemExcelExporter.BuildSummary(_summary);
+                string path = _excel.SaveWorkbook("小系统全站汇总计算书", workbook);
+                Status = "全站汇总 Excel 已生成(" + _summary.SystemCount + " 套系统、" + workbook.SheetCount +
+                         " 个工作表): " + path;
+            }
+            catch (Exception ex)
+            {
+                Status = "导出 Excel 失败: " + ex.Message;
+            }
+        }
 
         private void Calculate()
         {

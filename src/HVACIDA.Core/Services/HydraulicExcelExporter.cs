@@ -171,20 +171,7 @@ namespace HVACIDA.Core.Services
         /// <summary>把 Core 的结果表渲染成一张工作表(与界面/文本计算书同源)。</summary>
         public static void AddResultTable(XlsxSheet sheet, ResultTable table)
         {
-            if (sheet == null || table == null) return;
-            sheet.AddRow(table.Title);
-            foreach (var section in table.Sections)
-            {
-                sheet.AddRow(section.Title);
-                sheet.AddHeader("项目", "数值", "单位");
-                foreach (var row in section.Rows)
-                {
-                    if (row.Value.HasValue) sheet.AddRow(row.Label, row.Value.Value, row.Unit);
-                    else sheet.AddRow(row.Label, row.Text, "");
-                }
-                sheet.AddBlankRow();
-            }
-            if (!string.IsNullOrEmpty(table.Note)) sheet.AddRow("口径 / 说明", table.Note);
+            ExcelReportBuilder.AddResultTable(sheet, table);
         }
 
         private static void AddCoefficientSheet(XlsxSheet sheet, HydraulicInput input, HydraulicResult result,

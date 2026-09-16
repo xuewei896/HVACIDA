@@ -197,10 +197,28 @@ namespace HVACIDA.Core.Services
             return sb.ToString();
         }
 
+        /// <summary>
+        /// 取某列在**房间结果**上的原始值(Excel 导出与文本计算书共用;数值给 double / int,文本给 string)。
+        /// 返回值保持"数值就是数值",以便 Excel 里还能继续参与计算。
+        /// </summary>
+        public static object ValueOf(SmallRoomResult room, RoomColumn col)
+        {
+            if (room == null || col == null) return null;
+            var property = typeof(SmallRoomResult).GetProperty(col.Property);
+            return property == null ? null : property.GetValue(room, null);
+        }
+
+        /// <summary>取某列在**全站汇总行**上的原始值(Excel 导出用;列定义见 <see cref="SummaryColumns"/>)。</summary>
+        public static object ValueOf(SmallSystemSummaryRow row, RoomColumn col)
+        {
+            if (row == null || col == null) return null;
+            var property = typeof(SmallSystemSummaryRow).GetProperty(col.Property);
+            return property == null ? null : property.GetValue(row, null);
+        }
+
         private static string Cell(SmallRoomResult room, RoomColumn col)
         {
-            var property = typeof(SmallRoomResult).GetProperty(col.Property);
-            object value = property == null ? null : property.GetValue(room, null);
+            object value = ValueOf(room, col);
             if (value == null) return "";
             if (value is int i) return i.ToString(CultureInfo.InvariantCulture);
             if (value is double d) return Num(d, col.Decimals);

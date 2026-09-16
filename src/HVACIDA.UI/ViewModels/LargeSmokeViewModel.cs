@@ -19,6 +19,7 @@ namespace HVACIDA.UI.ViewModels
         private readonly ILargeSmokeCalculator _calculator;
         private readonly IDataRepository _repository;
         private readonly LargeSystemInputService _largeService;
+        private readonly ExcelReportGenerator _excel;
 
         private LargeSmokeInput _input;
         private LargeSystemInput _areas;
@@ -35,10 +36,20 @@ namespace HVACIDA.UI.ViewModels
         }
 
         public LargeSmokeViewModel(IDataRepository repository)
+            : this(repository, null)
+        {
+        }
+
+        /// <summary>
+        /// <paramref name="reportsDirectory"/> 用于自检时把导出的计算书写到临时目录
+        /// (为空则用 <c>%AppData%\HVACIDA\Reports</c>)。
+        /// </summary>
+        public LargeSmokeViewModel(IDataRepository repository, string reportsDirectory)
         {
             _calculator = new LargeSmokeCalculator();
             _repository = repository ?? new XmlProjectRepository();
             _largeService = new LargeSystemInputService(_repository);
+            _excel = new ExcelReportGenerator(reportsDirectory);
 
             _input = _repository.LoadLargeSmoke();
             _areas = _largeService.Load();          // 与公共区参数/负荷计算同一份(含气象联动)
@@ -46,6 +57,7 @@ namespace HVACIDA.UI.ViewModels
             CalculateCommand = new RelayCommand(CalculateAndPersist);
             SaveCommand = new RelayCommand(Save);
             ExportCommand = new RelayCommand(Export, () => _result != null);
+            ExportExcelCommand = new RelayCommand(ExportExcel, () => _result != null);
             ResetCommand = new RelayCommand(Reset);
 
             Calculate();
@@ -108,6 +120,9 @@ namespace HVACIDA.UI.ViewModels
 
         public ICommand ExportCommand { get; }
 
+        /// <summary>导出 **Excel(.xlsx)** 计算书(排烟分区宽表 + 选型 + 口径与待补)。</summary>
+        public ICommand ExportExcelCommand { get; }
+
         public ICommand ResetCommand { get; }
 
         public string Status
@@ -139,6 +154,27 @@ namespace HVACIDA.UI.ViewModels
 
             Calculate();
             Status = saveNote + " " + Status;
+        }
+
+        /// <summary>导出 Excel(.xlsx)计算书:排烟分区(逐区域宽表)+ 排烟选型 + 口径与待补。</summary>
+        private void ExportExcel()
+        {
+            try
+            {
+                if (_result == null)
+                {
+                    Status = "还没有可导出的结果:请先点【计 算】。";
+                    return;
+                }
+
+                var workbook = LargeSystemExcelExporter.BuildSmoke(_input, _result);
+                string path = _excel.SaveWorkbook("大系统排烟计算书", workbook);
+                Status = "Excel 计算书已生成(" + workbook.SheetCount + " 个工作表): " + path;
+            }
+            catch (Exception ex)
+            {
+                Status = "导出 Excel 失败: " + ex.Message;
+            }
         }
 
         /// <summary>内部重算(不写盘):构造函数、重新取面积、恢复默认走这里。</summary>

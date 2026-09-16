@@ -65,6 +65,9 @@
                             Command="{Binding SaveCommand}"/>
                     <Button Content="导出计算书" Width="104" Height="30" Margin="8,0,0,0"
                             Command="{Binding ExportCommand}"/>
+                    <Button Content="导出 Excel" Width="104" Height="30" Margin="8,0,0,0"
+                            Command="{Binding ExportExcelCommand}"
+                            ToolTip="导出 .xlsx:系统结果 + 房间明细 + 设备选型 + 口径与待补"/>
                     <Button Content="恢复默认" Width="92" Height="30" Margin="8,0,0,0"
                             Command="{Binding ResetCommand}"
                             ToolTip="恢复公式文档给定的默认参数(房间列表保留)"/>
