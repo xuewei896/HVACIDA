@@ -24,6 +24,7 @@ namespace HVACIDA.Smoke
     /// 场景12:小系统六类系统 —— 按《小系统空调负荷、送排风、排烟计算公式.docx》示例逐格复算。
     /// 场景21:标准条文电子版导入(txt/md/csv/docx → 条文原文可检索);
     /// 场景22:ima 在线知识库接入(OpenAPI 应答解读 / 凭证口径 / 设置往返 / 断网分支)。
+    /// 场景23:条文原文主路径(打开即自动载入 / 幂等 / 中段可搜 / 说明文件真换行)。
     /// 退出码 0 = 全部通过;1 = 存在偏差。
     /// </summary>
     internal static class Program
@@ -56,10 +57,11 @@ namespace HVACIDA.Smoke
             RunClauseAndGuideChecks();
             RunClauseImportChecks();
             RunImaChecks();
+            RunClausePrimaryPathChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算(含多系统汇总与 Excel 导出)/计算书 Excel 导出推广/条文导入/ima 在线知识库接入自检通过。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算(含多系统汇总与 Excel 导出)/计算书 Excel 导出推广/条文导入(含打开即载入与中段检索)/ima 在线知识库接入自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
@@ -2411,6 +2413,137 @@ namespace HVACIDA.Smoke
             Console.WriteLine("     (断网分支实际原因:" + offlineResult.ErrorMessage + ")");
 
             Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景23:条文原文主路径(打开即自动载入 / 幂等 / 中段也能搜到 / 说明文件是真换行)
+        //   评审口径(2026-09-16):条文原文是**主路径**,ima 在线只作辅助 —— 主路径必须
+        //   "不用每次手动点、放进去就能搜到、搜到的就是整条原文"。
+        // =====================================================================
+        private static void RunClausePrimaryPathChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景23:条文原文主路径(打开即载入 / 幂等 / 中段可搜 / 真换行)");
+            Console.WriteLine("==================================================");
+
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-ClauseMain-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(dir);
+
+                // 关键短语「机械加压送风量」刻意放在正文**中段**:验证关键词取样覆盖全文(不再是只取前 40 字)
+                File.WriteAllText(Path.Combine(dir, "GB 51251-2017 建筑防烟排烟系统技术标准.txt"),
+                    "#标准:GB 51251-2017 建筑防烟排烟系统技术标准\n" +
+                    "3.4.1 防烟系统设计应符合下列规定:防烟楼梯间及其前室应采用自然通风或机械加压送风方式;" +
+                    "当采用机械加压送风时,送风量应按计算确定;机械加压送风量应按门洞断面风速法与压差法分别计算并取其中较大值;" +
+                    "前室的加压送风口宜设置在直通室外的外墙上。本条为测试占位条文。\n",
+                    new System.Text.UTF8Encoding(false));
+
+                // 放一个 PDF:验证跳过原因给出"可照做"的转换办法
+                File.WriteAllText(Path.Combine(dir, "GB 50016-2014 建筑设计防火规范.pdf"), "PDF 占位",
+                    new System.Text.UTF8Encoding(false));
+
+                var loaded = KnowledgeBase.AutoLoadImportedClauses(dir);
+                CheckInt("载入条文条数(1 条,PDF 跳过)", loaded.Count, 1);
+                CheckInt("知识库导入计数", KnowledgeBase.ImportedClauseCount, 1);
+                CheckText("PDF 跳过原因给出可照做的转换办法",
+                    loaded.Skipped.Count == 1 && loaded.Skipped[0].Contains("另存为 .docx") ? "有" : loaded.Skipped.Count.ToString(), "有");
+
+                var search = KnowledgeBase.Search("机械加压送风量");
+                CheckText("条文**中段**的词也能搜到(关键词取样覆盖全文)",
+                    search.Count > 0 && search[0].Entry.Category == KnowledgeCategory.Clause
+                        ? "命中" : (search.Count == 0 ? "无" : search[0].Entry.Title), "命中");
+
+                var answer = KnowledgeBase.Answer("机械加压送风量怎么算?");
+                CheckText("按中段内容提问能给出答复", answer.HasAnswer ? "命中" : "未命中", "命中");
+                bool ordered = true;
+                for (int i = 1; i < answer.Matches.Count; i++)
+                {
+                    if (answer.Matches[i].Score > answer.Matches[i - 1].Score) ordered = false;
+                }
+                CheckText("命中按得分从高到低排序(最高分条目在首位)", ordered ? "有序" : "乱序", "有序");
+                var ranked = KnowledgeBase.Search("排烟 风量 条文 送风");
+                bool tieOrdered = true;
+                for (int i = 1; i < ranked.Count; i++)
+                {
+                    if (ranked[i].Score != ranked[i - 1].Score) continue;
+                    if (CategoryRank(ranked[i].Entry.Category) < CategoryRank(ranked[i - 1].Entry.Category)) tieOrdered = false;
+                }
+                CheckText("同分时按类别排序(已定口径 → 规范条文 → 规范依据 → 操作步骤 …)",
+                    tieOrdered ? "有序" : "乱序", "有序");
+                CheckText("答复里单列出命中的**条文原文**整条(不是片段)",
+                    answer.AnswerText.Contains("命中的规范条文原文") &&
+                    answer.AnswerText.Contains("门洞断面风速法") && answer.AnswerText.Contains("本条为测试占位条文")
+                        ? "全文" : "不完整", "全文");
+                CheckText("答复挂出处(标准编号 + 条文号)",
+                    answer.AnswerText.Contains("GB 51251-2017") && answer.AnswerText.Contains("3.4.1") ? "有" : answer.AnswerText, "有");
+
+                var byNo = KnowledgeBase.Answer("第 3.4.1 条是什么?");
+                CheckText("按**条文号**提问时原文条目在首位",
+                    byNo.HasAnswer && byNo.Top != null && byNo.Top.Id != null &&
+                    byNo.Top.Id.StartsWith("import-", StringComparison.Ordinal)
+                        ? "原文在首位" : (byNo.Top == null ? "无" : byNo.Top.Id), "原文在首位");
+
+                KnowledgeEntry imported = null;
+                foreach (var entry in KnowledgeBase.All)
+                {
+                    if (entry.Category == KnowledgeCategory.Clause &&
+                        entry.Id != null && entry.Id.StartsWith("import-", StringComparison.Ordinal)) imported = entry;
+                }
+                CheckText("导入条目进了知识库(分类=规范条文)",
+                    imported != null ? "有" : "无", "有");
+                CheckText("导入条目正文是**真换行**(不是字面 \\n)",
+                    imported != null && imported.Answer.Contains("\n") && !imported.Answer.Contains("\\n")
+                        ? "真换行" : "字面\\n", "真换行");
+
+                // 幂等:重复载入按 Id 替换,不重复累加
+                KnowledgeBase.AutoLoadImportedClauses(dir);
+                int importedCount = 0;
+                foreach (var entry in KnowledgeBase.All)
+                {
+                    if (entry.Id != null && entry.Id.StartsWith("import-", StringComparison.Ordinal)) importedCount++;
+                }
+                CheckInt("重复载入不重复累加(按 Id 替换)", importedCount, 1);
+
+                // 说明文件:真实换行 + 写明推荐主路径 / PDF 两种转换办法 / 打开即自动载入
+                string instruction = ClauseDocumentReader.InstructionText(dir);
+                CheckText("说明文件用真实换行(不是字面 \\n)",
+                    instruction.Contains("\n") && !instruction.Contains("\\n") ? "真换行" : "字面\\n", "真换行");
+                CheckText("说明文件写明这是推荐主路径并说明理由",
+                    instruction.Contains("推荐的主路径") && instruction.Contains("条文原文") ? "有" : "无", "有");
+                CheckText("说明文件给出 PDF 的两种转换办法",
+                    instruction.Contains("另存为 .docx") && instruction.Contains("记事本") ? "有" : "无", "有");
+                CheckText("说明文件写明打开知识库窗会自动载入",
+                    instruction.Contains("自动读一次") ? "有" : "无", "有");
+
+                // 目录不可用(拿一个位于文件下面的路径):不抛异常,只把原因写进说明
+                string blocker = Path.Combine(dir, "blocker.txt");
+                File.WriteAllText(blocker, "占位", new System.Text.UTF8Encoding(false));
+                var broken = KnowledgeBase.AutoLoadImportedClauses(Path.Combine(blocker, "sub"));
+                CheckInt("目录不可用时返回 0 条(不抛异常)", broken.Count, 0);
+                CheckText("目录不可用时说明写明原因",
+                    KnowledgeBase.ImportNote.Contains("不可用") || KnowledgeBase.ImportNote.Contains("失败") ? "有" : KnowledgeBase.ImportNote, "有");
+                CheckText("目录不可用不影响内置条目", KnowledgeBase.ByCategory(KnowledgeCategory.Standard).Count > 0 ? "在" : "丢了", "在");
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+            Console.WriteLine();
+        }
+
+        /// <summary>同分时的类别优先序(与 KnowledgeBase.Rank 的口径一致,自检里独立复述一遍以免"改了没人发现")。</summary>
+        private static int CategoryRank(KnowledgeCategory category)
+        {
+            switch (category)
+            {
+                case KnowledgeCategory.Caliber: return 0;
+                case KnowledgeCategory.Clause: return 1;
+                case KnowledgeCategory.Standard: return 2;
+                case KnowledgeCategory.Operation: return 3;
+                case KnowledgeCategory.Data: return 4;
+                default: return 5;
+            }
         }
 
         private static StandardClauseEntry FindClause(IList<StandardClauseEntry> entries, string clauseNo)

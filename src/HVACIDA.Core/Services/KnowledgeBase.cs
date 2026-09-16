@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using HVACIDA.Core.Models;
@@ -39,9 +39,55 @@ namespace HVACIDA.Core.Services
         /// <summary>本次导入的条文条数。</summary>
         public static int ImportedClauseCount { get; private set; }
 
+        private static readonly object ImportLock = new object();
+
+        private static bool _importedLoaded;
+
+        /// <summary>
+        /// **首次访问知识库时自动把条文目录并入**(2026-09-16)。
+        /// <para>
+        /// 之前只有点【重新导入条文】才会读目录 —— 重启 Revit 后条文就"消失"了,用户得记得再点一次。
+        /// 条文原文是本插件的**主路径**(给的是整条原文,可离线、可引用),所以改成**打开知识库窗即已载入**;
+        /// 手动【重新导入条文】保留,用于刚放进去的文件立刻生效。
+        /// </para>
+        /// <para>
+        /// 幂等 + 不抛异常:只读一次;目录不存在/无权限时把原因写进 <see cref="ImportNote"/> 后继续
+        /// (本地内置条目照常可用),绝不因为一个文件读不了就让知识库窗打不开。
+        /// </para>
+        /// </summary>
+        public static void EnsureImportedClausesLoaded()
+        {
+            lock (ImportLock)
+            {
+                if (_importedLoaded) return;
+                _importedLoaded = true;     // 先置位:即使下面失败也不反复重试(避免每次检索都去敲一次磁盘)
+            }
+            try
+            {
+                ReloadImportedClauses(ClauseDocumentReader.DefaultDirectory);
+            }
+            catch (Exception ex)
+            {
+                ImportedClauseCount = 0;
+                ImportNote = "自动载入条文目录失败:" + ex.Message +
+                             "(不影响本地知识库;可在知识库窗点【重新导入条文】重试)";
+            }
+        }
+
+        /// <summary>
+        /// 从**指定目录**载入条文并标记"已载入"(自检与多目录切换用;可重复调用,按 Id 替换、不会重复累加)。
+        /// </summary>
+        public static ClauseImportResult AutoLoadImportedClauses(string directory)
+        {
+            var result = ReloadImportedClauses(directory);
+            lock (ImportLock) { _importedLoaded = true; }
+            return result;
+        }
+
         /// <summary>
         /// 从条文目录(<c>%AppData%\\HVACIDA\\规范条文</c>)重载标准条文电子版,并入知识库。
-        /// 用户把文件放进去后调用(界面有【重新导入条文】按钮)。
+        /// 用户把文件放进去后调用(界面有【重新导入条文】按钮),或由
+        /// <see cref="EnsureImportedClausesLoaded"/> 在首次访问时自动调用。
         /// </summary>
         public static ClauseImportResult ReloadImportedClauses(string directory)
         {
@@ -55,10 +101,10 @@ namespace HVACIDA.Core.Services
                 }
                 foreach (var clause in result.Entries)
                 {
+                    // 答复正文=条文原文(用户导入的原文,逐字保留)+ 出处 + 边界说明
                     var entry = Entry(clause.Id, KnowledgeCategory.Clause, clause.Title, clause.Question,
-                        clause.ClauseText + "\\n\\n出处:" + clause.SourceText + "\\n" + clause.BoundaryNote,
+                        clause.ClauseText + "\n\n出处:" + clause.SourceText + "\n" + clause.BoundaryNote,
                         clause.SourceText, clause.Keywords.ToArray());
-                    entry.Question = clause.Question;
                     AllEntries.Add(entry);
                 }
             }
@@ -110,8 +156,15 @@ namespace HVACIDA.Core.Services
             return all;
         }
 
-        /// <summary>全部条目(按分类 + 标题排序,界面列表直接绑它)。</summary>
-        public static IList<KnowledgeEntry> All => AllEntries;
+        /// <summary>全部条目(按分类 + 标题排序,界面列表直接绑它)。首次访问会自动载入条文目录。</summary>
+        public static IList<KnowledgeEntry> All
+        {
+            get
+            {
+                EnsureImportedClausesLoaded();
+                return AllEntries;
+            }
+        }
 
         /// <summary>分类中文名。</summary>
         public static string CategoryName(KnowledgeCategory category)
@@ -131,6 +184,7 @@ namespace HVACIDA.Core.Services
         /// <summary>按分类取条目。</summary>
         public static IList<KnowledgeEntry> ByCategory(KnowledgeCategory category)
         {
+            EnsureImportedClausesLoaded();
             var result = new List<KnowledgeEntry>();
             foreach (var entry in AllEntries)
             {
@@ -157,6 +211,7 @@ namespace HVACIDA.Core.Services
         {
             var matches = new List<KnowledgeMatch>();
             if (string.IsNullOrEmpty(query)) return matches;
+            EnsureImportedClausesLoaded();
 
             string text = query.Trim();
             var tokens = Tokenize(text);
@@ -226,7 +281,13 @@ namespace HVACIDA.Core.Services
                 scope.Append("大系统负荷 / 排烟、小系统六类、水力计算(风与水)、气象参数与省市气象库、材料表统计、图纸与批量出图、");
                 scope.Append("计算书与 Excel 导出、数据存储与口径纪律。");
                 scope.Append("换几个关键词试试(例如「排烟 选型」「水力 扬程」「气象 湿球」「材料表 单位」),或在上方按分类浏览条目。");
-                scope.Append("**本知识库不会为范围外的问题编答案**;需要规范原文时请查 GB 50736 等标准或项目设计文件。");
+                scope.Append("\n\n**想让它答得出更多?** 两条路:");
+                scope.Append("① **条文原文(推荐)** —— 把标准条文电子版(txt/md/csv/docx)放进 " +
+                             ClauseDocumentReader.DefaultDirectory +
+                             ",再点【重新导入条文】,之后可按条文号或条文内容检索到**整条原文**;");
+                scope.Append("② **ima 在线知识库(可选)** —— 在知识库窗的 ima 面板填 Client ID + API Key + 知识库 ID 并启用," +
+                             "提问时会同时查你的 ima 知识库(只返回标题与命中片段,**引用要回 ima 看原文**)。");
+                scope.Append("**本知识库不会为范围外的问题编答案**;需要规范原文时请查 GB 50736 等标准原文或项目设计文件。");
                 if (matches.Count > 0)
                 {
                     scope.Append("\n\n以下是**弱相关**条目(仅供参考,不作为答复):");
@@ -252,22 +313,63 @@ namespace HVACIDA.Core.Services
             answer.HasAnswer = true;
             var top = strongMatches[0].Entry;
             var sb = new StringBuilder();
+            // 命中的**条文原文**(用户导入的标准条文电子版)单列一段、整条给出。
+            // 理由:条文原文是主路径的产物,不该被"相关条目"里的一行标题带过;
+            // 而排序口径**不动**(同分仍是 已定口径 → 规范条文 → …),这里只是把原文摆出来给用户核对。
+            var clauseMatches = new List<KnowledgeMatch>();
+            for (int i = 1; i < strongMatches.Count; i++)
+            {
+                if (IsImportedClause(strongMatches[i].Entry)) clauseMatches.Add(strongMatches[i]);
+            }
+
             sb.AppendLine("【" + top.CategoryName + "】" + top.Title);
             sb.AppendLine();
             sb.AppendLine(top.Answer);
             sb.AppendLine();
             sb.AppendLine("出处:" + top.Source);
-            if (strongMatches.Count > 1)
+
+            var others = new List<KnowledgeMatch>();
+            for (int i = 1; i < strongMatches.Count; i++)
+            {
+                if (!clauseMatches.Contains(strongMatches[i])) others.Add(strongMatches[i]);
+            }
+            if (others.Count > 0)
             {
                 sb.AppendLine();
                 sb.AppendLine("相关条目:");
-                for (int i = 1; i < strongMatches.Count; i++)
+                foreach (var match in others)
                 {
-                    sb.AppendLine("  · " + strongMatches[i].Entry.Title + "(" + strongMatches[i].Entry.CategoryName + ")");
+                    sb.AppendLine("  · " + match.Entry.Title + "(" + match.Entry.CategoryName + ")");
+                }
+            }
+
+            if (clauseMatches.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("命中的规范条文原文(你导入的条文电子版,逐字保留;以标准正式版本为准):");
+                int shown = 0;
+                foreach (var match in clauseMatches)
+                {
+                    if (shown >= 3)
+                    {
+                        sb.AppendLine("  …另有 " + (clauseMatches.Count - shown) + " 条命中,可在左侧按分类「规范条文」查看。");
+                        break;
+                    }
+                    sb.AppendLine();
+                    sb.AppendLine("【" + match.Entry.Title + "】");
+                    sb.AppendLine(match.Entry.Answer);
+                    shown++;
                 }
             }
             answer.AnswerText = sb.ToString();
             return answer;
+        }
+
+        /// <summary>是否为"用户导入的条文原文"条目(Id 前缀 import-,见 <see cref="ClauseDocumentReader"/>)。</summary>
+        private static bool IsImportedClause(KnowledgeEntry entry)
+        {
+            return entry != null && entry.Category == KnowledgeCategory.Clause &&
+                   entry.Id != null && entry.Id.StartsWith("import-", StringComparison.Ordinal);
         }
 
         /// <summary>示例问题(界面上的快捷提问按钮)。</summary>

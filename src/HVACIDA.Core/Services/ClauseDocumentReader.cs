@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -62,18 +62,30 @@ namespace HVACIDA.Core.Services
         private static readonly Regex StandardHeader = new Regex(
             @"^\s*#?\s*(?:标准|规范)\s*[:：]\s*(.+)$", RegexOptions.Compiled);
 
+        /// <summary>条文关键词取样窗口长度(字)。</summary>
+        private const int KeywordWindow = 12;
+
+        /// <summary>取样份数(总长超过一个窗口时,按长度均匀取这么多份 + 首尾各一份)。</summary>
+        private const int KeywordSamples = 12;
+
         /// <summary>目录里的说明文件内容(首次创建目录时写入,用户照着放文件即可)。</summary>
         public static string InstructionText(string directory)
         {
-            return "# 标准条文电子版放这里\\n\\n" +
-                   "插件读取的条文目录:" + directory + "\\n\\n" +
-                   "支持格式:.txt / .md / .csv / .docx(pdf、xls 请先另存为 docx 或 txt)。\\n\\n" +
-                   "文件命名建议:「GB 50736-2012 民用建筑供暖通风与空气调节设计规范.docx」—— 插件从文件名取标准编号与名称,\\n" +
-                   "也可以在文件首行写「#标准:GB 50736-2012 民用建筑供暖通风与空气调节设计规范」覆盖。\\n\\n" +
-                   "条文写法:行首以「4.1.2」或「第 4.1.2 条」开头即为一条条文的开始,\\n" +
-                   "从该行往下直到下一个条文号为止的文字,作为这条条文的原文。\\n\\n" +
-                   "放好文件后,在插件里打开「AI问答 → 规范知识库」→ 点【重新导入条文】:\\n" +
-                   "界面会显示「已从 N 个文件解析出 M 条条文」,并列出没解析成功的文件与原因。\\n";
+            return "# 标准条文电子版放这里(这是**推荐的主路径**)\n\n" +
+                   "插件读取的条文目录:" + directory + "\n\n" +
+                   "为什么推荐这条路:导入后插件手里是**条文原文(整条)**,可以离线检索、可以按条文号提问,\n" +
+                   "还能随知识库一起导出 Excel 交底;而 ima 在线检索只返回**标题 + 命中片段**,引用时还得回 ima 看原文。\n\n" +
+                   "支持格式:.txt / .md / .csv / .docx。\n" +
+                   "· .pdf / .xls / .xlsx **不支持**(PDF 解析容易读错条文,插件不冒这个险):\n" +
+                   "  办法一:用 Word 打开 PDF → 另存为 .docx;\n" +
+                   "  办法二:在 ima 等工具里打开 → 全选复制 → 粘贴进记事本另存为 .txt(UTF-8)。\n\n" +
+                   "文件命名建议:「GB 50736-2012 民用建筑供暖通风与空气调节设计规范.docx」—— 插件从文件名取标准编号与名称,\n" +
+                   "也可以在文件首行写「#标准:GB 50736-2012 民用建筑供暖通风与空气调节设计规范」覆盖。\n\n" +
+                   "条文写法:行首以「4.1.2」或「第 4.1.2 条」开头即为一条条文的开始,\n" +
+                   "从该行往下直到下一个条文号为止的文字,作为这条条文的原文。\n\n" +
+                   "放好文件后:插件**打开知识库窗时会自动读一次**这个目录(不必每次手动点);\n" +
+                   "刚放进去想立刻生效,就点「AI问答 → 规范知识库」→【重新导入条文】——\n" +
+                   "界面会显示「已从 N 个文件解析出 M 条条文」,并列出没解析成功的文件与原因。\n";
         }
 
         /// <summary>读取目录下全部受支持的条文文件。</summary>
@@ -82,7 +94,7 @@ namespace HVACIDA.Core.Services
             var result = new ClauseImportResult { Directory = directory ?? "" };
             result.Note = "支持的格式:.txt / .md / .csv / .docx;文件命名建议「GB 50736-2012 民用建筑供暖通风与空气调节设计规范」" +
                           "(插件从文件名取标准编号与名称);条文以行首「4.1.2」或「第 4.1.2 条」开头;" +
-                          "不支持 .pdf / .xls,请另存为 .docx 或 .txt。";
+                          "不支持 .pdf / .xls / .xlsx,请用 Word 打开 PDF 另存为 .docx,或复制成 .txt。";
 
             if (string.IsNullOrEmpty(directory))
             {
@@ -121,7 +133,8 @@ namespace HVACIDA.Core.Services
                 string ext = (Path.GetExtension(file) ?? "").ToLowerInvariant();
                 if (ext == ".pdf" || ext == ".xls" || ext == ".xlsx")
                 {
-                    result.Skipped.Add(Path.GetFileName(file) + "(格式暂不支持,请另存为 .docx 或 .txt)");
+                    result.Skipped.Add(Path.GetFileName(file) +
+                        "(格式暂不支持:PDF/Excel 的解析容易读错条文,插件不做。请用 Word 打开另存为 .docx,或复制成 .txt 后重放)");
                     continue;
                 }
                 if (ext != ".txt" && ext != ".md" && ext != ".csv" && ext != ".docx")
@@ -248,13 +261,34 @@ namespace HVACIDA.Core.Services
             return CodeDiscipline.Hvac;
         }
 
+        /// <summary>
+        /// 条文关键词取样:整条条文里**按位置均匀取若干 12 字窗口**。
+        /// <para>
+        /// 为什么要取样而不是只取开头:条文动辄几十到几百字,而知识库"算命中"要求**标题或关键词**命中
+        /// (只命中正文算弱相关、不给答复)。若关键词只取前 40 字,则"条文**中段**才出现的词"
+        /// 提问时就答不上来 —— 明明原文里有。取样后中段/末段的词也能命中,而正文里没有的词依旧不会命中。
+        /// </para>
+        /// </summary>
         private static List<string> BuildKeywords(string text)
         {
             var keywords = new List<string>();
             if (string.IsNullOrEmpty(text)) return keywords;
-            string plain = Regex.Replace(text, @"\s+", " ");
-            if (plain.Length > 40) plain = plain.Substring(0, 40);
-            keywords.Add(plain);
+            string plain = Regex.Replace(text, @"\s+", " ").Trim();
+            if (plain.Length <= KeywordWindow)
+            {
+                keywords.Add(plain);
+                return keywords;
+            }
+
+            keywords.Add(plain.Substring(0, KeywordWindow));
+            int step = Math.Max(1, plain.Length / KeywordSamples);
+            for (int start = 0; start + KeywordWindow <= plain.Length; start += step)
+            {
+                string window = plain.Substring(start, KeywordWindow);
+                if (!keywords.Contains(window)) keywords.Add(window);
+            }
+            string tail = plain.Substring(plain.Length - KeywordWindow, KeywordWindow);
+            if (!keywords.Contains(tail)) keywords.Add(tail);
             return keywords;
         }
 

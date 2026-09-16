@@ -38,6 +38,7 @@ namespace HVACIDA.UI.ViewModels
         private string _imaNote = "";
         private string _imaLimitText = "10";
         private bool _imaPanelExpanded = true;
+        private string _clauseNote = "";
 
         public KnowledgeViewModel()
             : this(null)
@@ -56,19 +57,21 @@ namespace HVACIDA.UI.ViewModels
         public KnowledgeViewModel(string reportsDirectory, string initialCategory)
         {
             _excel = new ExcelReportGenerator(reportsDirectory);
-            _entries = KnowledgeBase.All;
+            _entries = KnowledgeBase.All;               // 访问即自动载入条文目录(见 KnowledgeBase.EnsureImportedClausesLoaded)
 
             AskCommand = new RelayCommand(Ask);
             ResetCommand = new RelayCommand(Reset);
             ExportExcelCommand = new RelayCommand(ExportExcel);
             ReloadClausesCommand = new RelayCommand(ReloadClauses);
             CategoryCommand = new RelayCommand(() => ApplyCategory(PendingCategory));
+            OpenClauseFolderCommand = new RelayCommand(OpenClauseFolder);
             SaveImaCommand = new RelayCommand(SaveImaSettings);
             TestImaCommand = new RelayCommand(TestImaConnection);
             OpenImaShareCommand = new RelayCommand(OpenImaShare);
             SearchImaCommand = new RelayCommand(SearchImaOnly);
 
             LoadImaSettings();
+            RefreshClauseNote();
 
             Status = "共 " + _entries.Count + " 条条目(本项目已定口径 / 规范条文 / Revit 操作指南)。可以直接提问,也可以按分类浏览。";
             if (_entries.Count > 0) SelectedEntry = _entries[0];
@@ -163,6 +166,16 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>条文目录(界面显示,便于用户把文件放进去)。</summary>
         public string ClauseDirectory => ClauseDocumentReader.DefaultDirectory;
 
+        /// <summary>条文原文导入状态(载入了多少条 / 哪些文件没解析成功)。</summary>
+        public string ClauseNote
+        {
+            get => _clauseNote;
+            private set => Set(ref _clauseNote, value);
+        }
+
+        /// <summary>在资源管理器里打开条文目录(放文件用;目录不存在就先建)。</summary>
+        public ICommand OpenClauseFolderCommand { get; }
+
         // ==================================================================
         // ima 在线知识库(腾讯 ima 开放接口)
         //
@@ -248,7 +261,19 @@ namespace HVACIDA.UI.ViewModels
         public string ImaStatus
         {
             get => _imaStatus;
-            private set => Set(ref _imaStatus, value);
+            private set { if (Set(ref _imaStatus, value)) OnPropertyChanged(nameof(ImaSummary)); }
+        }
+
+        /// <summary>ima 一句话状态(收起的面板标题里也要能看见,否则用户不知道有没有启用)。</summary>
+        public string ImaSummary
+        {
+            get
+            {
+                if (!_imaSettings.Enabled && !_imaSettings.IsConfigured) return "未启用(只用本地知识库)";
+                if (!_imaSettings.Enabled) return "凭证已填但未勾选启用";
+                if (!_imaSettings.IsConfigured) return "已勾选启用,但凭证不全 —— " + _imaSettings.MissingCredentialText();
+                return "已启用(知识库 ID " + _imaSettings.KnowledgeBaseId + ")";
+            }
         }
 
         /// <summary>本次 ima 检索的提示(命中多少条 / 为什么没命中)。</summary>
@@ -387,11 +412,38 @@ namespace HVACIDA.UI.ViewModels
                 ApplyCategory("规范条文");
                 Status = result.Note + (result.Skipped.Count > 0 ? " 跳过:" + string.Join(";", result.Skipped.ToArray()) : "") +
                          "  条文目录:" + ClauseDirectory;
+                RefreshClauseNote();
                 OnPropertyChanged(nameof(ClauseDirectory));
             }
             catch (Exception ex)
             {
                 Status = "导入标准条文失败: " + ex.Message;
+            }
+        }
+
+        /// <summary>刷新「条文原文」状态行(载入条数 + 目录 + 跳过原因)。</summary>
+        private void RefreshClauseNote()
+        {
+            int count = KnowledgeBase.ImportedClauseCount;
+            ClauseNote = (count > 0
+                    ? "条文原文:已载入 " + count + " 条(打开本窗时自动读取该目录)。"
+                    : "条文原文:该目录里还没有可用条文 —— 把标准条文电子版(txt/md/csv/docx)放进去,再点【重新导入条文】。") +
+                "  " + KnowledgeBase.ImportNote;
+        }
+
+        /// <summary>在资源管理器里打开条文目录(**推荐主路径**:放条文原文的地方)。</summary>
+        private void OpenClauseFolder()
+        {
+            try
+            {
+                string directory = ClauseDirectory;
+                if (!System.IO.Directory.Exists(directory)) System.IO.Directory.CreateDirectory(directory);
+                Process.Start(new ProcessStartInfo(directory) { UseShellExecute = true });
+                Status = "已打开条文目录:" + directory + "(把标准条文电子版放进去,再点【重新导入条文】)";
+            }
+            catch (Exception ex)
+            {
+                Status = "打开条文目录失败:" + ex.Message + "(可手动在资源管理器地址栏粘贴:" + ClauseDirectory + ")";
             }
         }
 
@@ -423,7 +475,8 @@ namespace HVACIDA.UI.ViewModels
                 ? ImaSettingsStore.Summary(_imaSettings)
                 : "ima 在线知识库:未启用 —— 只用本地知识库。" + ImaKnowledgeSettings.CredentialHelp;
             ImaNote = note;
-            _imaPanelExpanded = !(_imaSettings.Enabled && _imaSettings.IsConfigured);
+            // ima 是**辅助**路径(只给片段):默认收起,靠标题上的一句话状态让用户知道有没有启用
+            _imaPanelExpanded = false;
 
             OnPropertyChanged(nameof(ImaEnabled));
             OnPropertyChanged(nameof(ImaClientId));
