@@ -1,4 +1,4 @@
-<Window x:Class="HVACIDA.UI.Views.KnowledgeWindow"
+﻿<Window x:Class="HVACIDA.UI.Views.KnowledgeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="规范知识库 - HVACIDA"
@@ -30,6 +30,10 @@
                 <TextBlock TextWrapping="Wrap"
                            Text="规范 / 口径知识库(需求 2.7):条目化、可检索、**每条都带出处**。答不出时明确说明知识范围,不编答案;接在线大模型时本知识库作为检索到的依据上下文。"/>
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="#2E7D32" Margin="0,4,0,0"/>
+                <TextBlock TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,2,0,0">
+                    <Run Text="标准条文电子版目录:"/><Run Text="{Binding ClauseDirectory, Mode=OneWay}" FontWeight="Bold"/>
+                    <Run Text="(支持 txt / md / csv / docx;放进去后点【重新导入条文】)"/>
+                </TextBlock>
             </StackPanel>
         </Border>
 
@@ -39,6 +43,8 @@
                     <Button Content="提 问" Width="90" Height="30" Command="{Binding AskCommand}" IsDefault="True"
                             ToolTip="按关键词检索知识库:命中给答复与出处;答不出会说明知识范围并列出最接近的条目"/>
                     <Button Content="清空对话" Width="96" Height="30" Margin="8,0,0,0" Command="{Binding ResetCommand}"/>
+                    <Button Content="重新导入条文" Width="120" Height="30" Margin="8,0,0,0" Command="{Binding ReloadClausesCommand}"
+                            ToolTip="读取「%AppData%\HVACIDA\规范条文」目录里的标准条文电子版(txt/md/csv/docx);放好文件后点一下即可检索条文原文"/>
                     <Button Content="导出知识库 Excel" Width="150" Height="30" Margin="8,0,0,0" Command="{Binding ExportExcelCommand}"
                             ToolTip="把当前筛选下的条目(含出处与关键词)导出为 .xlsx,便于评审与交底"/>
                 </StackPanel>

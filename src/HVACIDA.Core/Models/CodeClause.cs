@@ -50,7 +50,17 @@ namespace HVACIDA.Core.Models
         /// <summary>条文主题(检索结果标题)。</summary>
         public string Title { get; set; } = "";
 
-        /// <summary>章节线索(章节级,注明以标准目录为准;**不写具体条文号**)。</summary>
+        /// <summary>具体条文号(如 4.1.2)。**内置检索线索条目一律为空**:只给章节线索、不编条文号;
+        /// 由用户导入的标准原文条目才填(见 <see cref="ClauseText"/>)。</summary>
+        public string ClauseNo { get; set; } = "";
+
+        /// <summary>条文原文(仅**用户导入**的条文有;内置条目为空 —— 不凭记忆写条文)。</summary>
+        public string ClauseText { get; set; } = "";
+
+        /// <summary>是否是导入的条文原文条目。</summary>
+        public bool IsImported => !string.IsNullOrEmpty(ClauseText);
+
+        /// <summary>章节线索(章节级,注明以标准目录为准;**内置条目不写具体条文号**)。</summary>
         public string ClauseHint { get; set; } = "";
 
         /// <summary>要点概述(用自己的话说明这一条管什么;不替代原文)。</summary>
@@ -67,6 +77,7 @@ namespace HVACIDA.Core.Models
 
         /// <summary>出处文字(标准编号 + 名称 + 章节线索)。</summary>
         public string SourceText => StandardCode + " " + StandardName +
+                                    (string.IsNullOrEmpty(ClauseNo) ? "" : " 第 " + ClauseNo + " 条") +
                                     (string.IsNullOrEmpty(ClauseHint) ? "" : "(" + ClauseHint + ")");
     }
 

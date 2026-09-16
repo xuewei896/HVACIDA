@@ -52,6 +52,7 @@ namespace HVACIDA.Smoke
             RunKnowledgeChecks();
             RunLegendChecks();
             RunClauseAndGuideChecks();
+            RunClauseImportChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
@@ -2135,6 +2136,103 @@ namespace HVACIDA.Smoke
             CheckText("指南边界说明写明不含设计取值",
                 RevitOperationGuide.ScopeNote.Contains("不含设计取值") ? "有" : "缺", "有");
             Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景21:标准条文电子版导入(txt + docx;识别条文号与原文;跳过不支持格式并报原因)
+        // =====================================================================
+        private static void RunClauseImportChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景21:标准条文电子版导入(txt/docx 解析 + 落库)");
+            Console.WriteLine("==================================================");
+
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Clauses-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, "GB 50736-2012 民用建筑供暖通风与空气调节设计规范.txt"),
+                    "#标准:GB 50736-2012 民用建筑供暖通风与空气调节设计规范\n" +
+                    "4.1.2 室内设计温度应符合下列规定:\n1 舒适性空调室内设计参数应符合表 4.1.2 的规定;\n2 供暖室内设计温度宜符合表 4.1.3 的规定。\n\n" +
+                    "4.2.1 室内设计风速宜符合下列规定:夏季宜为 0.2~0.5 m/s。\n",
+                    new System.Text.UTF8Encoding(false));
+
+                // 造一个最小 .docx(ZIP + word/document.xml)验证 Word 文档解析
+                string docxPath = Path.Combine(dir, "GB 50015-2019 建筑给水排水设计标准.docx");
+                using (var stream = File.Create(docxPath))
+                using (var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create))
+                {
+                    var entry = zip.CreateEntry("word/document.xml");
+                    using (var writer = new System.IO.StreamWriter(entry.Open(), new System.Text.UTF8Encoding(false)))
+                    {
+                        writer.Write("<?xml version=\"1.0\" encoding=\"UTF-8\"?><w:document><w:body>" +
+                            "<w:p><w:r><w:t>3.2.1 生活给水用水定额应按现行国家标准与当地规定确定。</w:t></w:r></w:p>" +
+                            "<w:p><w:r><w:t>3.2.2 给水系统水压应满足最不利配水点的用水要求。</w:t></w:r></w:p>" +
+                            "</w:body></w:document>");
+                    }
+                }
+
+                // 放一个不支持的格式,验证"跳过并报原因"
+                File.WriteAllText(Path.Combine(dir, "GB 51251-2017 建筑防烟排烟系统技术标准.pdf"), "PDF 占位", new System.Text.UTF8Encoding(false));
+
+                var import = ClauseDocumentReader.Load(dir);
+                CheckInt("解析出 4 条条文(2 txt + 2 docx)", import.Count, 4);
+                CheckInt("解析成功文件数 = 2", import.Files.Count, 2);
+                CheckInt("跳过文件数 = 1(pdf)", import.Skipped.Count, 1);
+                CheckText("跳过原因写明格式不支持",
+                    import.Skipped[0].Contains("格式暂不支持") ? "有" : import.Skipped[0], "有");
+
+                var hvac = FindClause(import.Entries, "4.1.2");
+                var second = FindClause(import.Entries, "4.2.1");
+                CheckText("txt:条文号", hvac.ClauseNo, "4.1.2");
+                CheckText("txt:标准编号从文件名取", hvac.StandardCode, "GB 50736-2012");
+                CheckText("txt:标准名称从文件名取", hvac.StandardName, "民用建筑供暖通风与空气调节设计规范");
+                CheckText("txt:专业识别为通风空调", hvac.DisciplineName, "通风空调");
+                CheckText("txt:条文原文含全部正文(含 2 个子项)",
+                    hvac.ClauseText.Contains("舒适性空调室内设计参数") && hvac.ClauseText.Contains("供暖室内设计温度") ? "齐" : hvac.ClauseText, "齐");
+                CheckText("txt:第二条条文号", second == null ? "(缺)" : second.ClauseNo, "4.2.1");
+                CheckText("txt:出处带条文号", hvac.SourceText.Contains("第 4.1.2 条") ? "有" : hvac.SourceText, "有");
+                CheckText("导入条目标记为原文条目", hvac.IsImported ? "原文" : "线索", "原文");
+
+                var plumb = FindClause(import.Entries, "3.2.1");
+                CheckText("docx:条文号", plumb.ClauseNo, "3.2.1");
+                CheckText("docx:标准编号", plumb.StandardCode, "GB 50015-2019");
+                CheckText("docx:专业识别为给水排水", plumb.DisciplineName, "给水排水");
+                CheckText("docx:条文原文", plumb.ClauseText.Contains("生活给水用水定额") ? "有" : plumb.ClauseText, "有");
+
+                // 落库:并入知识库后可按条文号检索
+                var reload = KnowledgeBase.ReloadImportedClauses(dir);
+                CheckInt("落库条数 = 4", reload.Count, 4);
+                CheckInt("知识库导入计数 = 4", KnowledgeBase.ImportedClauseCount, 4);
+                CheckText("导入说明写明条数", KnowledgeBase.ImportNote.Contains("4 条条文") ? "有" : KnowledgeBase.ImportNote, "有");
+                var answer = KnowledgeBase.Answer("第 4.1.2 条是什么");
+                CheckText("按条文号提问命中导入条文",
+                    answer.HasAnswer && answer.AnswerText.Contains("室内设计温度") ? "命中" : "未命中", "命中");
+                var search = KnowledgeBase.Search("生活给水用水定额");
+                CheckText("按条文主题检索命中", search.Count > 0 ? "有" : "无", "有");
+
+                // 内置条目仍然不带条文号(不编条文)
+                int builtInWithNo = 0;
+                foreach (var clause in StandardClauseLibrary.All)
+                {
+                    if (!string.IsNullOrEmpty(clause.ClauseNo)) builtInWithNo++;
+                }
+                CheckInt("内置检索线索条目仍不含条文号(0 = 正常)", builtInWithNo, 0);
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+            Console.WriteLine();
+        }
+
+        private static StandardClauseEntry FindClause(IList<StandardClauseEntry> entries, string clauseNo)
+        {
+            foreach (var entry in entries)
+            {
+                if (string.Equals(entry.ClauseNo, clauseNo, StringComparison.Ordinal)) return entry;
+            }
+            return null;
         }
 
         private static LargeSystemInput BuildBusyScenario()

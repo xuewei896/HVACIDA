@@ -52,6 +52,7 @@ namespace HVACIDA.UI.ViewModels
             AskCommand = new RelayCommand(Ask);
             ResetCommand = new RelayCommand(Reset);
             ExportExcelCommand = new RelayCommand(ExportExcel);
+            ReloadClausesCommand = new RelayCommand(ReloadClauses);
             CategoryCommand = new RelayCommand(() => ApplyCategory(PendingCategory));
 
             Status = "共 " + _entries.Count + " 条条目(本项目已定口径 / 规范条文 / Revit 操作指南)。可以直接提问,也可以按分类浏览。";
@@ -141,6 +142,12 @@ namespace HVACIDA.UI.ViewModels
         public ICommand ResetCommand { get; }
         public ICommand ExportExcelCommand { get; }
 
+        /// <summary>重新导入标准条文电子版(读 %AppData%\\HVACIDA\\规范条文 目录)。</summary>
+        public ICommand ReloadClausesCommand { get; }
+
+        /// <summary>条文目录(界面显示,便于用户把文件放进去)。</summary>
+        public string ClauseDirectory => ClauseDocumentReader.DefaultDirectory;
+
         /// <summary>切换分类(界面把选中项写进 <see cref="PendingCategory"/> 后执行本命令)。</summary>
         public ICommand CategoryCommand { get; }
 
@@ -226,6 +233,24 @@ namespace HVACIDA.UI.ViewModels
                 }
             }
             return false;
+        }
+
+        /// <summary>重新导入条文目录下的标准条文电子版,并刷新条目列表。</summary>
+        private void ReloadClauses()
+        {
+            try
+            {
+                var result = KnowledgeBase.ReloadImportedClauses(null);
+                PendingCategory = "规范条文";
+                ApplyCategory("规范条文");
+                Status = result.Note + (result.Skipped.Count > 0 ? " 跳过:" + string.Join(";", result.Skipped.ToArray()) : "") +
+                         "  条文目录:" + ClauseDirectory;
+                OnPropertyChanged(nameof(ClauseDirectory));
+            }
+            catch (Exception ex)
+            {
+                Status = "导入标准条文失败: " + ex.Message;
+            }
         }
 
         private void ExportExcel()

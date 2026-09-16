@@ -33,6 +33,40 @@ namespace HVACIDA.Core.Services
 
         private static readonly List<KnowledgeEntry> AllEntries = BuildAll();
 
+        /// <summary>最近一次导入标准条文的说明(界面显示:读到了哪些文件、解析出多少条)。</summary>
+        public static string ImportNote { get; private set; } = "尚未导入标准条文电子版。";
+
+        /// <summary>本次导入的条文条数。</summary>
+        public static int ImportedClauseCount { get; private set; }
+
+        /// <summary>
+        /// 从条文目录(<c>%AppData%\\HVACIDA\\规范条文</c>)重载标准条文电子版,并入知识库。
+        /// 用户把文件放进去后调用(界面有【重新导入条文】按钮)。
+        /// </summary>
+        public static ClauseImportResult ReloadImportedClauses(string directory)
+        {
+            var result = ClauseDocumentReader.Load(string.IsNullOrEmpty(directory) ? ClauseDocumentReader.DefaultDirectory : directory);
+            lock (AllEntries)
+            {
+                for (int i = AllEntries.Count - 1; i >= 0; i--)
+                {
+                    if (AllEntries[i].Id != null && AllEntries[i].Id.StartsWith("import-", StringComparison.Ordinal))
+                        AllEntries.RemoveAt(i);
+                }
+                foreach (var clause in result.Entries)
+                {
+                    var entry = Entry(clause.Id, KnowledgeCategory.Clause, clause.Title, clause.Question,
+                        clause.ClauseText + "\\n\\n出处:" + clause.SourceText + "\\n" + clause.BoundaryNote,
+                        clause.SourceText, clause.Keywords.ToArray());
+                    entry.Question = clause.Question;
+                    AllEntries.Add(entry);
+                }
+            }
+            ImportedClauseCount = result.Count;
+            ImportNote = result.Note + (result.Skipped.Count > 0 ? " 跳过:" + string.Join(";", result.Skipped.ToArray()) : "");
+            return result;
+        }
+
         /// <summary>
         /// 知识库 = **本项目已定口径** + **规范条文检索**(<see cref="StandardClauseLibrary"/>)+
         /// **Revit 操作指南**(<see cref="RevitOperationGuide"/>)—— 三者在同一个窗里可检索、可按分类筛选。
