@@ -38,6 +38,12 @@
                               ToolTip="默认关闭:关闭时模型看不到命令、命令也不会执行;开启后命令返回的工程数据会随对话发给模型服务方,项目不允许出网时请保持关闭"/>
                     <TextBlock Text="{Binding OperateRevitText}" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#8A6100"/>
                 </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <CheckBox Content="允许模型修改模型(危险:每条都要你确认)" VerticalAlignment="Center"
+                              IsChecked="{Binding AllowModify, Mode=TwoWay}"
+                              ToolTip="第二级开关,默认关闭:关闭时修改类命令不下发给模型、硬调也被拒绝;开启后每次修改都会弹 Revit 原生对话框(默认按钮是「否」),单次最多改 200 个构件,数值型(带单位)参数一律不写"/>
+                    <TextBlock Text="{Binding AllowModifyText}" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#C0392B"/>
+                </StackPanel>
                 <TextBlock Text="{Binding ToolCountText}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,2,0,0"/>
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="#2E7D32" Margin="0,2,0,0"/>
                 <TextBlock Text="{Binding ScopeText}" TextWrapping="Wrap" Foreground="#8A8A8A" Margin="0,2,0,0"/>

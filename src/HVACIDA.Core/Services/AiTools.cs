@@ -46,6 +46,13 @@ namespace HVACIDA.Core.Services
         /// <summary>「操作 Revit」总开关(**默认关**:只聊天、不动模型)。</summary>
         public static bool OperateRevitEnabled { get; set; }
 
+        /// <summary>
+        /// **「允许修改模型」开关(默认关,比总开关更危险的一级)**:
+        /// 只有它和 <see cref="OperateRevitEnabled"/> 都开,<c>ModifiesModel=true</c> 的命令才会发给模型;
+        /// 而且每条修改类命令在执行前**必须**由用户在 Revit 原生对话框里确认过(确认在 Revit 侧实现)。
+        /// </summary>
+        public static bool AllowModifyEnabled { get; set; }
+
         /// <summary>命令集是否已就绪(Revit 完全初始化后由 ApplicationInitialized 装载)。</summary>
         public static bool IsReady => _host != null;
 
@@ -86,6 +93,11 @@ namespace HVACIDA.Core.Services
 
         /// <summary>
         /// 交给模型的工具清单(总开关关掉 / 未就绪时返回**空** —— 模型看不到工具,自然不会去调)。
+        /// <para>
+        /// **两级开关**:① <see cref="OperateRevitEnabled"/> 关 → 一条都不给;
+        /// ② <see cref="AllowModifyEnabled"/> 关 → 只给**只读**命令,会改模型的命令**不发给模型**
+        /// (模型看不到就不会去调;即使它凭旧清单硬调,<see cref="Execute"/> 也会挡住)。
+        /// </para>
         /// </summary>
         public static IList<AiToolDefinition> ToolsForModel()
         {
@@ -94,6 +106,7 @@ namespace HVACIDA.Core.Services
             foreach (var tool in _host.Tools)
             {
                 if (tool == null || string.IsNullOrEmpty(tool.Name)) continue;
+                if (tool.ModifiesModel && !AllowModifyEnabled) continue;   // 改模型的命令要额外开关
                 tools.Add(tool);
             }
             return tools;
@@ -122,6 +135,13 @@ namespace HVACIDA.Core.Services
                 LastBlockedReason = "找不到命令:" + name;
                 Append(name + ":找不到命令");
                 return "{\"error\":\"找不到命令:" + JsonValue.Escape(name ?? "") + "\",\"command\":\"" +
+                       JsonValue.Escape(name ?? "") + "\"}";
+            }
+            if (IsModifying(name) && !AllowModifyEnabled)
+            {
+                LastBlockedReason = "已关闭「允许修改模型」,修改类命令未执行";
+                Append(name + ":被拒绝(" + LastBlockedReason + ")");
+                return "{\"error\":\"已关闭「允许修改模型」,该命令会改动模型,未执行\",\"command\":\"" +
                        JsonValue.Escape(name ?? "") + "\"}";
             }
 
@@ -166,6 +186,17 @@ namespace HVACIDA.Core.Services
             foreach (var tool in _host.Tools)
             {
                 if (tool != null && string.Equals(tool.Name, name, StringComparison.Ordinal)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>该命令是否会改动模型(修改类命令要额外开关 + 逐条确认)。</summary>
+        public static bool IsModifying(string name)
+        {
+            if (_host == null || string.IsNullOrEmpty(name)) return false;
+            foreach (var tool in _host.Tools)
+            {
+                if (tool != null && string.Equals(tool.Name, name, StringComparison.Ordinal)) return tool.ModifiesModel;
             }
             return false;
         }
@@ -313,6 +344,20 @@ namespace HVACIDA.Core.Services
                 Name = "search_knowledge",
                 Description = "在本插件的知识库里检索(本项目已定口径 / 用户导入的标准条文原文 / Revit 操作指南),返回条目标题、正文与出处。问规范条文或软件操作时优先用这个。",
                 ParametersJson = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"检索关键词\"}},\"required\":[\"query\"]}"
+            },
+            new AiToolDefinition
+            {
+                Name = "set_parameter_value",
+                Description = "**会改模型**:把指定参数设为指定值。默认作用于用户当前选中的构件(也可显式给 elementIds)。" +
+                              "只支持文本(String)、整数(Integer)、构件 ID(ElementId)三类参数;" +
+                              "**数值型(带单位的实数)参数不写** —— Revit 内部单位是英尺,直接写数字会把几何改错,请让用户手工改或用带单位的算式参数。" +
+                              "执行前必须由用户在 Revit 对话框里确认,用户点「否」就不会改。",
+                ParametersJson = "{\"type\":\"object\",\"properties\":{" +
+                                 "\"parameter\":{\"type\":\"string\",\"description\":\"参数名(与 Revit 属性面板里一致)\"}," +
+                                 "\"value\":{\"type\":\"string\",\"description\":\"要设置的值(文本按原样,整数写数字)\"}," +
+                                 "\"elementIds\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"},\"description\":\"可选:要修改的构件 Id 列表;省略则用当前选择\"}}," +
+                                 "\"required\":[\"parameter\",\"value\"]}",
+                ModifiesModel = true
             }
         };
     }

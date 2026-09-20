@@ -219,8 +219,8 @@ namespace HVACIDA.Core.Services
                 "做法(承《如何将AI大模型(DeepSeek)接入Revit中》):检索依据 + 动态 Revit 上下文 → OpenAI 兼容 /chat/completions " +
                 "(SSE 流式) → 模型返回 function calling → **进程内 CommandBus** 经 ExternalEvent 在 Revit 主线程执行 → 结果回灌模型 → 给出草稿。",
                 "安全口径:「操作 Revit」**默认关闭**(关掉时模型看不到命令、命令不会执行,工程数据不出网);开启后命令返回的工程数据会随对话发给模型服务方;" +
-                "API key 按工作区用 Windows DPAPI 加密保存;本阶段只提供**只读命令**(工程信息/构件统计/空间/材料表/图纸/水力汇总/知识库);" +
-                "修改类命令需另行设计确认流程后才加入。"),
+                "API key 按工作区用 Windows DPAPI 加密保存;命令集 = **只读 7 条**(工程信息/构件统计/空间/材料表/图纸/水力汇总/知识库)+ **修改类 1 条**" +
+                "(set_parameter_value:要过第二级开关「允许模型修改模型」,执行前弹 Revit 原生确认框(默认「否」),单次 ≤200 个构件,数值型(带单位)参数一律不写)。"),
 
             // ---------- 7. 产品支持 ----------
             new ModuleInfo("feedback", "产品支持", "问题反馈", ModuleStatus.NotImplemented,

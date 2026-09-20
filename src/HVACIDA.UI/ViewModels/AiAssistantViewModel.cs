@@ -102,6 +102,7 @@ namespace HVACIDA.UI.ViewModels
         private string _modelText = "";
         private string _scopeText = "";
         private bool _operateRevit;
+        private bool _allowModify;
 
         public AiAssistantViewModel()
             : this(null)
@@ -203,6 +204,29 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>开关的一句话状态。</summary>
         public string OperateRevitText => _operateRevit ? "已开启(可执行读取命令)" : "已关闭(只聊天,不动模型)";
 
+        /// <summary>
+        /// **「允许模型修改模型」开关(默认关,比总开关更危险的一级)**:
+        /// 只有它和 <see cref="OperateRevit"/> 都开,修改类命令才会下发给模型;
+        /// 而且每条修改类命令执行前**必须**由用户在 Revit 原生对话框里确认(默认按钮是「否」)。
+        /// </summary>
+        public bool AllowModify
+        {
+            get => _allowModify;
+            set
+            {
+                if (!Set(ref _allowModify, value)) return;
+                AiCommandBus.AllowModifyEnabled = value;
+                OnPropertyChanged(nameof(AllowModifyText));
+                OnPropertyChanged(nameof(ToolCountText));
+                Status = value
+                    ? "⚠ 已允许模型修改模型:每条修改类命令执行前都会弹 Revit 对话框让你确认(默认「否」);单次最多改 200 个构件,数值型(带单位)参数一律不写。"
+                    : "已关闭「允许修改模型」:修改类命令不下发给模型;即使硬调也会被拒绝。";
+            }
+        }
+
+        /// <summary>修改开关的一句话状态。</summary>
+        public string AllowModifyText => _allowModify ? "已允许(每条都要确认)" : "已禁止(只读)";
+
         /// <summary>当前可用命令数(界面显示"模型能看到几条工具")。</summary>
         public string ToolCountText
         {
@@ -210,7 +234,8 @@ namespace HVACIDA.UI.ViewModels
             {
                 if (!_operateRevit) return "模型可见命令:0 条(开关已关)";
                 if (!AiCommandBus.IsReady) return "模型可见命令:0 条(命令集尚未加载,Revit 完全初始化后自动加载)";
-                return "模型可见命令:" + AiCommandBus.ToolsForModel().Count + " 条";
+                return "模型可见命令:" + AiCommandBus.ToolsForModel().Count + " 条" +
+                       (_allowModify ? "(含 1 条修改类,每条都要你确认)" : "(全部只读)");
             }
         }
 
@@ -305,6 +330,7 @@ namespace HVACIDA.UI.ViewModels
             if (string.IsNullOrEmpty(_modelText) && _selectedProvider != null) _modelText = _selectedProvider.Model;
 
             _operateRevit = AiCommandBus.OperateRevitEnabled;
+            _allowModify = AiCommandBus.AllowModifyEnabled;
             ScopeText = ScopeProvider == null
                 ? "工作区:未接入 Revit 上下文(自检/离线模式;密钥不按工作区隔离)"
                 : "工作区:" + _scope.Id + (_scope.IsUnsaved ? "(文档未保存)" : "");
@@ -316,6 +342,8 @@ namespace HVACIDA.UI.ViewModels
             OnPropertyChanged(nameof(SelectedProvider));
             OnPropertyChanged(nameof(OperateRevit));
             OnPropertyChanged(nameof(OperateRevitText));
+            OnPropertyChanged(nameof(AllowModify));
+            OnPropertyChanged(nameof(AllowModifyText));
             OnPropertyChanged(nameof(ToolCountText));
             OnPropertyChanged(nameof(Summary));
             Note = note;

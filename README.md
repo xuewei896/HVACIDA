@@ -87,7 +87,7 @@ dotnet build .\HVACIDA.sln
 | 2.2.4 结果管理 | 文本计算书(TextReportGenerator)+ **Excel 计算书**(`XlsxWriter` 自写最小 XLSX,零依赖) | ✅ 文本 + Excel:**大系统负荷 / 排烟 / 小系统 / 水力**各模块均可导出(`%AppData%\HVACIDA\Reports`) |
 | 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml** / **hydraulic.xml** 多系统容器) | 🟡 待换 SQLite(旧 small-system.xml 与水力单系统文件首次读取自动迁移) |
 | 2.7 规范知识库 | `KnowledgeBase`(本项目口径 + **规范条文检索** + **Revit 操作指南**,三类同窗可检索/筛选)+ **标准条文电子版导入(主路径)** + **ima 在线知识库(辅助,可选)** + 知识库窗口 | ✅ 条目化、每条带出处;规范条文覆盖 GB 50736 / GB 50015 / GB 51251 / GB 50016 / GB 50013 / GB 50014 / GB 50974 / GB 50157 / GB 51298 / GB 50243 / GB 50242 / GB/T 50114 等;**只给检索线索与要点,不编条文号与数值**(以标准原文为准);Revit 操作指南 15 节覆盖建模/空间/MEP/标注/出图/协同/排错;✅ 用户手上的条文电子版(txt/md/csv/docx)放进 `%AppData%\HVACIDA\规范条文` 即成为**可检索的条文原文** —— **打开知识库窗即自动载入**(不必每次手动点,可重复导入不累加)、**条文正文中段的词也能搜到**(关键词按全文均匀取样)、命中时答复里**单列整条原文**、按条文号提问原文进首位;✅ **ima 在线知识库**(辅助)按腾讯 ima 开放接口检索(需 Client ID + API Key + 知识库 ID,见 §6e),只给标题与片段;✅ **AI 问答(DeepSeek,检索增强,见 §6f)**:先本地检索**依据**,再把「问题 + 依据文本」发给模型,回答以**草稿** + **依据清单**呈现,系统提示写死不编条文号与数值、资料不足要明说;✅ **AI 助手停靠面板**(§6g):在 Revit 右侧聊天,需要工程数据时由模型调用**进程内只读命令**去取(不起 MCP、不配端口) |
-| 2.7b AI 助手(Revit 停靠面板) | `AiChatPanel` + `AiAssistantViewModel` + `AiChatClient` + `AiCommandBus` + `RevitAiToolHost` | ✅ 见 §6g:「操作 Revit」**默认关**(关掉时模型看不到命令、命令不执行、工程数据不出网);API key 走 **DPAPI** 按工作区加密;只读命令 7 条;命令活动日志可审计;⬜ 修改类命令(需逐条确认设计)、会话记忆、MCP |
+| 2.7b AI 助手(Revit 停靠面板) | `AiChatPanel` + `AiAssistantViewModel` + `AiChatClient` + `AiCommandBus` + `RevitAiToolHost` | ✅ 见 §6g:「操作 Revit」**默认关**(关掉时模型看不到命令、命令不执行、工程数据不出网);「**允许模型修改模型**」第二级开关 + **Revit 原生确认框**;API key 走 **DPAPI** 按工作区加密;**只读命令 7 条 + 修改类 1 条**;命令活动日志可审计;⬜ create/delete 类命令、会话记忆、MCP |
 | 2.3/2.4 水力计算 | 风系统 / 水系统录入窗 + **全站汇总窗**(`HydraulicCalculator` / `RevitHydraulicReader` / `HydraulicSummaryService`) | ✅ 已实装:模型里选系统 → 读管网 → 连接件拓扑求**最不利环路** → 需求全压(Pa)/ 扬程(m)+ 设备校核;**并联环路平衡**(Kv / 阀权度 / 需增加 ζ)、**系统阻力特性曲线**、**全站多系统汇总**(按「介质 + 系统编号」upsert)与 **Excel 导出**;系数全部可见可改(§4.10) |
 | 2.5 材料表统计(出图→明细表) | 材料表窗(`MaterialTakeoffService` / `RevitMaterialTakeoffReader`) | ✅ 读模型 11 类构件(风管/水管/管件/附件/末端/设备/保温)→ 归并键含**单位**(长度与件数不相加)→ 类别小计 + 逐类型明细 + Excel 3 页(§4.11) |
 | 2.6 图纸与批量出图(出图→图框) | 图框窗(`SheetCatalogService` / `RevitSheetReader` / `RevitSheetExporter` / `RevitAutoTagger`) | ✅ 图纸清单(编号/名称/图框/图幅 mm/视图数)+ **空图框计数** + **批量导出 DWG/DXF**(Revit 导出接口)+ **PDF**(系统打印机,**依赖本机 PDF 驱动,没有就逐张报失败**)+ 清单 Excel 4 页(§4.12);✅ **空间自动标注**(名称+编号,已有标注跳过)、✅ **图例表**(复用材料表);⬜ 风管/水管尺寸与设备编号标注、图例自动排版 |
@@ -260,12 +260,12 @@ python tools\docx2md\docx_to_markdown.py "通风空调智能设计助手.docx" `
 | ① Core 引擎 | `AiChatClient`:OpenAI 兼容 `/chat/completions` + **SSE 流式** + **function calling** 最多 **12 轮**;`AiCommandBus`(进程内、串行锁 3 分钟、可审计日志)+ **「操作 Revit」总开关**;`AiToolCatalog`(**工具 schema 清洗**,避免 PowerShell 风格 schema 触发 HTTP 400);`ApiKeyVault`(**Windows DPAPI 加密**保存 API key,按工作区隔离);`AiWorkspaceScope`(Revit 版本 + 用户 + 项目路径哈希);`AiProviderPresets`(DeepSeek / 通义 / 智谱 / Kimi / OpenAI + 自定义) | ✅ 本阶段完成(Smoke 场景25 约 70 项,离线可跑) |
 | ② Revit 侧 | 停靠面板「AI 助手」(`RegisterDockablePane` + **静态字段防 GC**)+ `CommandBus.Initialize` 放在 **ApplicationInitialized**(不在 OnStartup)+ `Idling` 兜底 + `AiExternalEventBridge`(ExternalEvent 命令模式:后台线程派活 → Revit 主线程执行 → `ManualResetEvent` 通知完成;每次派活先 `Reset()`)+ **只读命令集 7 条**(工程信息 / 构件统计 / 空间清单 / 材料表 / 图纸清单 / 水力汇总 / 知识库检索) | ✅ 本阶段完成(`RevitAiToolHost`;汇总口径**复用插件自己的服务**,AI 说的数与窗口里看到的是同一份) |
 | ③ WPF 聊天面板 | `AiChatPanel`(停靠面板内容控件)+ `AiAssistantViewModel`:流式打字机渲染(逐段追加)、**命令活动日志**(调了哪条、成功/失败、耗时)、**服务预设选择**(DeepSeek / 通义 / 智谱 / Kimi / OpenAI / 自定义)、**「操作 Revit」开关**、按工作区隔离的设置与密钥、失败红字照实显示 | ✅ 本阶段完成(面板不是模态窗:聊天时仍可操作模型) |
-| ④ 命令集扩充 | 只读命令已全部就位;**修改类命令(create / modify / delete)未做** —— 按本仓库纪律必须先设计"逐条 TaskDialog 确认 + 影响范围预览"再实现 | ⬜ 待做 |
+| ④ 修改类命令 | **已实现 1 条**:`set_parameter_value`(改文本 / 整数 / 构件 ID 参数;默认作用于**当前选择**,也可显式给 elementIds)。**四道闸门**:①「操作 Revit」②「**允许模型修改模型**」(第二级开关,默认关)③ **Revit 原生确认对话框**(默认按钮是「否」)④ 单次 ≤ 200 个构件。**数值型(带单位实数)参数一律拒写** —— Revit 内部单位是英尺,直接写数字会把几何 / 风量改错,宁可让用户手工改 | ✅ 本阶段完成(create / delete 类按同一模式后续可加) |
 
 **安全口径(照参考文档 2.6,并按本仓库纪律加严)**:
 ① **「操作 Revit」默认关**:关掉时**既不执行命令,也不把工具清单发给模型**(用户可以放心聊天,不怕 AI 乱改图);
 ② **API key 走 DPAPI 加密**(`%AppData%\HVACIDA\ai-key.bin`,按本机本用户 + 工作区隔离),**不落明文**;DPAPI 不可用时**明确降级提示**,不静默;
-③ **危险操作要确认**:删除/清理类命令执行前弹 Revit 原生 TaskDialog;首次实现**只做只读命令**;
+③ **改模型的命令要过两道开关 + 逐条确认**:「**允许模型修改模型**」**默认关**(关掉时修改类命令不下发给模型,硬调也被拒绝);开启后每条修改类命令执行前弹 **Revit 原生对话框**(默认按钮「否」),单次最多改 200 个构件,**数值型(带单位)参数一律不写**;
 ④ **工程数据出网要写明**:开启「操作 Revit」后,命令返回的工程数据(构件统计/空间/材料/图纸/已保存水力结果)**会**发给模型服务方 —— 界面与 `AiChatClient.PrivacyNoteWithTools` 都写明,项目不允许出网时请关掉开关;
 ⑤ **不做**参考文档里的 `send_code_to_revit`(让 AI 直接执行 C# 代码)—— 能力太强、prompt 约束不是硬约束,本项目不实现。
 

@@ -2930,7 +2930,7 @@ namespace HVACIDA.Smoke
             AiCommandBus.OperateRevitEnabled = false;
             CheckInt("总线:开关关掉 → 工具清单仍为空", AiCommandBus.ToolsForModel().Count, 0);
             AiCommandBus.OperateRevitEnabled = true;
-            CheckInt("总线:开关打开 → 工具清单=已注册命令数", AiCommandBus.ToolsForModel().Count, host.Tools.Count());
+            CheckInt("总线:开关打开 → 工具清单=只读命令数(修改类要额外开关)", AiCommandBus.ToolsForModel().Count, host.Tools.Count() - 1);
             CheckText("总线:执行交给宿主并回传 JSON",
                 AiCommandBus.Execute("analyze_model_statistics", "{}"), "{\"walls\":12}");
             CheckText("总线:找不到命令时明确报错(不执行)",
@@ -2941,6 +2941,41 @@ namespace HVACIDA.Smoke
             CheckInt("总线:轮次上限=12(参考文档取值)", AiChatClient.MaxToolRounds, 12);
             AiCommandBus.ClearLog();
             CheckInt("总线:日志可清空", AiCommandBus.Log.Count, 0);
+
+            // ---------- 5b) 修改类命令:两级开关 + 逐条确认(Revit 侧负责弹框) ----------
+            int modifyingCount = 0;
+            AiToolDefinition modifyingTool = null;
+            foreach (var tool in AiToolCatalog.Known)
+            {
+                if (tool.ModifiesModel) { modifyingCount++; modifyingTool = tool; }
+            }
+            CheckInt("修改类命令:命令表里恰好 1 条标 ModifiesModel", modifyingCount, 1);
+            CheckText("修改类命令:说明写明会改模型", modifyingTool != null && modifyingTool.Description.Contains("会改模型") ? "有" : "无", "有");
+            CheckText("修改类命令:说明写明执行前要确认", modifyingTool != null && modifyingTool.Description.Contains("确认") ? "有" : "无", "有");
+            CheckText("修改类命令:说明写明数值型参数不写(避免内部单位改错)",
+                modifyingTool != null && modifyingTool.Description.Contains("不写") ? "有" : "无", "有");
+            var schemaNotes = new List<string>();
+            CheckText("修改类命令:参数 schema 是合法 JSON 对象",
+                JsonValue.Parse(AiToolCatalog.SanitizeParameters(modifyingTool.ParametersJson, "set_parameter_value", schemaNotes)).IsObject
+                    ? "合法" : "非法", "合法");
+            CheckText("修改类命令:必填参数是 parameter + value",
+                JsonValue.Parse(modifyingTool.ParametersJson).Get("required").Count == 2 ? "对" : "错", "对");
+
+            AiCommandBus.AllowModifyEnabled = false;
+            CheckInt("修改类命令:第二级开关关时不下发给模型",
+                AiCommandBus.ToolsForModel().Count, AiToolCatalog.Known.Count - modifyingCount);
+            CheckText("修改类命令:第二级开关关时硬调也被拒绝",
+                AiCommandBus.Execute("set_parameter_value", "{\"parameter\":\"备注\",\"value\":\"x\"}").Contains("允许修改模型")
+                    ? "拒绝" : "放行", "拒绝");
+            AiCommandBus.AllowModifyEnabled = true;
+            CheckInt("修改类命令:两级开关都开才下发(含修改类)",
+                AiCommandBus.ToolsForModel().Count, AiToolCatalog.Known.Count);
+            CheckText("修改类命令:开关全开时执行结果透传",
+                AiCommandBus.Execute("set_parameter_value", "{\"parameter\":\"备注\",\"value\":\"x\"}"),
+                "{\"changed\":2,\"note\":\"已确认并写入\"}");
+            CheckText("修改类命令:执行留日志(可审计)",
+                AiCommandBus.Log.Count > 0 ? "有" : "无", "有");
+            AiCommandBus.AllowModifyEnabled = false;
             AiCommandBus.OperateRevitEnabled = false;
 
             // ---------- 6) API Key 保险箱(DPAPI 加密 + 工作区隔离) ----------
@@ -3061,6 +3096,7 @@ namespace HVACIDA.Smoke
             {
                 if (name == "boom") throw new InvalidOperationException("故意抛异常");
                 if (name == "analyze_model_statistics") return "{\"walls\":12}";
+                if (name == "set_parameter_value") return "{\"changed\":2,\"note\":\"已确认并写入\"}";
                 return "{\"error\":\"找不到命令:" + name + "\"}";
             }
         }

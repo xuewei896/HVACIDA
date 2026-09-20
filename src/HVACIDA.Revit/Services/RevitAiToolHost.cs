@@ -40,10 +40,14 @@ namespace HVACIDA.Revit.Services
         private static readonly HashSet<string> Implemented = new HashSet<string>(StringComparer.Ordinal)
         {
             "get_project_info", "analyze_model_statistics", "list_spaces", "get_material_takeoff",
-            "list_sheets", "get_hydraulic_summary", "search_knowledge"
+            "list_sheets", "get_hydraulic_summary", "search_knowledge",
+            "set_parameter_value"
         };
 
-        public string Description => "HVACIDA 只读命令集(" + Implemented.Count + " 条:工程信息/构件统计/空间/材料表/图纸/水力汇总/知识库)";
+        /// <summary>一次修改类命令最多动多少个构件(超过就拒绝,要求先缩小选择 —— 防"一句话改全楼")。</summary>
+        private const int MaxModifyElements = 200;
+
+        public string Description => "HVACIDA 命令集(" + Implemented.Count + " 条:只读 7 条 + 修改类 1 条,后者需额外开关且逐条确认)";
 
         public IEnumerable<AiToolDefinition> Tools
         {
@@ -77,6 +81,8 @@ namespace HVACIDA.Revit.Services
                     return _bridge.Run(_uiApp, HydraulicSummary, ToolTimeoutMs);
                 case "search_knowledge":
                     return SearchKnowledge(argumentsJson);      // 纯本地检索,不需要 Revit 线程
+                case "set_parameter_value":
+                    return _bridge.Run(_uiApp, app => SetParameterValue(app, argumentsJson), ToolTimeoutMs);
                 default:
                     return Obj("error", S("找不到命令:" + name));
             }
@@ -300,6 +306,197 @@ namespace HVACIDA.Revit.Services
             }
             return Obj("matches", "[" + string.Join(",", rows.ToArray()) + "]",
                 "note", S("依据来自本插件知识库;引用条文请以标准原文为准。"));
+        }
+
+        // ------------------------------------------------------------------ 修改类命令(需额外开关 + 逐条确认)
+
+        /// <summary>
+        /// **修改模型:设置参数值**(本仓库第一条"会改模型"的命令)。
+        /// <para>
+        /// 四道闸门,缺一不可:① Core 的「操作 Revit」开关;② Core 的「允许修改模型」开关;
+        /// ③ **Revit 原生确认对话框**(默认按钮是「否」);④ 单次最多 <see cref="MaxModifyElements"/> 个构件。
+        /// 只写文本 / 整数 / 构件 ID 三类参数;**数值型(带单位实数)一律拒写** ——
+        /// Revit 内部单位是英尺,直接写数字会把几何/风量改错,宁可让用户手工改。
+        /// </para>
+        /// </summary>
+        private string SetParameterValue(UIApplication app, string argumentsJson)
+        {
+            Document doc = DocumentOf(app);
+            if (doc == null) return NoDocument();
+
+            string parameterName = Argument(argumentsJson, "parameter");
+            string value = Argument(argumentsJson, "value");
+            if (string.IsNullOrEmpty(parameterName))
+                return Obj("error", S("缺少参数 parameter(参数名)"));
+
+            // 目标构件:显式给 Id 就用它,否则用当前选择
+            var targets = new List<Element>();
+            var explicitIds = ArgumentInts(argumentsJson, "elementIds");
+            if (explicitIds.Count > 0)
+            {
+                foreach (int id in explicitIds)
+                {
+                    Element element = doc.GetElement(new ElementId(id));
+                    if (element != null) targets.Add(element);
+                }
+            }
+            else
+            {
+                UIDocument uidoc = app.ActiveUIDocument;
+                if (uidoc == null) return Obj("error", S("没有活动文档/选择集"));
+                foreach (ElementId id in uidoc.Selection.GetElementIds())
+                {
+                    Element element = doc.GetElement(id);
+                    if (element != null) targets.Add(element);
+                }
+                if (targets.Count == 0)
+                    return Obj("error", S("当前没有选中任何构件 —— 请先在 Revit 里选中要改的构件(或让 AI 显式给出 elementIds)"));
+            }
+
+            if (targets.Count > MaxModifyElements)
+            {
+                return Obj("error", S("一次要改 " + targets.Count + " 个构件,超过安全上限 " + MaxModifyElements +
+                                      " —— 请先缩小选择范围再让我改(避免一句话改掉整栋楼)"));
+            }
+
+            // 先做一遍"能不能改"的体检(不写模型),把不能改的原因逐条报出来
+            var writable = new List<Element>();
+            var skipped = new List<string>();
+            StorageType storage = StorageType.String;
+            int stringCount = 0, integerCount = 0, elementIdCount = 0, doubleCount = 0;
+            foreach (var element in targets)
+            {
+                Parameter parameter = element.LookupParameter(parameterName);
+                if (parameter == null) { skipped.Add(IdOf(element) + ":没有参数「" + parameterName + "」"); continue; }
+                if (parameter.IsReadOnly) { skipped.Add(IdOf(element) + ":参数只读"); continue; }
+                StorageType type = parameter.StorageType;
+                if (type == StorageType.Double) doubleCount++;
+                else if (type == StorageType.Integer) integerCount++;
+                else if (type == StorageType.ElementId) elementIdCount++;
+                else stringCount++;
+                storage = type;
+                writable.Add(element);
+            }
+
+            if (doubleCount > 0)
+            {
+                return Obj("error", S("参数「" + parameterName + "」是**数值型**(带单位的实数)参数," + doubleCount +
+                                      " 个构件命中。Revit 内部单位是英尺,直接写数字会把几何/风量改错,本命令不写数值型参数 —— " +
+                                      "请在 Revit 里手工改,或改用带单位的算式参数。") +
+                    (skipped.Count > 0 ? ", \"skipped\":" + Strings(skipped) : ""));
+            }
+            if (writable.Count == 0)
+            {
+                return Obj("error", S("没有一个构件的参数「" + parameterName + "」可以写(参数不存在或只读)"),
+                    "skipped", Strings(skipped));
+            }
+
+            // 用户确认(Revit 原生对话框;默认按钮放在「否」上)
+            string kind = stringCount >= integerCount && stringCount >= elementIdCount ? "文本"
+                : (integerCount >= elementIdCount ? "整数" : "构件 ID");
+            var dialog = new TaskDialog("HVACIDA AI 助手 — 确认修改模型");
+            dialog.MainInstruction = "AI 请求修改模型,是否执行?";
+            dialog.MainContent =
+                "参数:" + parameterName + "(" + kind + "型)\n" +
+                "设为:" + (value ?? "") + "\n" +
+                "构件数:" + writable.Count + (skipped.Count > 0 ? "(另有 " + skipped.Count + " 个构件不能写,会跳过)" : "") + "\n" +
+                "构件示例:" + SampleIds(writable);
+            dialog.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
+            dialog.DefaultButton = TaskDialogResult.No;
+            TaskDialogResult answer = dialog.Show();
+            if (answer != TaskDialogResult.Yes)
+            {
+                return Obj("ok", "false", "cancelled", "true",
+                    "message", S("用户取消了本次修改,模型未改动。"));
+            }
+
+            int changed = 0;
+            var failed = new List<string>();
+            using (var transaction = new Transaction(doc, "HVACIDA AI:设置参数 " + parameterName))
+            {
+                transaction.Start();
+                foreach (var element in writable)
+                {
+                    try
+                    {
+                        Parameter parameter = element.LookupParameter(parameterName);
+                        if (parameter == null) continue;
+                        bool ok;
+                        switch (parameter.StorageType)
+                        {
+                            case StorageType.Integer:
+                                int integerValue;
+                                ok = int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out integerValue)
+                                     && parameter.Set(integerValue);
+                                if (!ok) failed.Add(IdOf(element) + ":整数解析失败或写入被拒");
+                                break;
+                            case StorageType.ElementId:
+                                int idValue;
+                                ok = int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out idValue)
+                                     && parameter.Set(new ElementId(idValue));
+                                if (!ok) failed.Add(IdOf(element) + ":构件 ID 解析失败或写入被拒");
+                                break;
+                            default:
+                                ok = parameter.Set(value ?? "");
+                                if (!ok) failed.Add(IdOf(element) + ":写入被拒");
+                                break;
+                        }
+                        if (ok) changed++;
+                    }
+                    catch (Exception ex)
+                    {
+                        failed.Add(IdOf(element) + ":" + ex.Message);
+                    }
+                }
+                if (changed > 0) transaction.Commit();
+                else transaction.RollBack();
+            }
+
+            return Obj(
+                "changed", N(changed),
+                "skipped", N(skipped.Count + failed.Count),
+                "parameter", S(parameterName),
+                "value", S(value),
+                "details", Strings(failed),
+                "note", S("已在事务内完成(" + changed + " 个构件)。撤销可用 Revit 的 Ctrl+Z(本命令是单个事务)。" +
+                          (skipped.Count > 0 ? " 另有 " + skipped.Count + " 个构件因参数不存在/只读被跳过。" : "")));
+        }
+
+        private static string IdOf(Element element)
+        {
+            try { return "#" + element.Id.IntegerValue; }
+            catch { return "#?"; }
+        }
+
+        private static string SampleIds(IList<Element> elements)
+        {
+            var parts = new List<string>();
+            for (int i = 0; i < elements.Count && i < 8; i++) parts.Add(IdOf(elements[i]));
+            return string.Join(",", parts.ToArray()) + (elements.Count > 8 ? " …" : "");
+        }
+
+        private static string Strings(IList<string> items)
+        {
+            var parts = new List<string>();
+            foreach (var item in items) parts.Add(S(item));
+            return "[" + string.Join(",", parts.ToArray()) + "]";
+        }
+
+        /// <summary>取整数数组参数(缺省返回空表)。</summary>
+        private static List<int> ArgumentInts(string argumentsJson, string name)
+        {
+            var values = new List<int>();
+            try
+            {
+                var node = JsonValue.Parse(argumentsJson ?? "{}").Get(name);
+                if (!node.IsArray) return values;
+                foreach (var item in node.Items) values.Add(item.AsInt(0));
+            }
+            catch
+            {
+                // 参数坏了就当没给:走"用当前选择"的路径,并在上面给出提示
+            }
+            return values;
         }
 
         // ------------------------------------------------------------------ 工具
