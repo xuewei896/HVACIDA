@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HVACIDA.Core.Services
@@ -212,7 +212,15 @@ namespace HVACIDA.Core.Services
                 "内容 = 本项目已实装模块的**已定口径**(大/小系统、排烟、水力风与水、气象与省市库、材料表、图纸与批量出图、" +
                 "计算书与 Excel、数据存储),每条含典型问法 + 答复 + **出处**(需求文档 / 公式文档 / 示例 xls / GB 50736 / 已定口径含日期)。",
                 "检索为关键词加权(标题 3 / 关键词 2 / 正文 1);范围外的问题给「知识范围说明 + 提问建议」并列出最接近条目;" +
-                "**未接在线大模型** —— 接入时本知识库作为「检索到的依据上下文」一并提交,答复仍须挂出处。可按分类浏览并导出 Excel。"),
+                "可按分类浏览、导入条文电子版,并可选接 ima 在线库与 **AI 问答(DeepSeek,检索增强)**;答复仍须挂出处。"),
+
+            new ModuleInfo("ai-chat", "AI问答", "AI助手", ModuleStatus.Implemented,
+                "在 Revit 右侧嵌一个 AI 聊天面板:自然语言提问,需要工程数据时由模型调用**进程内命令**去取(不起 MCP、不配端口)",
+                "做法(承《如何将AI大模型(DeepSeek)接入Revit中》):检索依据 + 动态 Revit 上下文 → OpenAI 兼容 /chat/completions " +
+                "(SSE 流式) → 模型返回 function calling → **进程内 CommandBus** 经 ExternalEvent 在 Revit 主线程执行 → 结果回灌模型 → 给出草稿。",
+                "安全口径:「操作 Revit」**默认关闭**(关掉时模型看不到命令、命令不会执行,工程数据不出网);开启后命令返回的工程数据会随对话发给模型服务方;" +
+                "API key 按工作区用 Windows DPAPI 加密保存;本阶段只提供**只读命令**(工程信息/构件统计/空间/材料表/图纸/水力汇总/知识库);" +
+                "修改类命令需另行设计确认流程后才加入。"),
 
             // ---------- 7. 产品支持 ----------
             new ModuleInfo("feedback", "产品支持", "问题反馈", ModuleStatus.NotImplemented,

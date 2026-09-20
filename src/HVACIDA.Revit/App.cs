@@ -60,6 +60,7 @@ namespace HVACIDA.Revit
             // 6. AI问答
             { "guide", typeof(Commands.ShowGuideCommand) },
             { "knowledge", typeof(Commands.ShowKnowledgeCommand) },
+            { "ai-chat", typeof(Commands.ShowAiAssistantCommand) },
 
             // 7. 产品支持
             { "feedback", typeof(Commands.ShowFeedbackCommand) },
@@ -71,6 +72,16 @@ namespace HVACIDA.Revit
             try
             {
                 CreateRibbon(application);
+
+                // AI 助手停靠面板(参考文档 2.1):
+                //  ① Provider 用**静态字段**持有(写成局部变量会被 GC 回收,之后点按钮报 pane has not been created yet);
+                //  ② 命令集初始化放在 ApplicationInitialized(那时 Revit 才完全就绪),Idling 再兜底一次。
+                PaneProvider = new Services.AiPaneProvider();
+                application.RegisterDockablePane(Services.AiPaneProvider.PaneId,
+                    Services.AiPaneProvider.PaneTitle, PaneProvider);
+                application.ControlledApplication.ApplicationInitialized += (s, e) => OnApplicationInitialized(s);
+                application.Idling += (s, e) => OnIdling();
+
                 return Result.Succeeded;
             }
             catch (Exception ex)
@@ -80,8 +91,64 @@ namespace HVACIDA.Revit
             }
         }
 
+        /// <summary>
+        /// AI 助手面板提供者(**必须静态持有**:Revit 不负责保活,一旦被 GC 回收,
+        /// 下次点「AI助手」就会报「pane has not been created yet」)。
+        /// </summary>
+        internal static Services.AiPaneProvider PaneProvider;
+
+        private static UIApplication _uiApplication;
+
+        /// <summary>Revit 完全初始化后装载 AI 命令集(照参考文档:不在 OnStartup 里直接初始化)。</summary>
+        private static void OnApplicationInitialized(object sender)
+        {
+            try
+            {
+                var app = sender as Autodesk.Revit.ApplicationServices.Application;
+                if (app == null) return;
+                _uiApplication = new UIApplication(app);
+                InitializeAiCommandBus(_uiApplication);
+            }
+            catch (Exception ex)
+            {
+                // 命令集装载失败不影响插件其它功能;面板会显示"命令集尚未加载",Idling 还会再试
+                AiCommandBus.Clear();
+                System.Diagnostics.Debug.WriteLine("AI 命令集初始化失败:" + ex.Message);
+            }
+        }
+
+        /// <summary>兜底:命令集还没就绪时,每次空闲再试一次(参考文档的做法)。</summary>
+        private static void OnIdling()
+        {
+            if (AiCommandBus.IsReady) return;
+            try
+            {
+                InitializeAiCommandBus(_uiApplication);
+            }
+            catch
+            {
+                // 静默重试:Idling 每秒都会来,重复弹窗反而打扰用户
+            }
+        }
+
+        /// <summary>装载命令集 + ExternalEvent 通道(幂等)。</summary>
+        private static void InitializeAiCommandBus(UIApplication uiApp)
+        {
+            if (uiApp == null || AiCommandBus.IsReady) return;
+            if (PaneProvider != null) PaneProvider.UiApplication = uiApp;
+            AiCommandBus.Register(new Services.RevitAiToolHost(uiApp));
+        }
+
         public Result OnShutdown(UIControlledApplication application)
         {
+            try
+            {
+                AiCommandBus.Clear();
+            }
+            catch
+            {
+                // 关闭阶段不打扰用户
+            }
             return Result.Succeeded;
         }
 

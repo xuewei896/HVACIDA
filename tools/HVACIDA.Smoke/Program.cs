@@ -81,10 +81,10 @@ namespace HVACIDA.Smoke
             Console.WriteLine("==================================================");
 
             string[] expectedPanels = { "项目信息", "大系统", "小系统", "水力计算", "出图", "AI问答", "产品支持" };
-            int[] expectedCounts = { 2, 4, 7, 3, 2, 2, 2 };
+            int[] expectedCounts = { 2, 4, 7, 3, 2, 3, 2 };
 
             CheckInt("面板数 = 7", ModuleCatalog.PanelOrder.Count, 7);
-            CheckInt("按钮数 = 22", ModuleCatalog.All.Count, 22);
+            CheckInt("按钮数 = 23(2026-09-16 新增「AI助手」停靠面板入口)", ModuleCatalog.All.Count, 23);
             CheckInt("面板顺序一致", string.Join(",", ModuleCatalog.PanelOrder) == string.Join(",", expectedPanels) ? 1 : 0, 1);
 
             for (int i = 0; i < expectedPanels.Length; i++)
@@ -106,7 +106,7 @@ namespace HVACIDA.Smoke
             const string expectedKeys =
                 "eng-info,weather,public-area,large-load,large-smoke,large-result," +
                 "small-allair,small-vrf,small-exhaust,small-sesmoke,small-press,small-smoke,small-result," +
-                "hyd-air,hyd-water,hyd-result,schedule,titleblock,guide,knowledge,feedback,help";
+                "hyd-air,hyd-water,hyd-result,schedule,titleblock,guide,knowledge,ai-chat,feedback,help";
             CheckInt("键清单与 App.cs 命令注册一致", string.Join(",", ModuleCatalog.Keys) == expectedKeys ? 1 : 0, 1);
 
             // 待实现类模块必须写出"待补/待实现"口径,不能只是空壳说明
@@ -2764,8 +2764,8 @@ namespace HVACIDA.Smoke
                 string raw = File.ReadAllText(path, Encoding.UTF8);
                 CheckText("设置:文件写明 API key 明文提醒",
                     raw.Contains(AiSettingsStore.PlainTextWarning) ? "有" : "无", "有");
-                CheckText("设置:文件写明不发送模型数据",
-                    raw.Contains("不发送 Revit 模型数据") ? "有" : "无", "有");
+                CheckText("设置:文件写明不发送模型数据(未开操作 Revit 时)",
+                    raw.Contains("操作 Revit") && raw.Contains("工程数据") ? "有" : "无", "有");
 
                 string note;
                 var loaded = AiSettingsStore.Load(path, out note);
@@ -2960,6 +2960,32 @@ namespace HVACIDA.Smoke
                 CheckText("密钥:换工作区取不回(隔离生效)",
                     ApiKeyVault.Load("2020_hp_file-bbb", vaultPath), "");
                 CheckText("密钥:存在性判断", ApiKeyVault.Has("2020_hp_file-aaa", vaultPath) ? "有" : "无", "有");
+
+                // 与设置文件联动:指定工作区时,ai.xml 里不写 key,key 只在保险箱里
+                string scopedSettings = Path.Combine(vaultDir, "ai.xml");
+                var scoped = new AiChatSettings
+                {
+                    Enabled = true,
+                    ApiKey = "sk-scoped",
+                    Provider = "deepseek",
+                    Model = "deepseek-flash",
+                    Stream = true
+                };
+                AiSettingsStore.Save(scoped, scopedSettings, "2020_hp_file-aaa");
+                string scopedRaw = File.ReadAllText(scopedSettings, Encoding.UTF8);
+                CheckText("设置+密钥:指定工作区时 ai.xml 不写 key",
+                    scopedRaw.Contains("sk-scoped") ? "写了" : "没写", "没写");
+                CheckText("设置+密钥:保险箱文件已生成",
+                    File.Exists(Path.Combine(vaultDir, "ai-key.bin")) ? "有" : "无", "有");
+                string scopedNote;
+                var scopedLoaded = AiSettingsStore.Load(scopedSettings, "2020_hp_file-aaa", out scopedNote);
+                CheckText("设置+密钥:按工作区取回 key", scopedLoaded.ApiKey, "sk-scoped");
+                CheckText("设置+密钥:说明里写明 key 来源",
+                    scopedNote.Contains("DPAPI") ? "有" : scopedNote, "有");
+                CheckText("设置:往返 Provider", scopedLoaded.Provider, "deepseek");
+                CheckText("设置:往返 Stream", scopedLoaded.Stream ? "true" : "false", "true");
+                var otherScope = AiSettingsStore.Load(scopedSettings, "2020_hp_file-bbb", out scopedNote);
+                CheckText("设置+密钥:换工作区取不到 key", string.IsNullOrEmpty(otherScope.ApiKey) ? "取不到" : "取到了", "取不到");
                 ApiKeyVault.Save("2020_hp_file-aaa", "", vaultPath);
                 CheckText("密钥:传空串=删除", ApiKeyVault.Load("2020_hp_file-aaa", vaultPath), "");
                 CheckText("密钥:坏密文按没有处理(不抛)",

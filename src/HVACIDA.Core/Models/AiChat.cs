@@ -32,6 +32,9 @@ namespace HVACIDA.Core.Models
         /// <summary>模型名(留空即官方文档给的默认模型,见 <c>DeepSeekClient.DefaultModel</c>)。</summary>
         public string Model { get; set; } = "";
 
+        /// <summary>服务预设键(见 <c>AiProviderPresets</c>;自定义时为 <c>custom</c>)。</summary>
+        public string Provider { get; set; } = "";
+
         /// <summary>采样温度(工程问答要稳,默认 0.2;允许 0~2)。</summary>
         public double Temperature { get; set; } = 0.2;
 
@@ -77,6 +80,7 @@ namespace HVACIDA.Core.Models
                 ApiKey = ApiKey ?? "",
                 Endpoint = Endpoint ?? "",
                 Model = Model ?? "",
+                Provider = Provider ?? "",
                 Temperature = Temperature,
                 MaxTokens = MaxTokens,
                 TimeoutSeconds = TimeoutSeconds,

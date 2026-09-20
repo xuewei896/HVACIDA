@@ -526,6 +526,21 @@ namespace HVACIDA.IconGen
                 g.Ellipse(Ctx.Accent, 1.9f, 21.5f, 20, 6.0f, Color.FromArgb(0xF2, 0xF8, 0xFD));
                 g.Line2(Ctx.Accent, 2.6f, 25.7f, 24.2f, 29.5f, 28.4f);
             },
+            ["ai-chat"] = g =>
+            {
+                // 聊天气泡 + 右下角"AI 星芒"四角星(表示"会自己调用命令去取数据")
+                g.Rect(Ctx.Line, 1.7f, 3, 5.5f, 21, 15.5f, Color.FromArgb(0xF2, 0xF8, 0xFD), 3.2f);
+                g.Poly(Ctx.Line, 1.5f, Color.FromArgb(0xF2, 0xF8, 0xFD),
+                    new PointF(8.5f, 20.6f), new PointF(8.5f, 25.5f), new PointF(13.5f, 20.6f));
+                g.Line2(Ctx.Gray, 1.3f, 6.5f, 10, 18, 10);
+                g.Line2(Ctx.Gray, 1.3f, 6.5f, 14, 14.5f, 14);
+                g.Line2(Ctx.Accent, 1.3f, 6.5f, 18, 12, 18);
+                // 四角星(中心 24.5,20;半径 7.5)
+                g.Poly(Ctx.Accent, 1.5f, Ctx.Accent,
+                    new PointF(24.5f, 12.5f), new PointF(25.9f, 18.6f), new PointF(32f, 20f),
+                    new PointF(25.9f, 21.4f), new PointF(24.5f, 27.5f), new PointF(23.1f, 21.4f),
+                    new PointF(17f, 20f), new PointF(23.1f, 18.6f));
+            },
 
             // ---------- 7. 产品支持 ----------
             ["feedback"] = g =>

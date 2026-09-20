@@ -27,7 +27,7 @@ D:\DSH
 │  │  └─ Resources/weather-db.csv  全国省市气象参数库(294 台站,由 tools/weatherdb 生成、内嵌进 DLL)
 │  ├─ HVACIDA.UI       WPF 窗口+MVVM(不引用 Revit API);结果视图统一走可复用 ResultTableView(分组表格)
 │  └─ HVACIDA.Revit    ExternalApplication/Ribbon/Command + 内嵌图标(引用前两者+Revit 2020 API)
-│     └─ Resources/Icons/  22 个按钮图标 ×(16/32)px,由 tools/HVACIDA.IconGen 生成、内嵌进 DLL
+│     └─ Resources/Icons/  23 个按钮图标 ×(16/32)px,由 tools/HVACIDA.IconGen 生成、内嵌进 DLL
 ├─ tools
 │  ├─ HVACIDA.Smoke    数值+结构自检(北京算例 30 项、目录/仓库/知识库/小系统/空间聚合/气象联动/省市气象库/排烟计算)
 │  │                   + 窗口 / Ribbon / 文档同步 / 气象库同步四项脚本
@@ -58,7 +58,7 @@ dotnet build .\HVACIDA.sln
 ## 4. 部署到 Revit 2020
 
 1. 运行 `deploy\install.ps1`(需要管理员权限写 ProgramData)。
-2. 重启 Revit 2020 → Ribbon 出现 **HVACIDA** 页:**7 个面板 / 22 个 PushButton**(已按评审定稿实现)——
+2. 重启 Revit 2020 → Ribbon 出现 **HVACIDA** 页:**7 个面板 / 23 个 PushButton**(已按评审定稿实现)——
    项目信息(工程信息·气象参数)/ 大系统(公共区参数·负荷计算·排烟计算·计算结果)/ 小系统(**7 键**:六类系统 + 计算结果)/
    水力计算(风系统·水系统·计算结果)/ 出图(明细表·图框)/ AI问答(操作指南·规范知识库)/ 产品支持(问题反馈·帮助)。
    面板名与按钮文字来自 `HVACIDA.Core.Services.ModuleCatalog`(单一数据源),详见 `docs/UI设计规范.md` §4.0。
@@ -86,7 +86,8 @@ dotnet build .\HVACIDA.sln
 | 焓湿图 | PsychrometricHelper(饱和分压/含湿量/焓/露点/热湿比/除热风量) | ✅ 标准公式 |
 | 2.2.4 结果管理 | 文本计算书(TextReportGenerator)+ **Excel 计算书**(`XlsxWriter` 自写最小 XLSX,零依赖) | ✅ 文本 + Excel:**大系统负荷 / 排烟 / 小系统 / 水力**各模块均可导出(`%AppData%\HVACIDA\Reports`) |
 | 存储 | IDataRepository → XmlProjectRepository(project.xml / large-system.xml / large-smoke.xml / **small-systems.xml** / **hydraulic.xml** 多系统容器) | 🟡 待换 SQLite(旧 small-system.xml 与水力单系统文件首次读取自动迁移) |
-| 2.7 规范知识库 | `KnowledgeBase`(本项目口径 + **规范条文检索** + **Revit 操作指南**,三类同窗可检索/筛选)+ **标准条文电子版导入(主路径)** + **ima 在线知识库(辅助,可选)** + 知识库窗口 | ✅ 条目化、每条带出处;规范条文覆盖 GB 50736 / GB 50015 / GB 51251 / GB 50016 / GB 50013 / GB 50014 / GB 50974 / GB 50157 / GB 51298 / GB 50243 / GB 50242 / GB/T 50114 等;**只给检索线索与要点,不编条文号与数值**(以标准原文为准);Revit 操作指南 15 节覆盖建模/空间/MEP/标注/出图/协同/排错;✅ 用户手上的条文电子版(txt/md/csv/docx)放进 `%AppData%\HVACIDA\规范条文` 即成为**可检索的条文原文** —— **打开知识库窗即自动载入**(不必每次手动点,可重复导入不累加)、**条文正文中段的词也能搜到**(关键词按全文均匀取样)、命中时答复里**单列整条原文**、按条文号提问原文进首位;✅ **ima 在线知识库**(辅助)按腾讯 ima 开放接口检索(需 Client ID + API Key + 知识库 ID,见 §6e),只给标题与片段;✅ **AI 问答(DeepSeek,检索增强,见 §6f)**:先本地检索**依据**,再把「问题 + 依据文本」发给模型,回答以**草稿** + **依据清单**呈现,系统提示写死不编条文号与数值、资料不足要明说 |
+| 2.7 规范知识库 | `KnowledgeBase`(本项目口径 + **规范条文检索** + **Revit 操作指南**,三类同窗可检索/筛选)+ **标准条文电子版导入(主路径)** + **ima 在线知识库(辅助,可选)** + 知识库窗口 | ✅ 条目化、每条带出处;规范条文覆盖 GB 50736 / GB 50015 / GB 51251 / GB 50016 / GB 50013 / GB 50014 / GB 50974 / GB 50157 / GB 51298 / GB 50243 / GB 50242 / GB/T 50114 等;**只给检索线索与要点,不编条文号与数值**(以标准原文为准);Revit 操作指南 15 节覆盖建模/空间/MEP/标注/出图/协同/排错;✅ 用户手上的条文电子版(txt/md/csv/docx)放进 `%AppData%\HVACIDA\规范条文` 即成为**可检索的条文原文** —— **打开知识库窗即自动载入**(不必每次手动点,可重复导入不累加)、**条文正文中段的词也能搜到**(关键词按全文均匀取样)、命中时答复里**单列整条原文**、按条文号提问原文进首位;✅ **ima 在线知识库**(辅助)按腾讯 ima 开放接口检索(需 Client ID + API Key + 知识库 ID,见 §6e),只给标题与片段;✅ **AI 问答(DeepSeek,检索增强,见 §6f)**:先本地检索**依据**,再把「问题 + 依据文本」发给模型,回答以**草稿** + **依据清单**呈现,系统提示写死不编条文号与数值、资料不足要明说;✅ **AI 助手停靠面板**(§6g):在 Revit 右侧聊天,需要工程数据时由模型调用**进程内只读命令**去取(不起 MCP、不配端口) |
+| 2.7b AI 助手(Revit 停靠面板) | `AiChatPanel` + `AiAssistantViewModel` + `AiChatClient` + `AiCommandBus` + `RevitAiToolHost` | ✅ 见 §6g:「操作 Revit」**默认关**(关掉时模型看不到命令、命令不执行、工程数据不出网);API key 走 **DPAPI** 按工作区加密;只读命令 7 条;命令活动日志可审计;⬜ 修改类命令(需逐条确认设计)、会话记忆、MCP |
 | 2.3/2.4 水力计算 | 风系统 / 水系统录入窗 + **全站汇总窗**(`HydraulicCalculator` / `RevitHydraulicReader` / `HydraulicSummaryService`) | ✅ 已实装:模型里选系统 → 读管网 → 连接件拓扑求**最不利环路** → 需求全压(Pa)/ 扬程(m)+ 设备校核;**并联环路平衡**(Kv / 阀权度 / 需增加 ζ)、**系统阻力特性曲线**、**全站多系统汇总**(按「介质 + 系统编号」upsert)与 **Excel 导出**;系数全部可见可改(§4.10) |
 | 2.5 材料表统计(出图→明细表) | 材料表窗(`MaterialTakeoffService` / `RevitMaterialTakeoffReader`) | ✅ 读模型 11 类构件(风管/水管/管件/附件/末端/设备/保温)→ 归并键含**单位**(长度与件数不相加)→ 类别小计 + 逐类型明细 + Excel 3 页(§4.11) |
 | 2.6 图纸与批量出图(出图→图框) | 图框窗(`SheetCatalogService` / `RevitSheetReader` / `RevitSheetExporter` / `RevitAutoTagger`) | ✅ 图纸清单(编号/名称/图框/图幅 mm/视图数)+ **空图框计数** + **批量导出 DWG/DXF**(Revit 导出接口)+ **PDF**(系统打印机,**依赖本机 PDF 驱动,没有就逐张报失败**)+ 清单 Excel 4 页(§4.12);✅ **空间自动标注**(名称+编号,已有标注跳过)、✅ **图例表**(复用材料表);⬜ 风管/水管尺寸与设备编号标注、图例自动排版 |
@@ -103,9 +104,9 @@ dotnet build .\HVACIDA.sln
    剩余:**墙长**(小系统"与土壤接触外墙长度")、**与土壤接触屋顶面积**、参数回写、批量空间分区。
 5. ~~计算书升级 Excel~~ **已实现并推广到全部模块**(大系统负荷/排烟、小系统单系统与全站汇总、水力单系统与全站汇总:
    Core 内自写最小 XLSX 写入器,**不引 EPPlus/OpenXML**);剩余:PDF 导出、出图/标注/图例,以及 Excel 里的图表(把阻力特性曲线画出来)。
-6. ~~按钮图标~~ 已实装(22 个图标 ×16/32px,`tools/HVACIDA.IconGen` 生成并内嵌 DLL,见 `docs/UI设计规范.md` §4.0.1);
+6. ~~按钮图标~~ 已实装(23 个图标 ×16/32px,`tools/HVACIDA.IconGen` 生成并内嵌 DLL,见 `docs/UI设计规范.md` §4.0.1);
    剩余:中英文界面、操作日志与撤销。
-7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/22 按钮、仓库往返、知识库、**条文导入(含打开即载入/幂等/中段可搜)、ima 在线知识库接入、AI 问答(DeepSeek 检索增强)**、小系统、**空间聚合、气象联动**)、**水力计算(风/水,手算复算)**——
+7. 数值回归:Smoke 工程已含北京算例 30 项断言 + 结构自检(7 面板/23 按钮、仓库往返、知识库、**条文导入(含打开即载入/幂等/中段可搜)、ima 在线知识库接入、AI 问答(DeepSeek 检索增强)**、小系统、**空间聚合、气象联动**)、**水力计算(风/水,手算复算)**——
    `tools\HVACIDA.Smoke\bin\Debug\net48\HVACIDA.Smoke.exe`。
 8. AI 问答待补(需求 2.7 的"接在线大模型"已完成最小可用版):
    ① **流式输出**(现为非流式:一次返回,长回答要等;流式需按 SSE 逐块解析);
@@ -121,7 +122,7 @@ dotnet build .\HVACIDA.sln
 
 ## 6b. 四项自检(不需要打开 Revit)
 ```powershell
-# 1) 数值 + 结构断言(30 项北京算例 + 7 面板/22 按钮 + 仓库往返 + 知识库 + 小系统 + 空间聚合 + 气象联动
+# 1) 数值 + 结构断言(30 项北京算例 + 7 面板/23 按钮 + 仓库往返 + 知识库 + 小系统 + 空间聚合 + 气象联动
 #    + 水力计算 / 多系统汇总 / Excel 导出(解压 xlsx 校验工作表与单元格)
 #    + 条文电子版导入(含打开即载入·中段可搜)/ ima 在线知识库接入(JSON 读取器·凭证口径·应答解读·断网分支)
 #    + AI 问答(DeepSeek 检索增强:请求体·应答·官方错误码·RAG 提示词·隐私口径·断网分支,离线可跑))
@@ -135,7 +136,7 @@ dotnet build .\HVACIDA.sln
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\window-smoke.ps1 `
   -UiDir .\src\HVACIDA.UI\bin\Release\net48
 
-# 3) Ribbon 结构自检:22 个命令注册 + [Transaction] 标注 + 22×2 内嵌图标(齐全/尺寸/可解码/覆盖率)
+# 3) Ribbon 结构自检:23 个命令注册 + [Transaction] 标注 + 23×2 内嵌图标(齐全/尺寸/可解码/覆盖率)
 powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\tools\HVACIDA.Smoke\ribbon-smoke.ps1 `
   -BinDir .\src\HVACIDA.Revit\bin\Release\net48
 
@@ -254,9 +255,9 @@ python tools\docx2md\docx_to_markdown.py "通风空调智能设计助手.docx" `
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | ① Core 引擎 | `AiChatClient`:OpenAI 兼容 `/chat/completions` + **SSE 流式** + **function calling** 最多 **12 轮**;`AiCommandBus`(进程内、串行锁 3 分钟、可审计日志)+ **「操作 Revit」总开关**;`AiToolCatalog`(**工具 schema 清洗**,避免 PowerShell 风格 schema 触发 HTTP 400);`ApiKeyVault`(**Windows DPAPI 加密**保存 API key,按工作区隔离);`AiWorkspaceScope`(Revit 版本 + 用户 + 项目路径哈希);`AiProviderPresets`(DeepSeek / 通义 / 智谱 / Kimi / OpenAI + 自定义) | ✅ 本阶段完成(Smoke 场景25 约 70 项,离线可跑) |
-| ② Revit 侧 | 停靠面板(`RegisterDockablePane` + 静态字段防 GC)+ 「AI 助手」按钮 + `CommandBus.Initialize` 放在 **ApplicationInitialized**(不在 OnStartup)+ `Idling` 兜底 + `ExternalEvent` 命令模式(Command + EventHandler,`ManualResetEvent` 必须在 `SetParameters` 时 `Reset()`)+ 命令集 | ⬜ 下一阶段 |
-| ③ WPF 聊天面板 | 流式打字机渲染(50 ms 定时刷新)、工具调用活动日志、模型预设选择、**「操作 Revit」开关**、按工作区隔离的聊天记录 | ⬜ 下一阶段 |
-| ④ 命令集扩充 | 只读命令优先(`analyze_model_statistics` / `list_spaces` / `get_material_takeoff` / `list_sheets` / `get_hydraulic_summary` / `search_knowledge` 已在 Core 注册清单里);**修改类命令必须逐条弹 TaskDialog 确认**后才执行 | ⬜ 下一阶段 |
+| ② Revit 侧 | 停靠面板「AI 助手」(`RegisterDockablePane` + **静态字段防 GC**)+ `CommandBus.Initialize` 放在 **ApplicationInitialized**(不在 OnStartup)+ `Idling` 兜底 + `AiExternalEventBridge`(ExternalEvent 命令模式:后台线程派活 → Revit 主线程执行 → `ManualResetEvent` 通知完成;每次派活先 `Reset()`)+ **只读命令集 7 条**(工程信息 / 构件统计 / 空间清单 / 材料表 / 图纸清单 / 水力汇总 / 知识库检索) | ✅ 本阶段完成(`RevitAiToolHost`;汇总口径**复用插件自己的服务**,AI 说的数与窗口里看到的是同一份) |
+| ③ WPF 聊天面板 | `AiChatPanel`(停靠面板内容控件)+ `AiAssistantViewModel`:流式打字机渲染(逐段追加)、**命令活动日志**(调了哪条、成功/失败、耗时)、**服务预设选择**(DeepSeek / 通义 / 智谱 / Kimi / OpenAI / 自定义)、**「操作 Revit」开关**、按工作区隔离的设置与密钥、失败红字照实显示 | ✅ 本阶段完成(面板不是模态窗:聊天时仍可操作模型) |
+| ④ 命令集扩充 | 只读命令已全部就位;**修改类命令(create / modify / delete)未做** —— 按本仓库纪律必须先设计"逐条 TaskDialog 确认 + 影响范围预览"再实现 | ⬜ 待做 |
 
 **安全口径(照参考文档 2.6,并按本仓库纪律加严)**:
 ① **「操作 Revit」默认关**:关掉时**既不执行命令,也不把工具清单发给模型**(用户可以放心聊天,不怕 AI 乱改图);

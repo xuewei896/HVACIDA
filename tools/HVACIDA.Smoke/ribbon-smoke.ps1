@@ -98,7 +98,8 @@ $map = $field.GetValue($null)
 $mapKeys = @($map.Keys | Sort-Object)
 $catalogKeys = @([HVACIDA.Core.Services.ModuleCatalog]::Keys | Sort-Object)
 
-if ($mapKeys.Count -eq 22) { Pass "命令映射条目 = 22" } else { Fail "命令映射条目 = $($mapKeys.Count)(应为 22)" }
+if ($mapKeys.Count -eq $catalogKeys.Count) { Pass "命令映射条目 = $($mapKeys.Count)(与目录一致)" }
+else { Fail "命令映射条目 = $($mapKeys.Count),目录 = $($catalogKeys.Count)(应一致)" }
 if (($mapKeys -join ',') -eq ($catalogKeys -join ',')) { Pass '映射键与 ModuleCatalog 键完全一致' }
 else {
     Fail '映射键与 ModuleCatalog 不一致'
@@ -120,8 +121,8 @@ foreach ($k in ($map.Keys | Sort-Object)) {
     $rows += [pscustomobject]@{ Key = $k; Command = $t.Name; ExternalCommand = $extCmd.IsAssignableFrom($t); Transaction = $hasTx }
 }
 
-if ($notExternal.Count -eq 0) { Pass '22 个命令均实现 IExternalCommand' } else { Fail ('未实现 IExternalCommand: ' + ($notExternal -join '; ')) }
-if ($notTransaction.Count -eq 0) { Pass '22 个命令均标注 [Transaction Manual]' } else { Fail ('缺少 [Transaction]: ' + ($notTransaction -join '; ')) }
+if ($notExternal.Count -eq 0) { Pass "$($mapKeys.Count) 个命令均实现 IExternalCommand" } else { Fail ('未实现 IExternalCommand: ' + ($notExternal -join '; ')) }
+if ($notTransaction.Count -eq 0) { Pass "$($mapKeys.Count) 个命令均标注 [Transaction Manual]" } else { Fail ('缺少 [Transaction]: ' + ($notTransaction -join '; ')) }
 
 # ---- 面板/按钮数复核(按目录,与 App 建面板逻辑同源) ----
 foreach ($p in [HVACIDA.Core.Services.ModuleCatalog]::PanelOrder) {
@@ -163,8 +164,8 @@ foreach ($k in ($map.Keys | Sort-Object)) {
     }
 }
 
-if ($missing16.Count -eq 0) { Pass '22 个模块均有 16×16 内嵌图标' } else { Fail ('缺 16×16 图标: ' + ($missing16 -join ',')) }
-if ($missing32.Count -eq 0) { Pass '22 个模块均有 32×32 内嵌图标' } else { Fail ('缺 32×32 图标: ' + ($missing32 -join ',')) }
+if ($missing16.Count -eq 0) { Pass "$($resNames.Count / 2) 个模块均有 16×16 内嵌图标" } else { Fail ('缺 16×16 图标: ' + ($missing16 -join ',')) }
+if ($missing32.Count -eq 0) { Pass "$($resNames.Count / 2) 个模块均有 32×32 内嵌图标" } else { Fail ('缺 32×32 图标: ' + ($missing32 -join ',')) }
 if ($badSize.Count -eq 0) { Pass '图标尺寸均为 16×16 / 32×32' } else { Fail ('尺寸不符: ' + ($badSize -join '; ')) }
 if ($undecodable.Count -eq 0) { Pass '图标可解码为已冻结的 ImageSource(可跨线程用于 Ribbon)' } else { Fail ('解码失败: ' + ($undecodable -join '; ')) }
 if ($badCoverage.Count -eq 0) {

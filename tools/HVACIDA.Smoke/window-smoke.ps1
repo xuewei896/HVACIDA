@@ -167,6 +167,7 @@ try {
         @('HydraulicSystemWindow.xaml', 'HydraulicSystemViewModel'),
         @('HydraulicResultWindow.xaml', 'HydraulicResultViewModel'),
         @('KnowledgeWindow.xaml', 'KnowledgeViewModel'),
+        @('AiChatPanel.xaml', 'AiAssistantViewModel'),
         @('InfoWindow.xaml', 'InfoViewModel')
     )
     foreach ($pair in $bindingMap) {
@@ -195,6 +196,14 @@ Test-Window '水力计算结果 HydraulicResultWindow' { New-Object "$uiNs.Hydra
 Test-Window '出图 材料表统计 MaterialTakeoffWindow' { New-Object "$uiNs.MaterialTakeoffWindow" }
 Test-Window '出图 图框 SheetCatalogWindow' { New-Object "$uiNs.SheetCatalogWindow" }
 Test-Window '规范知识库 KnowledgeWindow'       { New-Object "$uiNs.KnowledgeWindow" }
+# AI 助手是**停靠面板的内容控件**(不是 Window):这里放进一个宿主 Window 里构造 + 布局 + 关闭
+Test-Window 'AI助手面板 AiChatPanel(停靠面板内容)' {
+    $panel = New-Object "$uiNs.AiChatPanel"
+    $host2 = New-Object System.Windows.Window
+    $host2.Width = 420; $host2.Height = 640
+    $host2.Content = $panel
+    $host2
+}
 Test-Window '操作指南 InfoWindow(Guide)'      {
     $vm = [HVACIDA.UI.ViewModels.InfoViewModel]::Guide()
     New-Object "$uiNs.InfoWindow" -ArgumentList $vm
@@ -1511,15 +1520,16 @@ try {
     $fail++
 }
 
-# 待实现模块遍历:22 个模块都应能生成说明窗
+# 模块遍历:每个模块都应能生成说明窗(数量按目录取,避免增删模块时门禁变脆)
 try {
     $n = 0
     foreach ($m in [HVACIDA.Core.Services.ModuleCatalog]::All) {
         $vm = [HVACIDA.UI.ViewModels.InfoViewModel]::ForModule($m)
         if ($vm.Sections.Count -gt 0) { $n++ }
     }
-    if ($n -eq 22) { Write-Host "PASS  22 个模块均可生成说明内容" }
-    else { Write-Host "FAIL  模块说明内容生成: $n/22"; $fail++ }
+    $expectModules = @([HVACIDA.Core.Services.ModuleCatalog]::All).Count
+    if ($n -eq $expectModules) { Write-Host "PASS  $expectModules 个模块均可生成说明内容" }
+    else { Write-Host "FAIL  模块说明内容生成: $n/$expectModules"; $fail++ }
 } catch {
     Write-Host ("FAIL  模块说明内容生成  {0}" -f $_.Exception.Message)
     $fail++
