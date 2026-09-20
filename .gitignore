@@ -17,3 +17,6 @@ deploy/HVACIDA.addin.installed
 
 # Office 临时锁文件(Word/Excel 打开文档时生成,不应入库)
 ~$*
+
+# 第三方下载的参考资料(仅本地参考,不入库;版权归原作者)
+/如何将AI大模型(DeepSeek)接入Revit中.docx

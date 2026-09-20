@@ -249,6 +249,9 @@ python tools\docx2md\docx_to_markdown.py "通风空调智能设计助手.docx" `
 
 ## 6g. AI 助手(进程内 function calling,照《如何将AI大模型(DeepSeek)接入Revit中》的架构)
 
+> 参考资料是网络下载的第三方文章(《如何将AI大模型(DeepSeek)接入Revit中》),**未入库、版权归原作者**;
+> 本项目只借鉴其架构思路,实现、口径与安全约束均按本仓库纪律重写(见下方安全口径)。
+
 参考文档的核心思路:**不起 MCP Server、不配端口**,把大模型的 function calling 与 Revit 的 ExternalEvent 缝在一起,
 用**进程内 CommandBus** 替代外部 MCP。本条按该架构分阶段落地,**当前进度见下表**。
 
