@@ -23,6 +23,8 @@
          故不引任何 NuGet(与"不引 netstandard 桥接"的基线一致)。 -->
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
+    <!-- AI 密钥保险箱:Windows DPAPI(ProtectedData)在 System.Security 里 -->
+    <Reference Include="System.Security" />
   </ItemGroup>
 
 </Project>

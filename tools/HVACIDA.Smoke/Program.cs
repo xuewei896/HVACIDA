@@ -25,6 +25,8 @@ namespace HVACIDA.Smoke
     /// 场景21:标准条文电子版导入(txt/md/csv/docx → 条文原文可检索);
     /// 场景22:ima 在线知识库接入(OpenAPI 应答解读 / 凭证口径 / 设置往返 / 断网分支)。
     /// 场景23:条文原文主路径(打开即自动载入 / 幂等 / 中段可搜 / 说明文件真换行)。
+    /// 场景24:AI 问答(DeepSeek 检索增强:请求体 / 应答解读 / 官方错误码 / RAG 提示词 / 隐私口径)。
+    /// 场景25:AI 助手引擎(SSE 流式 / function calling 分片累加 / 12 轮上限 / CommandBus 与「操作 Revit」开关 / schema 清洗 / DPAPI 密钥 / 工作区隔离)。
     /// 退出码 0 = 全部通过;1 = 存在偏差。
     /// </summary>
     internal static class Program
@@ -58,10 +60,12 @@ namespace HVACIDA.Smoke
             RunClauseImportChecks();
             RunImaChecks();
             RunClausePrimaryPathChecks();
+            RunAiChatChecks();
+            RunAiAssistantChecks();
 
             Console.WriteLine("==================================================");
             Console.WriteLine(_failures == 0
-                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算(含多系统汇总与 Excel 导出)/计算书 Excel 导出推广/条文导入(含打开即载入与中段检索)/ima 在线知识库接入自检通过。"
+                ? "全部断言通过:数值与《大系统负荷计算公式-示例.xls》逐格一致;Ribbon 目录/仓库/知识库/小系统六类/空间聚合/气象联动/省市气象库/排烟计算/水力计算(含多系统汇总与 Excel 导出)/计算书 Excel 导出推广/条文导入(含打开即载入与中段检索)/ima 在线知识库接入/AI 问答(DeepSeek 检索增强)/AI 助手引擎(SSE·function calling·CommandBus 开关·DPAPI 密钥)自检通过。"
                 : "存在 " + _failures + " 处偏差,请核对上方 FAIL 行。");
             Console.WriteLine("==================================================");
             return _failures == 0 ? 0 : 1;
@@ -2530,6 +2534,509 @@ namespace HVACIDA.Smoke
                 try { Directory.Delete(dir, true); } catch { }
             }
             Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景24:AI 问答(DeepSeek,检索增强)
+        //   官方形态:base_url https://api.deepseek.com + POST /chat/completions +
+        //   Authorization: Bearer <key> + { model, messages, stream:false };错误看 HTTP 状态码。
+        //   本场景**不依赖真实网络**:请求体组装、应答/错误解读、RAG 提示词、设置往返都是纯函数;
+        //   只有最后一段故意连本机空端口,验证"网络不通时照实报错、不抛异常、不编回答"。
+        // =====================================================================
+        private static void RunAiChatChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景24:AI 问答(DeepSeek 检索增强:请求体 / 应答 / 错误码 / RAG 提示 / 隐私口径)");
+            Console.WriteLine("==================================================");
+
+            // ---------- 1) 请求体组装(照官方样例:model / messages / stream=false) ----------
+            var settings = new AiChatSettings { Enabled = true, ApiKey = "sk-test", MaxTokens = 512, Temperature = 0.2 };
+            var messages = new List<AiChatMessage>
+            {
+                AiChatMessage.System("规则:只能依据【可用依据】回答"),
+                AiChatMessage.User("问题:排烟量怎么算?\n依据:[1] 面积×60 \"引号\" 与 \\ 反斜杠")
+            };
+            string body = DeepSeekClient.BuildRequestBody(settings, messages);
+            var parsedBody = JsonValue.Parse(body);
+            CheckText("请求体:默认模型名", parsedBody.Get("model").AsString(""), DeepSeekClient.DefaultModel);
+            CheckInt("请求体:messages 条数", parsedBody.Get("messages").Count, 2);
+            CheckText("请求体:第一条是 system", parsedBody.Get("messages").Get(0).Get("role").AsString(""), "system");
+            CheckText("请求体:中文与引号转义正确(可被 JSON 读回)",
+                parsedBody.Get("messages").Get(1).Get("content").AsString("").Contains("面积×60 \"引号\" 与 \\ 反斜杠")
+                    ? "对" : parsedBody.Get("messages").Get(1).Get("content").AsString(""), "对");
+            CheckText("请求体:stream=false(非流式)",
+                parsedBody.Get("stream").Kind == JsonKind.Bool && !parsedBody.Get("stream").AsBool(true) ? "false" : "非 false", "false");
+            CheckInt("请求体:max_tokens", parsedBody.Get("max_tokens").AsInt(0), 512);
+            CheckText("请求体:temperature 透传", parsedBody.Get("temperature").AsDouble(-1).ToString("0.###"), "0.2");
+            CheckText("请求体:只带这些字段(不含任何 Revit 模型数据)",
+                body.Contains("Revit") || body.Contains("模型数据") ? "混入了" : "干净", "干净");
+
+            var custom = new AiChatSettings { ApiKey = "k", Model = "deepseek-v4-pro", Endpoint = "https://proxy.local/v1/" };
+            CheckText("地址:默认官方 /chat/completions",
+                DeepSeekClient.ResolveUrl(new AiChatSettings()), "https://api.deepseek.com/chat/completions");
+            CheckText("地址:自定义地址补路径且不重复斜杠",
+                DeepSeekClient.ResolveUrl(custom), "https://proxy.local/v1/chat/completions");
+            CheckText("地址:已含路径时不重复追加",
+                DeepSeekClient.ResolveUrl(new AiChatSettings { Endpoint = "https://x/y/chat/completions" }),
+                "https://x/y/chat/completions");
+            CheckText("模型:自定义生效", DeepSeekClient.ResolveModel(custom), "deepseek-v4-pro");
+
+            // ---------- 2) 成功应答解读 ----------
+            string okJson = "{\"id\":\"c1\",\"model\":\"deepseek-flash\",\"choices\":[{\"index\":0,\"message\":" +
+                            "{\"role\":\"assistant\",\"content\":\"按依据 [1],排烟量 = 公共区面积 × 60。\\n依据:\\n[1] 排烟口径\"}," +
+                            "\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":120,\"completion_tokens\":30," +
+                            "\"total_tokens\":150}}";
+            var ok = DeepSeekClient.Interpret(okJson, DeepSeekClient.DefaultModel, "排烟量怎么算?");
+            CheckText("应答:判成功", ok.Success ? "成功" : ok.ErrorMessage, "成功");
+            CheckText("应答:取到 content", ok.Content.Contains("公共区面积 × 60") ? "有" : ok.Content, "有");
+            CheckText("应答:中文换行保留", ok.Content.Contains("\n依据:") ? "有" : ok.Content, "有");
+            CheckInt("应答:prompt token", ok.PromptTokens, 120);
+            CheckInt("应答:completion token", ok.CompletionTokens, 30);
+            CheckInt("应答:total token", ok.TotalTokens, 150);
+            CheckText("应答:提示里写明必须核对依据", ok.Note.Contains("核对") ? "有" : ok.Note, "有");
+            CheckText("应答:usage 一句话", ok.UsageText.Contains("合计 150") ? "有" : ok.UsageText, "有");
+
+            var noChoice = DeepSeekClient.Interpret("{\"id\":\"x\",\"choices\":[]}", "m", "q");
+            CheckText("应答:没有 choices 判失败", noChoice.Success ? "成功" : "失败", "失败");
+            CheckText("应答:没有 choices 给出原因",
+                noChoice.ErrorKind == AiErrorKind.BadResponse && noChoice.Note.Contains("没有可用回答") ? "有" : noChoice.Note, "有");
+            var emptyContent = DeepSeekClient.Interpret(
+                "{\"choices\":[{\"message\":{\"content\":\"\"}}]}", "m", "q");
+            CheckText("应答:空 content 判失败", emptyContent.Success ? "成功" : "失败", "失败");
+            var badJson = DeepSeekClient.Interpret("<html>网关错误</html>", "m", "q");
+            CheckText("应答:非法 JSON 不抛异常",
+                badJson.ErrorKind == AiErrorKind.BadResponse && badJson.ErrorMessage.Contains("合法 JSON") ? "对" : badJson.ErrorMessage, "对");
+
+            // ---------- 3) 错误码(照官方文档:400/401/402/422/429/5xx) ----------
+            CheckText("错误码:400", DeepSeekClient.DescribeHttpStatus(400).Contains("格式错误") ? "有" : "无", "有");
+            CheckText("错误码:401", DeepSeekClient.DescribeHttpStatus(401).Contains("认证失败") ? "有" : "无", "有");
+            CheckText("错误码:402", DeepSeekClient.DescribeHttpStatus(402).Contains("余额不足") ? "有" : "无", "有");
+            CheckText("错误码:422", DeepSeekClient.DescribeHttpStatus(422).Contains("参数错误") ? "有" : "无", "有");
+            CheckText("错误码:429", DeepSeekClient.DescribeHttpStatus(429).Contains("速率") ? "有" : "无", "有");
+            CheckText("错误码:500", DeepSeekClient.DescribeHttpStatus(500).Contains("服务器故障") ? "有" : "无", "有");
+            CheckText("错误码:503", DeepSeekClient.DescribeHttpStatus(503).Contains("繁忙") ? "有" : "无", "有");
+            CheckText("错误码:未知码不自造含义", DeepSeekClient.DescribeHttpStatus(418), "接口返回 HTTP 418");
+            CheckText("失败分类:401 → 认证", DeepSeekClient.KindOf(401) == AiErrorKind.Unauthorized ? "对" : "错", "对");
+            CheckText("失败分类:402 → 余额", DeepSeekClient.KindOf(402) == AiErrorKind.InsufficientBalance ? "对" : "错", "对");
+            CheckText("失败分类:0 → 网络", DeepSeekClient.KindOf(0) == AiErrorKind.Network ? "对" : "错", "对");
+
+            var err401 = DeepSeekClient.InterpretError(
+                "{\"error\":{\"message\":\"Authentication Fails\",\"type\":\"authentication_error\",\"code\":\"invalid_api_key\"}}",
+                401, "m", "q");
+            CheckText("错误应答:HTTP 码写进原因", err401.ErrorMessage.Contains("认证失败") ? "有" : err401.ErrorMessage, "有");
+            CheckText("错误应答:message 原样透传", err401.ErrorMessage.Contains("Authentication Fails") ? "有" : err401.ErrorMessage, "有");
+            CheckText("错误应答:code 带出", err401.ErrorMessage.Contains("invalid_api_key") ? "有" : err401.ErrorMessage, "有");
+            CheckText("错误应答:提示写明没有模型回答", err401.Note.Contains("没有模型回答") ? "有" : err401.Note, "有");
+            var errHtml = DeepSeekClient.InterpretError("<html>502 Bad Gateway</html>", 503, "m", "q");
+            CheckText("错误应答:非 JSON 时截原文给用户", errHtml.ErrorMessage.Contains("502 Bad Gateway") ? "有" : errHtml.ErrorMessage, "有");
+
+            // ---------- 4) 凭证 / 启用守卫(不发请求) ----------
+            var off = new AiChatSettings { Enabled = false, ApiKey = "sk-x" };
+            var offResult = DeepSeekClient.Ask(off, messages, "排烟量怎么算?");
+            CheckText("守卫:未勾选启用不发请求", offResult.ErrorKind == AiErrorKind.NotEnabled ? "拦住" : offResult.ErrorKind.ToString(), "拦住");
+            var noKey = new AiChatSettings { Enabled = true };
+            var noKeyResult = DeepSeekClient.Ask(noKey, messages, "排烟量怎么算?");
+            CheckText("守卫:没有 API key 不发请求", noKeyResult.ErrorKind == AiErrorKind.NoCredential ? "拦住" : noKeyResult.ErrorKind.ToString(), "拦住");
+            CheckText("守卫:缺 key 时说明缺什么", noKeyResult.Note.Contains("API key") ? "有" : noKeyResult.Note, "有");
+            CheckText("守卫:空问题不发请求",
+                AiAnswerService.Ask(new AiChatSettings { Enabled = true, ApiKey = "k" }, "  ").ErrorMessage, "问题为空");
+            CheckText("隐私口径:写明不发送 Revit 模型数据与工程输入",
+                DeepSeekClient.PrivacyNote.Contains("不发送") && DeepSeekClient.PrivacyNote.Contains("Revit 模型数据") ? "有" : "无", "有");
+            CheckText("隐私口径:凭证说明里也写明",
+                AiChatSettings.CredentialHelp.Contains("不发送 Revit 模型数据") ? "有" : "无", "有");
+
+            // ---------- 5) RAG:提示词只依据本地检索结果,并写死纪律 ----------
+            string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Ai-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, "GB 51251-2017 建筑防烟排烟系统技术标准.txt"),
+                    "#标准:GB 51251-2017 建筑防烟排烟系统技术标准\n" +
+                    "4.4.6 排烟系统的设计应符合下列规定:机械排烟系统的排烟量应按不小于 60 m³/(h·m²)确定;" +
+                    "排烟风机应能在 280 ℃ 时连续工作 30 min。本条为测试占位条文。\n",
+                    new System.Text.UTF8Encoding(false));
+                KnowledgeBase.AutoLoadImportedClauses(dir);
+
+                var prompt = AiAnswerService.BuildPrompt("排烟量怎么确定?", 5, 6000);
+                CheckInt("RAG:两条消息(system + user)", prompt.Messages.Count, 2);
+                CheckText("RAG:第一条是 system", prompt.Messages[0].Role, "system");
+                CheckText("RAG:系统提示写死「只能依据给定资料」",
+                    prompt.Messages[0].Content.Contains("只能依据我提供的") ? "有" : "无", "有");
+                CheckText("RAG:系统提示写死「不得编造/严禁猜测」",
+                    prompt.Messages[0].Content.Contains("不要使用你自己的记忆补充规范条文号") &&
+                    prompt.Messages[0].Content.Contains("严禁猜测或编造") ? "有" : "无", "有");
+                CheckText("RAG:系统提示要求结尾列依据",
+                    prompt.Messages[0].Content.Contains("依据:") ? "有" : "无", "有");
+                CheckText("RAG:用户消息带【可用依据】段",
+                    prompt.Messages[1].Content.Contains("【可用依据】") ? "有" : "无", "有");
+                CheckText("RAG:依据带编号与出处(条文原文进提示词)",
+                    prompt.Citations.Count > 0 &&
+                    prompt.Messages[1].Content.Contains("[1]") &&
+                    prompt.Messages[1].Content.Contains("GB 51251-2017") &&
+                    prompt.Messages[1].Content.Contains("280 ℃") ? "有" : "无", "有");
+                CheckText("RAG:有依据时标注相关度达标", prompt.HasStrongCitation ? "达标" : "偏低", "达标");
+                CheckText("RAG:依据清单每条都有出处",
+                    prompt.Citations.Count > 0 && prompt.Citations[0].Source.Length > 0 ? "有" : "无", "有");
+                CheckText("RAG:提示词告诉用户送了什么",
+                    prompt.Note.Contains("已送入") ? "有" : prompt.Note, "有");
+
+                var limited = AiAnswerService.BuildPrompt("排烟量怎么确定?", 1, 6000);
+                CheckInt("RAG:依据条数上限生效", limited.Citations.Count <= 1 ? 1 : 0, 1);
+
+                // 字数总预算:送进模型的依据文本总量不得超上限(超了就截断/不塞)
+                int sent = 0;
+                foreach (var citation in limited.Citations) sent += citation.Text.Length;
+                CheckInt("RAG:依据文本总量不超字数预算", sent <= 6000 ? 1 : 0, 1);
+                var tight = AiAnswerService.BuildPrompt("排烟量怎么确定?", 5, 260);
+                int tightSent = 0;
+                foreach (var citation in tight.Citations) tightSent += citation.Text.Length;
+                CheckText("RAG:预算收紧后总量也被压住",
+                    tightSent <= 260 ? "压住了" : tightSent.ToString(), "压住了");
+
+                // 单条超长条文(>1200 字)必须截断并标注
+                string longDir = Path.Combine(Path.GetTempPath(), "HVACIDA-AiLong-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Directory.CreateDirectory(longDir);
+                    File.WriteAllText(Path.Combine(longDir, "GB 50019-2015 工业建筑供暖通风与空气调节设计规范.txt"),
+                        "#标准:GB 50019-2015 工业建筑供暖通风与空气调节设计规范\n" +
+                        "5.1.1 供暖系统的热负荷应按下列规定确定:" + new string('测', 2000) +
+                        "以上为超长测试条文,用于验证单条依据的截断与标注。\n",
+                        new System.Text.UTF8Encoding(false));
+                    KnowledgeBase.AutoLoadImportedClauses(longDir);
+                    // 用**条文号**提问,确保命中的就是这条超长导入条文(避免被内置条文线索的同分排序挤掉)
+                    var longPrompt = AiAnswerService.BuildPrompt("第 5.1.1 条是什么", 1, 6000);
+                    string longInfo = longPrompt.Citations.Count == 0
+                        ? "(没有依据)"
+                        : ("标题=" + longPrompt.Citations[0].Title.Substring(0, 12) + "…,字数=" +
+                           longPrompt.Citations[0].Text.Length + ",截断=" + longPrompt.Citations[0].Truncated);
+                    Console.WriteLine("     (超长依据实测:" + longInfo + ")");
+                    CheckText("RAG:单条超长依据被截断并标注",
+                        longPrompt.Citations.Count == 1 && longPrompt.Citations[0].Truncated &&
+                        longPrompt.Citations[0].Text.Length <= AiAnswerService.CitationMaxChars
+                            ? "截断并标注" : ("条数 " + longPrompt.Citations.Count), "截断并标注");
+                    CheckText("RAG:截断后提示词里也说明已截断",
+                        longPrompt.Messages[1].Content.Contains("已按字数上限截断") ? "有" : "无", "有");
+                }
+                finally
+                {
+                    try { Directory.Delete(longDir, true); } catch { }
+                }
+
+                // 完全没有关联的问题:不带任何依据,并明确要求模型别凭记忆答
+                var none = AiAnswerService.BuildPrompt("qqzzxx vvbbnn", 5, 6000);
+                CheckInt("RAG:毫无关联的问题不带依据", none.Citations.Count, 0);
+                CheckText("RAG:没有依据时明确告诉模型「资料不足别凭记忆答」",
+                    none.Messages[1].Content.Contains("没有检索到任何依据") &&
+                    none.Messages[1].Content.Contains("不要凭记忆作答") ? "有" : "无", "有");
+
+                // 弱相关(正文巧合撞词):会带上但标注"相关度不高",且不当作达标
+                var weak = AiAnswerService.BuildPrompt("混凝土强度等级怎么定", 5, 6000);
+                CheckText("RAG:弱相关不达标(不冒充有依据)", weak.HasStrongCitation ? "达标" : "偏低", "偏低");
+                CheckText("RAG:弱相关时提示模型别勉强作答",
+                    weak.Messages[1].Content.Contains("相关度不高") ? "有" : "无", "有");
+
+                var blocked = AiAnswerService.Ask(new AiChatSettings { Enabled = false }, "排烟量怎么确定?");
+                CheckText("RAG:未启用时不发请求但保留本地依据",
+                    !blocked.Success && blocked.CitationCount > 0 ? "保留" : ("失败且依据 " + blocked.CitationCount), "保留");
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+
+            // ---------- 6) 设置落盘往返 ----------
+            string cfgDir = Path.Combine(Path.GetTempPath(), "HVACIDA-AiCfg-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string path = Path.Combine(cfgDir, "ai.xml");
+                var saved = new AiChatSettings
+                {
+                    Enabled = true,
+                    ApiKey = "sk-abc",
+                    Model = "deepseek-flash",
+                    Endpoint = "https://api.deepseek.com",
+                    MaxTokens = 2048,
+                    Temperature = 0.3,
+                    ContextEntryLimit = 8
+                };
+                CheckText("设置:写入路径", AiSettingsStore.Save(saved, path), path);
+                string raw = File.ReadAllText(path, Encoding.UTF8);
+                CheckText("设置:文件写明 API key 明文提醒",
+                    raw.Contains(AiSettingsStore.PlainTextWarning) ? "有" : "无", "有");
+                CheckText("设置:文件写明不发送模型数据",
+                    raw.Contains("不发送 Revit 模型数据") ? "有" : "无", "有");
+
+                string note;
+                var loaded = AiSettingsStore.Load(path, out note);
+                CheckText("设置:往返 Enabled", loaded.Enabled ? "true" : "false", "true");
+                CheckText("设置:往返 ApiKey", loaded.ApiKey, "sk-abc");
+                CheckText("设置:往返 Model", loaded.Model, "deepseek-flash");
+                CheckText("设置:往返 Endpoint", loaded.Endpoint, "https://api.deepseek.com");
+                CheckInt("设置:往返 MaxTokens", loaded.MaxTokens, 2048);
+                CheckInt("设置:往返 依据条数上限", loaded.ContextEntryLimit, 8);
+                CheckText("设置:往返 Temperature", loaded.Temperature.ToString("0.###"), "0.3");
+                CheckText("设置:状态一句话", AiSettingsStore.Summary(loaded).Contains("已启用") ? "有" : "无", "有");
+
+                var missing = AiSettingsStore.Load(Path.Combine(cfgDir, "没有这个文件.xml"), out note);
+                CheckText("设置:文件不存在给默认(未启用)且不抛", missing.Enabled ? "启用了" : "未启用", "未启用");
+                CheckText("设置:文件不存在时说明原因", note.Contains("还没有 AI 设置文件") ? "有" : note, "有");
+            }
+            finally
+            {
+                try { Directory.Delete(cfgDir, true); } catch { }
+            }
+
+            // ---------- 7) 网络不通:照实报错、不抛异常、不编回答 ----------
+            var aiOffline = new AiChatSettings
+            {
+                Enabled = true,
+                ApiKey = "sk-test",
+                Endpoint = "http://127.0.0.1:9"      // 本机空端口:必然失败
+            };
+            var aiOfflineResult = AiAnswerService.Ask(aiOffline, "排烟量怎么确定?");
+            CheckText("AI 断网:判失败(不抛异常)", aiOfflineResult.Success ? "成功" : "失败", "失败");
+            CheckText("AI 断网:回答为空(不编内容)", string.IsNullOrEmpty(aiOfflineResult.Content) ? "空" : aiOfflineResult.Content, "空");
+            CheckText("AI 断网:提示写明没有模型回答且本地依据不受影响",
+                aiOfflineResult.Note.Contains("没有模型回答") ? "有" : aiOfflineResult.Note, "有");
+            Console.WriteLine("     (AI 断网分支实际原因:" + aiOfflineResult.ErrorMessage + ")");
+
+            Console.WriteLine();
+        }
+
+        // =====================================================================
+        // 场景25:AI 助手引擎(照《如何将AI大模型(DeepSeek)接入Revit中》的架构)
+        //   SSE 流式 / function calling 分片累加 / 12 轮上限 / 进程内 CommandBus 与「操作 Revit」总开关 /
+        //   工具 schema 清洗 / API Key DPAPI 加密 / 工作区隔离。全部离线可跑。
+        // =====================================================================
+        private static void RunAiAssistantChecks()
+        {
+            Console.WriteLine("==================================================");
+            Console.WriteLine("场景25:AI 助手引擎(SSE 流式 / function calling / CommandBus 开关 / DPAPI 密钥 / 工作区隔离)");
+            Console.WriteLine("==================================================");
+
+            // ---------- 1) SSE 解析 ----------
+            CheckText("SSE:识别 data 行", AiChatClient.IsSseDataLine("data: {\"a\":1}") ? "是" : "否", "是");
+            CheckText("SSE:注释行不算 data 行", AiChatClient.IsSseDataLine(": keep-alive") ? "是" : "否", "否");
+            CheckText("SSE:取负载", AiChatClient.ExtractSsePayload("data:{\"a\":1}"), "{\"a\":1}");
+            CheckText("SSE:[DONE] 取空串", AiChatClient.ExtractSsePayload("data: [DONE]"), "");
+            CheckText("SSE:非 data 行返回 null", AiChatClient.ExtractSsePayload("event: message") ?? "(null)", "(null)");
+
+            var content = new StringBuilder();
+            var calls = new Dictionary<int, AiToolCall>();
+            var pieces = new List<string>();
+            Action<string> onPartial = delegate (string piece) { pieces.Add(piece); };
+            bool done; int tokens;
+            AiChatClient.ApplyStreamDelta(
+                "{\"choices\":[{\"delta\":{\"content\":\"排烟量\"},\"finish_reason\":null}]}", content, calls, out done, out tokens, onPartial);
+            AiChatClient.ApplyStreamDelta(
+                "{\"choices\":[{\"delta\":{\"content\":\" = 面积×60\"},\"finish_reason\":null}]}", content, calls, out done, out tokens, onPartial);
+            CheckText("SSE:正文分片累加", content.ToString(), "排烟量 = 面积×60");
+            CheckInt("SSE:打字机回调次数", pieces.Count, 2);
+            CheckText("SSE:单行坏数据不毁整轮(不抛)",
+                AiChatClient.ExtractSsePayload("data: {坏数据") != null ? "有返回" : "无", "有返回");
+
+            // ---------- 2) tool_calls 分片累加(参考文档踩过的坑) ----------
+            var fragCalls = new Dictionary<int, AiToolCall>();
+            var fragContent = new StringBuilder();
+            AiChatClient.ApplyStreamDelta(
+                "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\"," +
+                "\"function\":{\"name\":\"analyze_model_\",\"arguments\":\"{\\\"a\\\"\"}}]},\"finish_reason\":null}]}",
+                fragContent, fragCalls, out done, out tokens, null);
+            AiChatClient.ApplyStreamDelta(
+                "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"statistics\"," +
+                "\"arguments\":\":1}\"}}]},\"finish_reason\":null}]}",
+                fragContent, fragCalls, out done, out tokens, null);
+            CheckInt("工具调用:按 index 归并成 1 条", fragCalls.Count, 1);
+            CheckText("工具调用:函数名分片拼完整", fragCalls[0].Name, "analyze_model_statistics");
+            CheckText("工具调用:参数分片拼完整", fragCalls[0].ArgumentsJson, "{\"a\":1}");
+            CheckText("工具调用:id 保留", fragCalls[0].Id, "call_1");
+            AiChatClient.ApplyStreamDelta(
+                "{\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}", fragContent, fragCalls, out done, out tokens, null);
+            CheckText("工具调用:finish_reason 置完成标记", done ? "完成" : "未完成", "完成");
+
+            // ---------- 3) 请求体:tools 与工具消息(协议必须带 tool_calls 的助手消息) ----------
+            var assistantSettings = new AiChatSettings { Enabled = true, ApiKey = "sk-x" };
+            var history = new List<AiChatMessage>
+            {
+                AiChatMessage.System("规则"),
+                AiChatMessage.User("统计构件"),
+                AiChatMessage.Assistant("", AiChatClient.BuildToolCallsJson(new List<AiToolCall>
+                {
+                    new AiToolCall { Index = 0, Id = "call_1", Name = "analyze_model_statistics", ArgumentsJson = "{}" }
+                })),
+                AiChatMessage.Tool("call_1", "{\"walls\":12}")
+            };
+            string toolsJson = AiToolCatalog.BuildToolsJson(AiToolCatalog.Known);
+            string body = AiChatClient.BuildRequestBody(assistantSettings, history, toolsJson, true);
+            var parsed = JsonValue.Parse(body);
+            CheckText("请求体:stream=true", parsed.Get("stream").AsBool(false) ? "true" : "false", "true");
+            CheckInt("请求体:tools 条数(已知命令表)", parsed.Get("tools").Count, AiToolCatalog.Known.Count);
+            CheckText("请求体:tool_choice=auto", parsed.Get("tool_choice").AsString(""), "auto");
+            CheckText("请求体:助手消息带 tool_calls(未转义成字符串)",
+                parsed.Get("messages").Get(2).Get("tool_calls").IsArray &&
+                parsed.Get("messages").Get(2).Get("tool_calls").Get(0).Get("function").Get("name").AsString("")
+                    == "analyze_model_statistics" ? "对" : "错", "对");
+            CheckText("请求体:工具结果消息带 tool_call_id",
+                parsed.Get("messages").Get(3).Get("tool_call_id").AsString(""), "call_1");
+            string noTools = AiChatClient.BuildRequestBody(assistantSettings, history, "[]", false);
+            CheckText("请求体:没有工具时不带 tools 字段",
+                noTools.Contains("\"tools\"") ? "带了" : "没带", "没带");
+            CheckText("请求体:没有工具时不带 tool_choice", noTools.Contains("tool_choice") ? "带了" : "没带", "没带");
+
+            var nonStream = AiChatClient.ExtractMessageToolCalls(
+                "{\"choices\":[{\"message\":{\"content\":\"\",\"tool_calls\":[{\"id\":\"c9\",\"type\":\"function\"," +
+                "\"function\":{\"name\":\"list_spaces\",\"arguments\":\"{\\\"keyword\\\":\\\"站厅\\\"}\"}}]}}]}");
+            CheckInt("非流式:取到 1 条工具调用", nonStream.Count, 1);
+            CheckText("非流式:函数名", nonStream[0].Name, "list_spaces");
+            CheckText("非流式:参数", nonStream[0].ArgumentsJson, "{\"keyword\":\"站厅\"}");
+
+            // ---------- 4) 工具 schema 清洗(避免 HTTP 400) ----------
+            var notes = new List<string>();
+            CheckText("schema:PowerShell 散列表被换成合法骨架",
+                AiToolCatalog.SanitizeParameters("@{type=object;properties=@{}}", "x", notes), "{\"type\":\"object\",\"properties\":{}}");
+            CheckInt("schema:清洗有记录(不静默)", notes.Count, 1);
+            CheckText("schema:非法 JSON 换骨架",
+                AiToolCatalog.SanitizeParameters("{坏", "y", notes), "{\"type\":\"object\",\"properties\":{}}");
+            CheckText("schema:缺 type 时补齐",
+                AiToolCatalog.SanitizeParameters("{\"properties\":{\"a\":{\"type\":\"string\"}}}", "z", notes),
+                "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}");
+            CheckText("schema:合法 schema 原样保留",
+                AiToolCatalog.SanitizeParameters("{\"type\":\"object\",\"properties\":{}}", "w", notes),
+                "{\"type\":\"object\",\"properties\":{}}");
+            CheckText("schema:识别 PowerShell 风格", AiToolCatalog.LooksLikePowerShellHashtable("@{a=1}") ? "是" : "否", "是");
+            CheckText("schema:合法 JSON 不误判", AiToolCatalog.LooksLikePowerShellHashtable("{\"type\":\"object\"}") ? "是" : "否", "否");
+            var dirtyTools = new List<AiToolDefinition>
+            {
+                new AiToolDefinition { Name = "x", Description = "脏 schema", ParametersJson = "@{type=object;properties=@{}}" }
+            };
+            string dirtyJson = AiToolCatalog.BuildToolsJson(dirtyTools);
+            CheckText("工具目录:清洗说明会带出去(不静默)", AiToolCatalog.LastSanitizeNote.Length > 0 ? "有" : "无", "有");
+            CheckText("工具目录:清洗后仍是合法 JSON 且 parameters 是对象",
+                JsonValue.Parse(dirtyJson).Get(0).Get("function").Get("parameters").IsObject ? "合法" : "非法", "合法");
+
+            // ---------- 5) 进程内 CommandBus 与「操作 Revit」总开关 ----------
+            AiCommandBus.Clear();
+            AiCommandBus.OperateRevitEnabled = false;
+            CheckText("总线:命令集未加载时不就绪", AiCommandBus.IsReady ? "就绪" : "未就绪", "未就绪");
+            CheckInt("总线:总开关关掉时工具清单为空(模型看不到工具)", AiCommandBus.ToolsForModel().Count, 0);
+            string blocked = AiCommandBus.Execute("analyze_model_statistics", "{}");
+            CheckText("总线:总开关关掉时拒绝执行", blocked.Contains("已关闭操作 Revit") ? "拒绝" : blocked, "拒绝");
+
+            var host = new FakeToolHost();
+            AiCommandBus.Register(host);
+            CheckText("总线:注册后自述来源", AiCommandBus.HostDescription.Contains("假命令集") ? "有" : AiCommandBus.HostDescription, "有");
+            CheckText("总线:注册后就绪", AiCommandBus.IsReady ? "就绪" : "未就绪", "就绪");
+            AiCommandBus.OperateRevitEnabled = false;
+            CheckInt("总线:开关关掉 → 工具清单仍为空", AiCommandBus.ToolsForModel().Count, 0);
+            AiCommandBus.OperateRevitEnabled = true;
+            CheckInt("总线:开关打开 → 工具清单=已注册命令数", AiCommandBus.ToolsForModel().Count, host.Tools.Count());
+            CheckText("总线:执行交给宿主并回传 JSON",
+                AiCommandBus.Execute("analyze_model_statistics", "{}"), "{\"walls\":12}");
+            CheckText("总线:找不到命令时明确报错(不执行)",
+                AiCommandBus.Execute("no_such_command", "{}").Contains("找不到命令") ? "有" : "无", "有");
+            CheckText("总线:执行有日志(可审计)", AiCommandBus.Log.Count > 0 ? "有" : "无", "有");
+            CheckText("总线:命令抛异常也返回 JSON 不抛",
+                AiCommandBus.Execute("boom", "{}").Contains("\"error\"") ? "有 error" : "无", "有 error");
+            CheckInt("总线:轮次上限=12(参考文档取值)", AiChatClient.MaxToolRounds, 12);
+            AiCommandBus.ClearLog();
+            CheckInt("总线:日志可清空", AiCommandBus.Log.Count, 0);
+            AiCommandBus.OperateRevitEnabled = false;
+
+            // ---------- 6) API Key 保险箱(DPAPI 加密 + 工作区隔离) ----------
+            string vaultDir = Path.Combine(Path.GetTempPath(), "HVACIDA-Vault-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(vaultDir);
+                string vaultPath = Path.Combine(vaultDir, "ai-key.bin");
+                ApiKeyVault.Save("2020_hp_file-aaa", "sk-secret-value", vaultPath);
+                string vaultRaw = File.ReadAllText(vaultPath, Encoding.UTF8);
+                CheckText("密钥:文件里不出现明文",
+                    vaultRaw.Contains("sk-secret-value") ? "有明文" : "无明文", "无明文");
+                CheckText("密钥:加密方式有说明(加密或明确降级)",
+                    ApiKeyVault.LastNote.Contains("DPAPI") || ApiKeyVault.LastNote.Contains("明文等价") ? "有" : ApiKeyVault.LastNote, "有");
+                CheckText("密钥:同一工作区能取回",
+                    ApiKeyVault.Load("2020_hp_file-aaa", vaultPath), "sk-secret-value");
+                CheckText("密钥:换工作区取不回(隔离生效)",
+                    ApiKeyVault.Load("2020_hp_file-bbb", vaultPath), "");
+                CheckText("密钥:存在性判断", ApiKeyVault.Has("2020_hp_file-aaa", vaultPath) ? "有" : "无", "有");
+                ApiKeyVault.Save("2020_hp_file-aaa", "", vaultPath);
+                CheckText("密钥:传空串=删除", ApiKeyVault.Load("2020_hp_file-aaa", vaultPath), "");
+                CheckText("密钥:坏密文按没有处理(不抛)",
+                    ApiKeyVault.Decode("bm90LWEtYmxvYg==", "whatever"), "");
+            }
+            finally
+            {
+                try { Directory.Delete(vaultDir, true); } catch { }
+            }
+
+            // ---------- 7) 工作区隔离 ----------
+            var scopeA = new AiWorkspaceScope { RevitVersion = "2020", UserName = "hp", ProjectPath = @"D:\a.rvt" };
+            var scopeB = new AiWorkspaceScope { RevitVersion = "2020", UserName = "hp", ProjectPath = @"D:\b.rvt" };
+            CheckText("工作区:不同项目不同标识", scopeA.Id == scopeB.Id ? "相同" : "不同", "不同");
+            CheckText("工作区:同一项目标识稳定", scopeA.Id, new AiWorkspaceScope
+            {
+                RevitVersion = "2020",
+                UserName = "hp",
+                ProjectPath = @"D:\a.rvt"
+            }.Id);
+            CheckText("工作区:未保存文档带 unsaved 前缀",
+                AiWorkspaceScope.ForUnsaved("2020", "hp", "项目1").Id.Contains("unsaved-") ? "有" : "无", "有");
+            CheckText("工作区:另存为后迁移到正式路径",
+                AiWorkspaceScope.ForUnsaved("2020", "hp", "项目1").Migrate(@"D:\a.rvt").Id.Contains("file-") ? "迁移了" : "没迁移", "迁移了");
+            CheckText("工作区:不同工作区的 DPAPI 熵不同",
+                Convert.ToBase64String(scopeA.Entropy) == Convert.ToBase64String(scopeB.Entropy) ? "相同" : "不同", "不同");
+
+            // ---------- 8) 提示词纪律 + 隐私口径(防回归:不许被改软) ----------
+            CheckText("提示词:要求先取真实数据", AiChatClient.DefaultSystemPrompt.Contains("先调用工具去取真实数据") ? "有" : "无", "有");
+            CheckText("提示词:禁止编条文号与系数", AiChatClient.DefaultSystemPrompt.Contains("不要编造规范条文号") ? "有" : "无", "有");
+            CheckText("提示词:改模型前要先要确认", AiChatClient.DefaultSystemPrompt.Contains("等用户确认") ? "有" : "无", "有");
+            CheckText("隐私:开工具时写明工程数据会出网",
+                AiChatClient.PrivacyNoteWithTools.Contains("工程数据") && AiChatClient.PrivacyNoteWithTools.Contains("出网") ? "有" : "无", "有");
+
+            // ---------- 9) 守卫分支(不发请求) ----------
+            var noKeyAssistant = new AiChatSettings { Enabled = true };
+            var guard1 = AiChatClient.Send("统计构件", noKeyAssistant, null, null, true, null, null, null, null, 2000, 2);
+            CheckText("守卫:没填 key 不发请求", guard1.ErrorKind == AiErrorKind.NoCredential ? "拦住" : guard1.ErrorKind.ToString(), "拦住");
+            var offAssistant = new AiChatSettings { Enabled = false, ApiKey = "sk-x" };
+            var guard2 = AiChatClient.Send("统计构件", offAssistant, null, null, true, null, null, null, null, 2000, 2);
+            CheckText("守卫:未启用不发请求", guard2.ErrorKind == AiErrorKind.NotEnabled ? "拦住" : guard2.ErrorKind.ToString(), "拦住");
+            var emptyQuery = AiChatClient.Send("   ", noKeyAssistant, null, null, true, null, null, null, null, 2000, 2);
+            CheckText("守卫:空问题不发请求", emptyQuery.ErrorMessage, "问题为空");
+
+            // ---------- 10) 网络不通:照实报错、不抛异常、不编回答 ----------
+            var offlineAssistant = new AiChatSettings
+            {
+                Enabled = true,
+                ApiKey = "sk-test",
+                Endpoint = "http://127.0.0.1:9",
+                Stream = true
+            };
+            var offlineAssistantResult = AiChatClient.Send("统计构件数量", offlineAssistant, null, "文档:a.rvt", true,
+                null, null, null, null, 3000, 3);
+            CheckText("AI 助手断网:判失败(不抛异常)", offlineAssistantResult.Success ? "成功" : "失败", "失败");
+            CheckText("AI 助手断网:回答为空(不编内容)", string.IsNullOrEmpty(offlineAssistantResult.Content) ? "空" : "有内容", "空");
+            CheckText("AI 助手断网:提示写明没有模型回答且可先用本地窗口",
+                offlineAssistantResult.Note.Contains("没有模型回答") ? "有" : offlineAssistantResult.Note, "有");
+            CheckText("AI 助手断网:没有执行任何命令", offlineAssistantResult.ToolCallCount == 0 ? "0 条" : "有", "0 条");
+            Console.WriteLine("     (AI 助手断网实际原因:" + offlineAssistantResult.ErrorMessage + ")");
+
+            Console.WriteLine();
+        }
+
+        /// <summary>自检用的假命令宿主(替代 Revit 层,验证总线与工具清单的契约)。</summary>
+        private sealed class FakeToolHost : IAiToolHost
+        {
+            public string Description => "假命令集(自检用)";
+
+            public IEnumerable<AiToolDefinition> Tools => AiToolCatalog.Known;
+
+            public string Execute(string name, string argumentsJson)
+            {
+                if (name == "boom") throw new InvalidOperationException("故意抛异常");
+                if (name == "analyze_model_statistics") return "{\"walls\":12}";
+                return "{\"error\":\"找不到命令:" + name + "\"}";
+            }
         }
 
         /// <summary>同分时的类别优先序(与 KnowledgeBase.Rank 的口径一致,自检里独立复述一遍以免"改了没人发现")。</summary>

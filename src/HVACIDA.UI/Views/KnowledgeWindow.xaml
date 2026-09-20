@@ -118,6 +118,72 @@
                         </TextBlock>
                     </StackPanel>
                 </Expander>
+
+                <!-- 主路径之外的 AI 增强(DeepSeek):检索增强,回答必须对着依据核对 -->
+                <Expander Margin="0,6,0,0" IsExpanded="{Binding AiPanelExpanded, Mode=TwoWay}">
+                    <Expander.Header>
+                        <TextBlock>
+                            <Run Text="③ AI 问答(DeepSeek;检索增强 —— 先本地检索依据,再让模型照依据答) —— 当前:"/>
+                            <Run Text="{Binding AiSummary, Mode=OneWay}" FontWeight="Bold"/>
+                        </TextBlock>
+                    </Expander.Header>
+                    <StackPanel Margin="0,4,0,0">
+                        <TextBlock Text="{Binding AiCredentialHelp}" TextWrapping="Wrap" Foreground="#8A6100"/>
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <CheckBox Grid.Row="0" Grid.Column="0" Content="启用 AI 问答(DeepSeek)"
+                                      VerticalAlignment="Center" IsChecked="{Binding AiEnabled, Mode=TwoWay}"
+                                      ToolTip="不勾选(或不保存)时插件只查本地知识库,不会向 DeepSeek 发任何请求"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="依据条数上限" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                            <TextBox Grid.Row="0" Grid.Column="3" Width="60" Height="24" HorizontalAlignment="Left"
+                                     Text="{Binding AiContextLimitText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="每次最多把几条检索到的依据送给模型(1-20;依据越多越贵,也越容易被无关内容带偏)"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="API key" VerticalAlignment="Center" Margin="0,6,8,0"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" Height="24" Margin="0,6,0,0"
+                                     Text="{Binding AiApiKey, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="在 platform.deepseek.com 申请;本机明文保存在 ai.xml,请勿把该文件外发或提交到代码库"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="最大生成 token" VerticalAlignment="Center" Margin="12,6,8,0"/>
+                            <TextBox Grid.Row="1" Grid.Column="3" Width="60" Height="24" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                     Text="{Binding AiMaxTokensText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="单次回答的长度上限(默认 1024);太小会答一半就断"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="模型" VerticalAlignment="Center" Margin="0,6,8,0"/>
+                            <TextBox Grid.Row="2" Grid.Column="1" Height="24" Margin="0,6,0,0"
+                                     Text="{Binding AiModelText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="留空用官方文档给的默认模型;模型名与价格以 DeepSeek 官方文档为准,填错会在状态栏照实报 422 参数错误"/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="接口地址" VerticalAlignment="Center" Margin="12,6,8,0"/>
+                            <TextBox Grid.Row="2" Grid.Column="3" Height="24" Margin="0,6,0,0"
+                                     Text="{Binding AiEndpointText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="留空用官方 https://api.deepseek.com(OpenAI 兼容,/chat/completions);自建或走代理时才改"/>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="保存设置" Width="90" Height="26" Command="{Binding SaveAiCommand}"/>
+                            <Button Content="测试连接" Width="90" Height="26" Margin="8,0,0,0" Command="{Binding TestAiCommand}"
+                                    ToolTip="发一条最小请求(会消耗极少量 token):用来分清是 key/余额问题还是网络不通"/>
+                            <Button Content="申请 API key" Width="110" Height="26" Margin="8,0,0,0" Command="{Binding OpenAiKeyPageCommand}"
+                                    ToolTip="在浏览器打开 platform.deepseek.com/api_keys"/>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding AiStatus}" TextWrapping="Wrap" Foreground="#23486E" Margin="0,6,0,0"/>
+                        <TextBlock Text="{Binding AiNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,2,0,0"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#8A8A8A" Margin="0,2,0,0">
+                            <Run Text="设置文件:"/><Run Text="{Binding AiSettingsPath, Mode=OneWay}" FontWeight="Bold"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Expander>
             </StackPanel>
         </Border>
 
@@ -140,6 +206,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*" MinHeight="240"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -230,6 +297,38 @@
                         <DataGridTextColumn Header="media_id" Width="170" Binding="{Binding MediaId}"/>
                     </DataGrid.Columns>
                 </DataGrid>
+            </StackPanel>
+
+            <!-- 五、AI 回答(DeepSeek)+ 依据清单:回答是草稿,核对的是依据 -->
+            <StackPanel Grid.Row="5" Visibility="{Binding HasAiResult, Converter={StaticResource BoolToVis}}">
+                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,8,0,4"
+                           Text="AI 回答(DeepSeek 生成;**草稿** —— 请逐条对着下面的依据与标准原文核对后再用)"/>
+                <TextBox x:Name="AiAnswerBox" Text="{Binding AiAnswerText, Mode=OneWay}" IsReadOnly="True"
+                         TextWrapping="Wrap" Height="130" VerticalScrollBarVisibility="Auto"
+                         Background="#FFFDE7" BorderBrush="#DDDDDD" BorderThickness="1" Padding="8"
+                         FontFamily="Consolas"/>
+                <TextBlock x:Name="AiErrorBox" Text="{Binding AiError}" TextWrapping="Wrap"
+                           Foreground="#C0392B" Margin="0,4,0,0"/>
+                <TextBlock Text="{Binding AiNote}" TextWrapping="Wrap" Foreground="#8A6100" Margin="0,2,0,0"/>
+
+                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,6,0,4"
+                           Text="本次送入模型的依据(插件本地检索结果;只发送这些文本,不发送 Revit 模型数据与工程输入)"/>
+                <DataGrid x:Name="AiCitationGrid" Style="{StaticResource Grid}" ItemsSource="{Binding AiCitations}"
+                          SelectedItem="{Binding SelectedAiCitation, Mode=TwoWay}"
+                          MaxHeight="130" AlternatingRowBackground="#F7FAFD">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="序号" Width="50" Binding="{Binding Index}"/>
+                        <DataGridTextColumn Header="分类" Width="90" Binding="{Binding Category}"/>
+                        <DataGridTextColumn Header="条目标题" Width="280" Binding="{Binding Title}"/>
+                        <DataGridTextColumn Header="出处" Width="*" Binding="{Binding Source}"/>
+                        <DataGridTextColumn Header="相关度" Width="70" Binding="{Binding Score}"/>
+                        <DataGridTextColumn Header="截断" Width="60" Binding="{Binding Truncated}"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBox x:Name="AiCitationTextBox" Text="{Binding AiCitationText, Mode=OneWay}" IsReadOnly="True"
+                         TextWrapping="Wrap" Height="90" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0"
+                         Background="White" BorderBrush="#DDDDDD" BorderThickness="1" Padding="8"
+                         FontFamily="Consolas"/>
             </StackPanel>
         </Grid>
     </DockPanel>

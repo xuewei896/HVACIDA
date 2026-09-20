@@ -45,8 +45,6 @@ namespace HVACIDA.Core.Services
         /// <summary>知识库信息接口名(用于"测试连接")。</summary>
         public const string KnowledgeBaseApi = "get_knowledge_base";
 
-        private static bool _tlsReady;
-
         /// <summary>接口地址(设置里没填就用官方地址;统一补上结尾的「/」)。</summary>
         public static string ResolveEndpoint(ImaKnowledgeSettings settings)
         {
@@ -271,7 +269,7 @@ namespace HVACIDA.Core.Services
             string url = ResolveEndpoint(settings) + api;
             try
             {
-                EnsureTls();
+                HttpTls.EnsureTls12();
                 var request = (HttpWebRequest)WebRequest.Create(url);
                 request.Method = "POST";
                 request.ContentType = "application/json; charset=utf-8";
@@ -375,22 +373,6 @@ namespace HVACIDA.Core.Services
             }
             return "ima 在线检索没有成功 —— " + hint +
                    "。本条问答**只用本地知识库**的结果,没有编造在线内容。";
-        }
-
-        /// <summary>Revit 2020 进程默认可能只开 TLS 1.0/1.1,ima 走 HTTPS,这里显式打开 TLS 1.2。</summary>
-        private static void EnsureTls()
-        {
-            if (_tlsReady) return;
-            try
-            {
-                ServicePointManager.SecurityProtocol =
-                    ServicePointManager.SecurityProtocol | SecurityProtocolType.Tls12;
-            }
-            catch
-            {
-                // 老系统上没有 Tls12 枚举值也不影响:后面连不上会照实报错
-            }
-            _tlsReady = true;
         }
 
         /// <summary>把命中片段拼成给人看的答复块(界面与报告共用;空片段不编内容)。</summary>

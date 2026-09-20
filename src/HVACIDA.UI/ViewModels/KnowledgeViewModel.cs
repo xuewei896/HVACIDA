@@ -40,6 +40,20 @@ namespace HVACIDA.UI.ViewModels
         private bool _imaPanelExpanded = true;
         private string _clauseNote = "";
 
+        // ---- AI 问答(DeepSeek,需求 2.7「接在线大模型」):检索增强 + 依据清单,默认关 ----
+        private AiChatSettings _aiSettings = new AiChatSettings();
+        private string _aiStatus = "";
+        private string _aiNote = "";
+        private string _aiError = "";
+        private string _aiAnswer = "";
+        private bool _aiBusy;
+        private bool _aiPanelExpanded;
+        private string _aiModelText = "";
+        private string _aiEndpointText = "";
+        private string _aiMaxTokensText = "";
+        private string _aiContextLimitText = "";
+        private AiCitation _selectedAiCitation;
+
         public KnowledgeViewModel()
             : this(null)
         {
@@ -69,8 +83,13 @@ namespace HVACIDA.UI.ViewModels
             TestImaCommand = new RelayCommand(TestImaConnection);
             OpenImaShareCommand = new RelayCommand(OpenImaShare);
             SearchImaCommand = new RelayCommand(SearchImaOnly);
+            SaveAiCommand = new RelayCommand(SaveAiSettings);
+            AskAiCommand = new RelayCommand(AskAiAsync);
+            TestAiCommand = new RelayCommand(TestAiConnection);
+            OpenAiKeyPageCommand = new RelayCommand(OpenAiKeyPage);
 
             LoadImaSettings();
+            LoadAiSettings();
             RefreshClauseNote();
 
             Status = "共 " + _entries.Count + " 条条目(本项目已定口径 / 规范条文 / Revit 操作指南)。可以直接提问,也可以按分类浏览。";
@@ -307,6 +326,184 @@ namespace HVACIDA.UI.ViewModels
 
         /// <summary>单独用 ima 知识库检索一次(不影响本地检索结果)。</summary>
         public ICommand SearchImaCommand { get; }
+
+        // ==================================================================
+        // AI 问答(DeepSeek)—— 需求 2.7「接在线大模型」
+        //
+        // 口径:不是让模型凭记忆答工程问题,而是**检索增强** ——
+        //   ① 先用本地知识库检索出**依据**;② 依据 + 问题发给 DeepSeek;
+        //   ③ 系统提示写死「不编条文号/数值、资料不足要明说、结尾列依据」;
+        //   ④ 回答与**依据清单**一起显示,用户核对的是依据。
+        // 隐私:只发「问题 + 依据文本」,不发 Revit 模型数据与工程输入。
+        // ==================================================================
+
+        /// <summary>AI 凭证 / 隐私说明(界面原样显示)。</summary>
+        public string AiCredentialHelp => AiChatSettings.CredentialHelp;
+
+        /// <summary>AI 设置文件路径(明文保存 API key,界面要提醒)。</summary>
+        public string AiSettingsPath => AiSettingsStore.DefaultPath;
+
+        /// <summary>是否启用 AI 问答(默认关)。</summary>
+        public bool AiEnabled
+        {
+            get => _aiSettings.Enabled;
+            set
+            {
+                if (_aiSettings.Enabled == value) return;
+                _aiSettings.Enabled = value;
+                OnPropertyChanged(nameof(AiEnabled));
+                OnPropertyChanged(nameof(AiSummary));
+            }
+        }
+
+        /// <summary>DeepSeek API key(本机明文保存)。</summary>
+        public string AiApiKey
+        {
+            get => _aiSettings.ApiKey;
+            set
+            {
+                if (_aiSettings.ApiKey == value) return;
+                _aiSettings.ApiKey = value ?? "";
+                OnPropertyChanged(nameof(AiApiKey));
+                OnPropertyChanged(nameof(AiSummary));
+            }
+        }
+
+        /// <summary>模型名(留空用官方文档默认;界面提示当前实际会用哪个)。</summary>
+        public string AiModelText
+        {
+            get => _aiModelText;
+            set => Set(ref _aiModelText, value ?? "");
+        }
+
+        /// <summary>接口地址(留空用官方 https://api.deepseek.com)。</summary>
+        public string AiEndpointText
+        {
+            get => _aiEndpointText;
+            set => Set(ref _aiEndpointText, value ?? "");
+        }
+
+        /// <summary>单次回答最大生成 token。</summary>
+        public string AiMaxTokensText
+        {
+            get => _aiMaxTokensText;
+            set => Set(ref _aiMaxTokensText, value ?? "");
+        }
+
+        /// <summary>送入模型的依据条数上限。</summary>
+        public string AiContextLimitText
+        {
+            get => _aiContextLimitText;
+            set => Set(ref _aiContextLimitText, value ?? "");
+        }
+
+        /// <summary>当前实际会用的模型名与地址(收起面板时也看得见)。</summary>
+        public string AiSummary
+        {
+            get
+            {
+                if (!_aiSettings.Enabled && !_aiSettings.IsConfigured) return "未启用(只用本地知识库)";
+                if (!_aiSettings.Enabled) return "已填 API key 但未勾选启用";
+                if (!_aiSettings.IsConfigured) return "已勾选启用,但" + _aiSettings.MissingCredentialText();
+                return "已启用(" + DeepSeekClient.ResolveModel(_aiSettings) + ")";
+            }
+        }
+
+        /// <summary>AI 设置 / 调用状态。</summary>
+        public string AiStatus
+        {
+            get => _aiStatus;
+            private set
+            {
+                if (Set(ref _aiStatus, value)) OnPropertyChanged(nameof(AiSummary));
+            }
+        }
+
+        /// <summary>本次 AI 问答的提示(送了几条依据、token 用量、发往哪里)。</summary>
+        public string AiNote
+        {
+            get => _aiNote;
+            private set => Set(ref _aiNote, value);
+        }
+
+        /// <summary>失败原因(成功时为空;红字显示)。</summary>
+        public string AiError
+        {
+            get => _aiError;
+            private set
+            {
+                if (Set(ref _aiError, value)) OnPropertyChanged(nameof(HasAiResult));
+            }
+        }
+
+        /// <summary>模型回答正文(**草稿**,必须对着依据核对)。</summary>
+        public string AiAnswerText
+        {
+            get => _aiAnswer;
+            private set
+            {
+                if (Set(ref _aiAnswer, value)) OnPropertyChanged(nameof(HasAiResult));
+            }
+        }
+
+        /// <summary>正在请求模型(界面禁用按钮、显示"正在请求")。</summary>
+        public bool AiBusy
+        {
+            get => _aiBusy;
+            private set
+            {
+                if (!Set(ref _aiBusy, value)) return;
+                OnPropertyChanged(nameof(AiCanAsk));
+            }
+        }
+
+        /// <summary>按钮可用性(忙碌时禁用,避免重复发请求)。</summary>
+        public bool AiCanAsk => !_aiBusy;
+
+        /// <summary>AI 面板是否展开(AI 是主路径之外的可选增强,默认收起)。</summary>
+        public bool AiPanelExpanded
+        {
+            get => _aiPanelExpanded;
+            set => Set(ref _aiPanelExpanded, value);
+        }
+
+        /// <summary>本次回答用到的依据(来自本地检索;界面逐条列出便于核对)。</summary>
+        public ObservableCollection<AiCitation> AiCitations { get; } = new ObservableCollection<AiCitation>();
+
+        /// <summary>是否显示依据清单(没问过就不摆空表)。</summary>
+        public bool HasAiCitations => AiCitations.Count > 0;
+
+        /// <summary>是否显示 AI 回答区(没问过就不摆空区)。</summary>
+        public bool HasAiResult =>
+            !string.IsNullOrEmpty(_aiAnswer) || !string.IsNullOrEmpty(_aiError) || AiCitations.Count > 0;
+
+        /// <summary>选中的依据(下方显示它的正文,便于逐条核对)。</summary>
+        public AiCitation SelectedAiCitation
+        {
+            get => _selectedAiCitation;
+            set
+            {
+                if (!Set(ref _selectedAiCitation, value)) return;
+                OnPropertyChanged(nameof(AiCitationText));
+            }
+        }
+
+        /// <summary>选中依据的正文(没选时给提示,不摆空白)。</summary>
+        public string AiCitationText => _selectedAiCitation == null
+            ? "(选中上面一条依据,这里显示它的正文 —— 模型回答对不对,就看它跟依据对不对得上)"
+            : _selectedAiCitation.Text;
+
+        /// <summary>保存 AI 设置(只落本机 ai.xml,不发请求)。</summary>
+        public ICommand SaveAiCommand { get; }
+
+        /// <summary>AI 回答:检索依据 → 发给 DeepSeek → 显示回答 + 依据(异步,不卡界面)。</summary>
+        public ICommand AskAiCommand { get; }
+
+        /// <summary>测试 AI 连接(发一条最小请求,会消耗极少量 token)。</summary>
+        public ICommand TestAiCommand { get; }
+
+        /// <summary>打开 DeepSeek 开放平台申请/查看 API key。</summary>
+        public ICommand OpenAiKeyPageCommand { get; }
 
         /// <summary>切换分类(界面把选中项写进 <see cref="PendingCategory"/> 后执行本命令)。</summary>
         public ICommand CategoryCommand { get; }
@@ -608,6 +805,206 @@ namespace HVACIDA.UI.ViewModels
             }
             AnswerText = AnswerText + section;
             Lines.Add(new ChatLine(false, section.Trim()));
+        }
+
+        // ==================================================================
+        // AI 问答(DeepSeek):设置读写 / 异步提问 / 连接测试 / 依据清单
+        // ==================================================================
+
+        /// <summary>打开知识库窗时读一次本机 AI 设置(读失败不影响本地知识库)。</summary>
+        private void LoadAiSettings()
+        {
+            string note;
+            _aiSettings = AiSettingsStore.Load(AiSettingsStore.DefaultPath, out note);
+            _aiModelText = _aiSettings.Model ?? "";
+            _aiEndpointText = _aiSettings.Endpoint ?? "";
+            _aiMaxTokensText = _aiSettings.MaxTokens.ToString(CultureInfo.InvariantCulture);
+            _aiContextLimitText = _aiSettings.ContextEntryLimit.ToString(CultureInfo.InvariantCulture);
+            _aiPanelExpanded = false;                    // 可选增强:默认收起,标题上带一句话状态
+
+            AiStatus = _aiSettings.Enabled || _aiSettings.IsConfigured
+                ? AiSettingsStore.Summary(_aiSettings)
+                : "AI 问答:未启用 —— 只用本地知识库。" + AiChatSettings.CredentialHelp;
+            AiNote = note;
+
+            OnPropertyChanged(nameof(AiEnabled));
+            OnPropertyChanged(nameof(AiApiKey));
+            OnPropertyChanged(nameof(AiModelText));
+            OnPropertyChanged(nameof(AiEndpointText));
+            OnPropertyChanged(nameof(AiMaxTokensText));
+            OnPropertyChanged(nameof(AiContextLimitText));
+            OnPropertyChanged(nameof(AiPanelExpanded));
+        }
+
+        /// <summary>把界面上的取值收进设置对象(不落盘、不发请求)。</summary>
+        private void SyncAiSettingsFromUi()
+        {
+            int maxTokens;
+            if (!int.TryParse(_aiMaxTokensText, NumberStyles.Integer, CultureInfo.InvariantCulture, out maxTokens) || maxTokens <= 0)
+                maxTokens = 1024;
+            if (maxTokens > 8192) maxTokens = 8192;
+
+            int limit;
+            if (!int.TryParse(_aiContextLimitText, NumberStyles.Integer, CultureInfo.InvariantCulture, out limit) || limit <= 0)
+                limit = 5;
+            if (limit > 20) limit = 20;
+
+            _aiSettings.Model = (_aiModelText ?? "").Trim();
+            _aiSettings.Endpoint = (_aiEndpointText ?? "").Trim();
+            _aiSettings.MaxTokens = maxTokens;
+            _aiSettings.ContextEntryLimit = limit;
+            _aiMaxTokensText = maxTokens.ToString(CultureInfo.InvariantCulture);
+            _aiContextLimitText = limit.ToString(CultureInfo.InvariantCulture);
+            OnPropertyChanged(nameof(AiMaxTokensText));
+            OnPropertyChanged(nameof(AiContextLimitText));
+        }
+
+        /// <summary>保存 AI 设置(只落本机 ai.xml)。</summary>
+        private void SaveAiSettings()
+        {
+            try
+            {
+                SyncAiSettingsFromUi();
+                string path = AiSettingsStore.Save(_aiSettings);
+                AiStatus = "AI 设置已保存(" + path + "):" + AiSettingsStore.Summary(_aiSettings);
+                AiNote = "已保存。" + AiChatSettings.CredentialHelp;
+            }
+            catch (Exception ex)
+            {
+                AiStatus = "保存 AI 设置失败:" + ex.Message;
+            }
+        }
+
+        /// <summary>
+        /// **AI 回答**:先本地检索依据,再把「问题 + 依据」发给 DeepSeek(在后台线程发,不卡界面)。
+        /// 未启用 / 没填 Key 时**不发请求**,但照样把本地检索到的依据摆出来,并说清为什么没有模型回答。
+        /// </summary>
+        private async void AskAiAsync()
+        {
+            if (_aiBusy) return;
+            try
+            {
+                string query = (_question ?? "").Trim();
+                if (query.Length == 0)
+                {
+                    AiStatus = "请先输入问题,再点【AI 回答】。";
+                    return;
+                }
+
+                SyncAiSettingsFromUi();
+                var settings = _aiSettings.Clone();
+
+                AiError = "";
+                AiAnswerText = "";
+                AiCitations.Clear();
+                SelectedAiCitation = null;
+                OnPropertyChanged(nameof(HasAiCitations));
+                OnPropertyChanged(nameof(HasAiResult));
+
+                if (!settings.Enabled || !settings.IsConfigured)
+                {
+                    // 不发请求:把本地依据与原因说清楚(依据清单对用户仍有价值)
+                    var blocked = AiAnswerService.Ask(settings, query);
+                    ApplyAiResult(blocked);
+                    return;
+                }
+
+                AiBusy = true;
+                AiStatus = "正在请求 DeepSeek(" + DeepSeekClient.ResolveModel(settings) + ")…… 会发送你的问题与检索到的依据文本。";
+                AiNote = DeepSeekClient.PrivacyNote;
+
+                var result = await System.Threading.Tasks.Task.Run(() => AiAnswerService.Ask(settings, query));
+                ApplyAiResult(result);
+            }
+            catch (Exception ex)
+            {
+                AiError = "AI 问答失败:" + ex.Message;
+                AiStatus = "AI 问答失败:" + ex.Message;
+            }
+            finally
+            {
+                AiBusy = false;
+            }
+        }
+
+        /// <summary>把一次 AI 问答结果摆到界面上(成功给回答 + 依据;失败照实说并保留依据)。</summary>
+        private void ApplyAiResult(AiChatResult result)
+        {
+            AiCitations.Clear();
+            if (result.Citations != null)
+            {
+                foreach (var citation in result.Citations) AiCitations.Add(citation);
+            }
+            SelectedAiCitation = AiCitations.Count > 0 ? AiCitations[0] : null;
+            OnPropertyChanged(nameof(HasAiCitations));
+            OnPropertyChanged(nameof(HasAiResult));
+
+            if (result.Success)
+            {
+                AiAnswerText = result.Content;
+                AiError = "";
+                AiStatus = "AI 回答已生成(" + result.Model + "," + result.ElapsedMs + " ms):" + result.UsageText +
+                           ";依据 " + result.CitationCount + " 条 —— **请对着依据与标准原文核对后再用**。";
+                AiNote = result.Note;
+            }
+            else
+            {
+                AiAnswerText = "";
+                AiError = result.ErrorMessage;
+                AiStatus = "本次没有模型回答:" + result.ErrorMessage;
+                AiNote = result.Note + (result.CitationCount > 0
+                    ? " 本地检索到的 " + result.CitationCount + " 条依据仍列在下面。"
+                    : "");
+            }
+        }
+
+        /// <summary>测试 AI 连接:发一条最小请求(会消耗极少量 token),用来分清"key/余额问题"还是"网络问题"。</summary>
+        private void TestAiConnection()
+        {
+            try
+            {
+                SyncAiSettingsFromUi();
+                var settings = _aiSettings.Clone();
+                if (!settings.IsConfigured)
+                {
+                    AiStatus = "AI 凭证不全,没法测试 —— " + settings.MissingCredentialText();
+                    return;
+                }
+
+                settings.Enabled = true;                 // 测试本身是显式动作,不受"是否勾选启用"阻挡
+                settings.MaxTokens = 16;
+                settings.Temperature = 0;
+                var messages = new List<AiChatMessage>
+                {
+                    AiChatMessage.System("这是连通性测试。只回复四个字:连接正常。"),
+                    AiChatMessage.User("连接正常吗?")
+                };
+                var result = DeepSeekClient.Ask(settings, messages, "连通性测试");
+                AiError = result.Success ? "" : result.ErrorMessage;
+                AiStatus = result.Success
+                    ? "AI 连接测试:成功(" + result.Model + "," + result.ElapsedMs + " ms;" + result.UsageText +
+                      ")。回答:" + result.Content.Replace("\r", " ").Replace("\n", " ")
+                    : "AI 连接测试失败:" + result.ErrorMessage + " —— " + result.Note;
+                AiNote = result.Note;
+            }
+            catch (Exception ex)
+            {
+                AiStatus = "测试 AI 连接失败:" + ex.Message;
+            }
+        }
+
+        /// <summary>打开 DeepSeek 开放平台(申请 / 查看 API key)。</summary>
+        private void OpenAiKeyPage()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo("https://platform.deepseek.com/api_keys") { UseShellExecute = true });
+                AiStatus = "已在浏览器打开 DeepSeek 开放平台(platform.deepseek.com/api_keys),在那里申请 API key。";
+            }
+            catch (Exception ex)
+            {
+                AiStatus = "打开浏览器失败:" + ex.Message + "(可手动访问 https://platform.deepseek.com/api_keys)";
+            }
         }
     }
     /// <summary>对话记录的一行。</summary>
