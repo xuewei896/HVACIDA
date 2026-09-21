@@ -84,9 +84,7 @@
                                         Command="{Binding SyncWeatherCommand}"
                                         ToolTip="重新读取「项目信息 → 气象参数」并回填 C5/F4/F6"/>
                             </StackPanel>
-                            <TextBlock Text="{Binding WeatherNote}" Margin="4,0,4,2" TextWrapping="Wrap" Foreground="#2E7D32"/>
-                            <TextBlock Text="{Binding WeatherWarning}" Margin="4,0,4,6" TextWrapping="Wrap" Foreground="#C0392B"
-                                       Visibility="{Binding WeatherWarningVisibility}"/>
+                            <TextBlock Text="{Binding WeatherNote}" Margin="4,0,4,6" TextWrapping="Wrap" Foreground="#2E7D32"/>
                             <UniformGrid Columns="2">
                                 <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="夏季空调室外湿球温度 ℃" ToolTip="对应公式文档单元格 C5"/><TextBox x:Name="WetBulbBox" Style="{StaticResource WeatherField}" Text="{Binding Input.OutdoorWetBulbC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                                 <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅空调计算干球温度 ℃" ToolTip="对应公式文档单元格 F4"/><TextBox Style="{StaticResource WeatherField}" Text="{Binding Input.HallDesignTempC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>

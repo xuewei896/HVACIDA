@@ -15,8 +15,12 @@ namespace HVACIDA.Core.Services
     ///   <item>F6 站台夏季空调计算干球温度 ← <c>DesignConditionParams.LargeSystemIndoor.PlatformDryBulbC</c></item>
     /// </list>
     /// 其余各格一律取自公式文档默认值或用户输入,本类不越界修改。
-    /// 纪律:气象参数"未填"时<strong>不覆盖</strong>目标值,只登记到 UnsetFields 由界面提示,
+    /// 纪律:气象参数"未填"时<strong>不覆盖</strong>目标值,只登记到 <see cref="WeatherSyncResult.UnsetFields"/>,
     /// 避免用未填的 0 ℃ 冲掉用户已填的数值。
+    /// <para>
+    /// 2026-09-20 用户口径「删掉所有告警」:不再生成告警文案(原 <c>Warning</c> 属性已删),
+    /// 未填项只在 <c>UnsetFields</c> 里留痕(供自检与后续报告使用),界面上不提示。
+    /// </para>
     /// </summary>
     public static class ProjectDesignSync
     {
@@ -52,13 +56,6 @@ namespace HVACIDA.Core.Services
                 ? "已按「项目信息 → 气象参数」回填 " + DescribeSource(result) +
                   (result.AppliedCount < 3 ? "(其中 " + result.AppliedCount + " 格有变化)" : "") + "。"
                 : "本窗 C5/F4/F6 与「项目信息 → 气象参数」一致(" + DescribeSource(result) + ")。";
-
-            if (result.UnsetFields.Count > 0)
-            {
-                result.Warning =
-                    "⚠ 项目信息中有未填项:" + string.Join("、", result.UnsetFields.ToArray()) +
-                    "。已保留本窗原值不做覆盖;请到 Ribbon「项目信息 → 气象参数」点【从气象数据库获取】填入后,回到本窗点【重新同步】。";
-            }
 
             return result;
         }
@@ -111,8 +108,5 @@ namespace HVACIDA.Core.Services
 
         /// <summary>界面状态栏文案(非空)。</summary>
         public string Note { get; set; } = "";
-
-        /// <summary>需要用户去补气象参数时的告警文案(可为空字符串)。</summary>
-        public string Warning { get; set; } = "";
     }
 }

@@ -283,8 +283,7 @@ namespace HVACIDA.Smoke
             Check("C5 湿球 ← 室外", input.OutdoorWetBulbC, 25);
             Check("F4 站厅干球 ← 室内", input.HallDesignTempC, 29);
             Check("F6 站台干球 ← 室内", input.PlatformDesignTempC, 27);
-            CheckInt("无未填告警", sync.UnsetFields.Count, 0);
-            CheckText("告警文案为空", sync.Warning, "");
+            CheckInt("无未填项", sync.UnsetFields.Count, 0);
 
             // (2) 端到端:北京算例其余格照抄,只靠联动补 C5/F4/F6 → 结果必须与手填逐格一致
             var beijing = BuildBeijingSample();
@@ -313,7 +312,7 @@ namespace HVACIDA.Smoke
             Check("未填时不覆盖已填的 C5", keep.OutdoorWetBulbC, 25.5);
             CheckInt("未填项被登记(仅 C5)", blankSync.UnsetFields.Count, 1);
             CheckInt("未填项文案指向 C5", blankSync.UnsetFields[0].StartsWith("C5") ? 1 : 0, 1);
-            CheckInt("未填时给出告警", blankSync.Warning.Length > 0 ? 1 : 0, 1);
+            // 2026-09-20 用户口径「删掉所有告警」:不再生成告警文案(原 sync.Warning 断言随之删除)
 
             // (4) 服务层:勾选/取消联动与落盘往返
             string dir = Path.Combine(Path.GetTempPath(), "HVACIDA-Weather-" + Guid.NewGuid().ToString("N"));
@@ -504,13 +503,14 @@ namespace HVACIDA.Smoke
             Check("室内设计参数不被气象库改动(站厅 29 ℃)", design.LargeSystemIndoor.HallDryBulbC, 29.0);
             CheckText("状态文案含台站", apply.Note.Contains("54511") ? "1" : "0", "1");
 
-            // 缺湿球台站:不得覆盖,且必须给出告警
+            // 缺湿球台站:不得覆盖(2026-09-20 起不再生成告警文案,改断言"缺失项有登记")
             var xianyang = db.Find("陕西", "咸阳");
             var design2 = new DesignConditionParams();
             design2.LargeSystemOutdoor.SummerACWetBulbC = 25.5;
             var apply2 = WeatherDatabase.Apply(xianyang, design2);
             Check("缺湿球时不覆盖原值", design2.LargeSystemOutdoor.SummerACWetBulbC, 25.5);
-            CheckInt("缺湿球时给出告警", apply2.Warning.Length > 0 ? 1 : 0, 1);
+            CheckInt("缺湿球时登记缺失项(仅留痕,不提示)",
+                apply2.MissingText.Length > 0 && apply2.MissingText.Contains("湿球") ? 1 : 0, 1);
             // 湿球同时喂"大系统室外"与"小系统室外"两处,故缺 1 个源值 → 少 2 个写入项
             CheckInt("缺湿球时回填项数 = 8(10 - 2,湿球喂大小系统两处)", apply2.FilledCount, 8);
 

@@ -69,10 +69,10 @@ try {
 try {
     $noteBad = @()
     foreach ($x in $xamls) {
-        $hit = Select-String -Path $x.FullName -Pattern '(Text|Header|Content)="[^"]*(需求\s*[0-9]|\*\*|注:|说明:|备注:)'
+        $hit = Select-String -Path $x.FullName -Pattern '(Text|Header|Content)="[^"]*(需求\s*[0-9]|\*\*|注:|说明:|备注:|⚠|告警)'
         foreach ($h in $hit) { $noteBad += ((Split-Path $x.FullName -Leaf) + ':' + $h.LineNumber) }
     }
-    if ($noteBad.Count -eq 0) { Write-Host ("PASS  XAML 可见文本无备注说明(需求引用 / 注: / Markdown 符一律在 ToolTip)" ) }
+    if ($noteBad.Count -eq 0) { Write-Host ("PASS  XAML 可见文本无备注说明 / 无告警(需求引用 / 注: / Markdown 符 / ⚠ / 告警 一律在 ToolTip)" ) }
     else { Write-Host ("FAIL  XAML 可见文本仍含备注说明: " + ($noteBad -join ', ')); $fail++ }
 } catch {
     Write-Host ("FAIL  备注说明扫描  {0}" -f $_.Exception.Message)
@@ -310,6 +310,11 @@ try {
     if ($lvm.AutoSyncWeather -eq $true -and $lvm.WeatherLinked -eq $true) {
         Write-Host "PASS  大系统窗默认开启气象联动"
     } else { Write-Host "FAIL  大系统窗气象联动默认值"; $fail++ }
+
+    # 防回归(2026-09-20「删掉所有告警」):大系统 VM 不得再暴露告警属性
+    if ($null -eq $lvm.PSObject.Properties['WeatherWarning']) {
+        Write-Host "PASS  大系统 VM 已无 WeatherWarning 告警属性(气象联动失败不再提示)"
+    } else { Write-Host "FAIL  大系统 VM 仍暴露 WeatherWarning"; $fail++ }
 
     if ($lvm.Input.OutdoorWetBulbC -eq 25.0 -and $lvm.Input.HallDesignTempC -eq 29.0 -and $lvm.Input.PlatformDesignTempC -eq 27.0) {
         Write-Host ("PASS  大系统窗自动回填 C5/F4/F6 = {0}/{1}/{2}" -f $lvm.Input.OutdoorWetBulbC, $lvm.Input.HallDesignTempC, $lvm.Input.PlatformDesignTempC)
@@ -809,13 +814,18 @@ try {
         Write-Host ("PASS  台站信息来源可见: {0}" -f $pivm.StationInfo.Substring(0, [Math]::Min(52, $pivm.StationInfo.Length)))
     } else { Write-Host "FAIL  台站信息未显示"; $fail++ }
 
-    # 换到缺湿球温度的台站:不得覆盖原值,且必须给告警
+    # 换到缺湿球温度的台站:不得覆盖原值(2026-09-20 用户口径「删掉所有告警」:不再提示告警文案)
     $pivm.SelectedProvince = '陕西'
     $pivm.SelectedCity = '咸阳'
     $wetKept = $pivm.Model.Design.LargeSystemOutdoor.SummerACWetBulbC
-    if ($pivm.WeatherWarning -ne '' -and $wetKept -eq 27.5) {
-        Write-Host "PASS  标准未记录湿球温度的台站:给出告警且不覆盖原值"
-    } else { Write-Host ("FAIL  咸阳: warning='{0}' wet={1}" -f $pivm.WeatherWarning, $wetKept); $fail++ }
+    if ($wetKept -eq 27.5) {
+        Write-Host "PASS  标准未记录湿球温度的台站:不覆盖原值(告警文案已按要求删除)"
+    } else { Write-Host ("FAIL  咸阳: wet={0}" -f $wetKept); $fail++ }
+
+    # 防回归:两个 ViewModel 不得再暴露告警属性(有人加回来就 FAIL)
+    if ($null -eq $pivm.PSObject.Properties['WeatherWarning']) {
+        Write-Host "PASS  工程信息 VM 已无 WeatherWarning 告警属性"
+    } else { Write-Host "FAIL  工程信息 VM 仍暴露 WeatherWarning"; $fail++ }
 
     Test-Window '工程信息(带气象库) ProjectInfoWindow' { New-Object "$uiNs.ProjectInfoWindow" -ArgumentList $pivm }
 

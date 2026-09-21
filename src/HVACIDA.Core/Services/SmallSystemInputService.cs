@@ -1,4 +1,4 @@
-﻿using HVACIDA.Core.Models;
+using HVACIDA.Core.Models;
 
 namespace HVACIDA.Core.Services
 {
@@ -99,7 +99,7 @@ namespace HVACIDA.Core.Services
             LastWeatherNote = filled > 0
                 ? "室外计算参数取自「项目信息 → 气象参数」:干球 " + input.OutdoorDryBulbC.ToString("0.##") +
                   " ℃、湿球 " + input.OutdoorWetBulbC.ToString("0.##") + " ℃。"
-                : "⚠ 项目信息里未填夏季空调室外计算干球/湿球温度,请在「项目信息 → 气象参数」选择城市或手工填写。";
+                : "";   // 2026-09-20 用户口径「删掉所有告警」:未取到室外参数时不再给告警文案
         }
 
         /// <summary>

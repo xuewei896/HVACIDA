@@ -18,8 +18,12 @@ namespace HVACIDA.Core.Services
     /// 门禁 <c>tools/weatherdb/check-weather-db-sync.ps1</c> 负责校验一致性。
     /// </para>
     /// <para>
-    /// 纪律:标准没有记录的格一律为 <c>null</c>,取值时<strong>不覆盖</strong>目标参数并给出告警,
+    /// 纪律:标准没有记录的格一律为 <c>null</c>,取值时<strong>不覆盖</strong>目标参数,
     /// 绝不用邻近台站或猜测值补齐(见 <see cref="WeatherStationRecord"/> 注释)。
+    /// </para>
+    /// <para>
+    /// 2026-09-20 用户口径「删掉所有告警」:不再生成告警文案(原 <c>WeatherApplyResult.Warning</c> 已删);
+    /// "哪些项标准未记录"仍记录在 <see cref="WeatherApplyResult.MissingText"/> 里,界面上不提示。
     /// </para>
     /// </summary>
     public class WeatherDatabase
@@ -138,11 +142,6 @@ namespace HVACIDA.Core.Services
             result.MissingText = string.Join("、", missing.ToArray());
             result.Note = "已按「" + station.Province + station.City + "」台站(" + station.StationId + ")回填 " +
                           result.FilledCount + " 项室外气象参数,数据源 GB 50736-2012 附录A。";
-            if (missing.Count > 0)
-            {
-                result.Warning = "⚠ 该台站在标准中未记录:" + result.MissingText +
-                                 "。这些字段保持原值未改动,请查 GB 50736-2012 附录A 表19 或当地气象资料后手工填写。";
-            }
             return result;
         }
 
@@ -329,8 +328,5 @@ namespace HVACIDA.Core.Services
 
         /// <summary>状态栏文案。</summary>
         public string Note { get; set; } = "";
-
-        /// <summary>需要人工补录时的告警(可为空)。</summary>
-        public string Warning { get; set; } = "";
     }
 }

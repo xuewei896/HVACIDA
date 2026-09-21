@@ -21,7 +21,6 @@ namespace HVACIDA.UI.ViewModels
         private string _resultText = "";
         private string _status = "";
         private string _weatherNote = "";
-        private string _weatherWarning = "";
         private ResultTable _table;
 
         public LargeSystemViewModel()
@@ -114,7 +113,6 @@ namespace HVACIDA.UI.ViewModels
                 {
                     ApplyWeatherNotes(null);
                     WeatherNote = "已改为手工输入:C5/F4/F6 由本窗数值参与计算,不再随项目信息变化。";
-                    WeatherWarning = "";
                     Status = "已关闭气象参数联动,C5/F4/F6 可手工输入。";
                 }
 
@@ -132,19 +130,6 @@ namespace HVACIDA.UI.ViewModels
             get => _weatherNote;
             private set => Set(ref _weatherNote, value);
         }
-
-        /// <summary>气象参数有未填项时的告警文案(无告警时折叠)。</summary>
-        public string WeatherWarning
-        {
-            get => _weatherWarning;
-            private set
-            {
-                if (Set(ref _weatherWarning, value)) OnPropertyChanged(nameof(WeatherWarningVisibility));
-            }
-        }
-
-        public Visibility WeatherWarningVisibility =>
-            string.IsNullOrEmpty(_weatherWarning) ? Visibility.Collapsed : Visibility.Visible;
 
         private LargeSystemResult _lastResult;
 
@@ -174,12 +159,10 @@ namespace HVACIDA.UI.ViewModels
             if (sync == null)
             {
                 WeatherNote = "";
-                WeatherWarning = "";
                 return;
             }
 
             WeatherNote = sync.Note;
-            WeatherWarning = sync.Warning;
         }
 
         /// <summary>

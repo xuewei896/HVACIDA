@@ -24,7 +24,6 @@ namespace HVACIDA.UI.ViewModels
         private string _weatherStatus = "";
         private string _stationInfo = "";
         private string _weatherSummary = "";
-        private string _weatherWarning = "";
         private string _selectedProvince = "";
         private string _selectedCity = "";
         private IList<string> _cities = new List<string>();
@@ -163,21 +162,6 @@ namespace HVACIDA.UI.ViewModels
                 ? System.Windows.Visibility.Collapsed
                 : System.Windows.Visibility.Visible;
 
-        /// <summary>气象参数来源告警(标准未记录项等);无告警时折叠。</summary>
-        public string WeatherWarning
-        {
-            get => _weatherWarning;
-            private set
-            {
-                if (Set(ref _weatherWarning, value)) OnPropertyChanged(nameof(WeatherWarningVisibility));
-            }
-        }
-
-        public System.Windows.Visibility WeatherWarningVisibility =>
-            string.IsNullOrEmpty(_weatherWarning)
-                ? System.Windows.Visibility.Collapsed
-                : System.Windows.Visibility.Visible;
-
         /// <summary>气象参数是否来自数据库(界面标注"来自 GB 50736-2012 附录A")。</summary>
         public bool WeatherFromDatabase
         {
@@ -254,13 +238,11 @@ namespace HVACIDA.UI.ViewModels
             if (station == null)
             {
                 WeatherFromDatabase = false;
-                WeatherWarning = "";
                 return null;
             }
 
             var result = WeatherDatabase.Apply(station, Model.Design);
             WeatherFromDatabase = true;
-            WeatherWarning = result.Warning;
             OnPropertyChanged(nameof(Model));      // Core 模型是纯数据类,整体通知一次刷新所有字段
             return result;
         }
@@ -314,7 +296,6 @@ namespace HVACIDA.UI.ViewModels
         {
             Model.Design = new DesignConditionParams();
             WeatherFromDatabase = false;
-            WeatherWarning = "";
             OnPropertyChanged(nameof(Model));
             WeatherStatus = "已恢复出厂默认值(未使用气象库);请按项目所在地核对,或回「工程信息」重选城市。";
         }
