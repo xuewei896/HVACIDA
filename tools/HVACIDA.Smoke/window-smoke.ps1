@@ -818,6 +818,30 @@ try {
     } else { Write-Host ("FAIL  咸阳: warning='{0}' wet={1}" -f $pivm.WeatherWarning, $wetKept); $fail++ }
 
     Test-Window '工程信息(带气象库) ProjectInfoWindow' { New-Object "$uiNs.ProjectInfoWindow" -ArgumentList $pivm }
+
+    # 2026-09-20 用户口径:工程信息窗固定尺寸 + 【确 定】= 保存并关闭(保存失败不关窗)
+    $piw = New-Object "$uiNs.ProjectInfoWindow" -ArgumentList $pivm
+    $piw.Show(); $piw.UpdateLayout()
+    if ($piw.ResizeMode.ToString() -eq 'NoResize' -and $piw.MinWidth -eq 0 -and $piw.MinHeight -eq 0) {
+        Write-Host ("PASS  工程信息窗为固定尺寸(ResizeMode=NoResize,{0}x{1})" -f [int]$piw.Width, [int]$piw.Height)
+    } else {
+        Write-Host ("FAIL  工程信息窗仍可缩放: ResizeMode={0} Min={1}x{2}" -f $piw.ResizeMode, $piw.MinWidth, $piw.MinHeight)
+        $fail++
+    }
+
+    $okBtn = $piw.FindName('ConfirmButton')
+    if ($okBtn -ne $null -and $okBtn.Content -eq '确 定') {
+        $okBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        $projSaved = Test-Path (Join-Path $tmp3 'project.xml')
+        if (-not $piw.IsVisible -and $projSaved) {
+            Write-Host "PASS  【确 定】= 保存并关闭本窗(project.xml 已落盘,窗口已关)"
+        } else {
+            Write-Host ("FAIL  确定按钮行为: closed={0} saved={1}" -f (-not $piw.IsVisible), $projSaved); $fail++
+        }
+    } else {
+        Write-Host "FAIL  工程信息窗未找到【确 定】按钮(ConfirmButton)"; $fail++
+    }
+    if ($piw.IsVisible) { $piw.Close() }
     try { Remove-Item $tmp3 -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
     Write-Host ("FAIL  省市气象库自检  {0}" -f $_.Exception.Message)

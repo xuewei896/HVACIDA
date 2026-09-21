@@ -265,19 +265,30 @@ namespace HVACIDA.UI.ViewModels
             return result;
         }
 
-        private void Save()
+        /// <summary>
+        /// 保存到仓库;返回是否成功。窗口【确 定】按"保存并关闭"实现,
+        /// 保存失败时必须<strong>不关窗</strong>,否则用户看不到失败原因。
+        /// </summary>
+        public bool TrySave()
         {
             try
             {
                 _repository.SaveProject(Model);
                 Status = "已保存到: " + _repository.StorageDirectory;
                 WeatherStatus = "已保存到: " + _repository.StorageDirectory;
+                return true;
             }
             catch (Exception ex)
             {
                 Status = "保存失败: " + ex.Message;
                 WeatherStatus = "保存失败: " + ex.Message;
+                return false;
             }
+        }
+
+        private void Save()
+        {
+            TrySave();
         }
 
         /// <summary>按当前地点从气象数据库回填(未选地点时提示去哪里选)。</summary>
