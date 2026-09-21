@@ -20,3 +20,8 @@ deploy/HVACIDA.addin.installed
 
 # 第三方下载的参考资料(仅本地参考,不入库;版权归原作者)
 /如何将AI大模型(DeepSeek)接入Revit中.docx
+
+# 本机凭据(内含 API key 明文,绝不入库;建议另存到仓库目录之外)
+*API key*.txt
+*apikey*.txt
+/Revit AI助手使用的API key.txt

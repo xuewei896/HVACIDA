@@ -1,4 +1,4 @@
-﻿<Window x:Class="HVACIDA.UI.Views.PublicAreaWindow"
+<Window x:Class="HVACIDA.UI.Views.PublicAreaWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="大系统 — 公共区参数 - HVACIDA"
@@ -14,6 +14,7 @@
         </Style>
         <Style x:Key="FieldInput" TargetType="{x:Type TextBox}">
             <Setter Property="Width" Value="150"/>
+            <Setter Property="Height" Value="24"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="2,3,10,3"/>
             <Setter Property="HorizontalContentAlignment" Value="Right"/>
@@ -36,11 +37,6 @@
     </Window.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
-            <TextBlock TextWrapping="Wrap"
-                       Text="需求 2.2.3.1:公共区几何(站厅/站台面积、站厅层高、站厅长度)由模型空间取值 —— 可【自动识别全模型空间】或【拾取…】指定;高峰客流必须手工输入,插件不从模型推断。保存后「大系统 → 负荷计算 / 计算结果」读取同一份数据。"/>
-        </Border>
-
         <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
             <DockPanel>
                 <Button DockPanel.Dock="Left" Content="恢复默认" Width="96" Height="30"
@@ -56,7 +52,8 @@
 
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="10">
-                <GroupBox Header="二、公共区几何(可由模型空间获取)" Style="{StaticResource GroupHeader}">
+                <GroupBox Header="二、公共区几何" Style="{StaticResource GroupHeader}"
+                          ToolTip="站厅/站台面积、站厅层高、站厅长度由模型空间取值(需求 2.2.3.1);高峰客流须手工输入,插件不从模型推断">
                     <StackPanel>
                         <WrapPanel Margin="4,0,0,6">
                             <Button Content="自动识别全模型空间" Height="26" Padding="10,0" Margin="0,0,8,4"

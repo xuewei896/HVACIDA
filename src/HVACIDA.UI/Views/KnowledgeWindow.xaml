@@ -26,199 +26,184 @@
     </Window.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
-            <StackPanel>
-                <TextBlock TextWrapping="Wrap"
-                           Text="规范 / 口径知识库(需求 2.7):条目化、可检索、**每条都带出处**。答不出时明确说明知识范围,不编答案;接在线大模型时本知识库作为检索到的依据上下文。"/>
-                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="#2E7D32" Margin="0,4,0,0"/>
-
-                <!-- 主路径:条文原文(推荐) —— 给整条原文、可离线、可引用 -->
-                <Border Background="#F1F8E9" BorderBrush="#C5E1A5" BorderThickness="1" Padding="6,4" Margin="0,6,0,0">
-                    <StackPanel>
-                        <TextBlock TextWrapping="Wrap" FontWeight="Bold" Foreground="#33691E"
-                                   Text="① 条文原文(推荐主路径):导入后手里是整条原文 —— 可离线检索、可按条文号提问、可随知识库一起导出 Excel;ima 在线只给片段,引用还得回 ima 看原文。"/>
-                        <TextBlock TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,2,0,0">
-                            <Run Text="条文目录:"/><Run Text="{Binding ClauseDirectory, Mode=OneWay}" FontWeight="Bold"/>
-                        </TextBlock>
-                        <TextBlock Text="{Binding ClauseNote}" TextWrapping="Wrap" Foreground="#33691E" Margin="0,2,0,0"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                            <Button Content="打开条文目录" Width="110" Height="26" Command="{Binding OpenClauseFolderCommand}"
-                                    ToolTip="在资源管理器里打开条文目录,把标准条文电子版(txt / md / csv / docx)放进去"/>
-                            <Button Content="重新导入条文" Width="110" Height="26" Margin="8,0,0,0" Command="{Binding ReloadClausesCommand}"
-                                    ToolTip="刚放进去的文件点一下就生效(打开本窗时也会自动读一次该目录)"/>
-                            <TextBlock VerticalAlignment="Center" Margin="10,0,0,0" Foreground="#8A8A8A" TextWrapping="Wrap"
-                                       Text="支持 txt / md / csv / docx;PDF、Excel 请先用 Word 打开另存为 docx,或复制成 txt"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <!-- 辅路径:ima 在线知识库(可选);凭证只落本机;不勾选就始终只用上面的本地知识库 -->
-                <Expander Margin="0,6,0,0" IsExpanded="{Binding ImaPanelExpanded, Mode=TwoWay}">
-                    <Expander.Header>
-                        <TextBlock>
-                            <Run Text="② ima 在线知识库(辅助,可选;只返回标题 + 命中片段) —— 当前:"/>
-                            <Run Text="{Binding ImaSummary, Mode=OneWay}" FontWeight="Bold"/>
-                        </TextBlock>
-                    </Expander.Header>
-                    <StackPanel Margin="0,4,0,0">
-                        <TextBlock Text="{Binding ImaCredentialHelp}" TextWrapping="Wrap" Foreground="#8A6100"/>
-                        <Grid Margin="0,6,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <CheckBox Grid.Row="0" Grid.Column="0" Content="启用 ima 在线知识库"
-                                      VerticalAlignment="Center" IsChecked="{Binding ImaEnabled, Mode=TwoWay}"
-                                      ToolTip="不勾选(或不保存)时插件只查本地知识库,不会发任何网络请求"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="单次最多显示" VerticalAlignment="Center" Margin="12,0,8,0"/>
-                            <TextBox Grid.Row="0" Grid.Column="3" Width="60" Height="24" HorizontalAlignment="Left"
-                                     Text="{Binding ImaLimitText, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="ima 检索接口没有条数参数,这里只是本地最多显示多少条(1-50)"/>
-
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Client ID" VerticalAlignment="Center" Margin="0,6,8,0"/>
-                            <TextBox Grid.Row="1" Grid.Column="1" Height="24" Margin="0,6,0,0"
-                                     Text="{Binding ImaClientId, UpdateSourceTrigger=PropertyChanged}"/>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="API Key" VerticalAlignment="Center" Margin="12,6,8,0"/>
-                            <TextBox Grid.Row="1" Grid.Column="3" Height="24" Margin="0,6,0,0"
-                                     Text="{Binding ImaApiKey, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="本机明文保存在 ima.xml;请勿把该文件外发或提交到代码库"/>
-
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="知识库 ID" VerticalAlignment="Center" Margin="0,6,8,0"/>
-                            <TextBox Grid.Row="2" Grid.Column="1" Height="24" Margin="0,6,0,0"
-                                     Text="{Binding ImaKnowledgeBaseId, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="接口参数 knowledge_base_id:知识库自身的 ID,**不是** shareId"/>
-                            <TextBlock Grid.Row="2" Grid.Column="2" Text="分享链接" VerticalAlignment="Center" Margin="12,6,8,0"/>
-                            <TextBox Grid.Row="2" Grid.Column="3" Height="24" Margin="0,6,0,0"
-                                     Text="{Binding ImaShareLink, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="整条 https:// 分享链接,供【打开分享页】用;shareId 单独一个值打不开,插件也不拿它当凭证"/>
-                        </Grid>
-
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <Button Content="保存设置" Width="90" Height="26" Command="{Binding SaveImaCommand}"/>
-                            <Button Content="测试连接" Width="90" Height="26" Margin="8,0,0,0" Command="{Binding TestImaCommand}"
-                                    ToolTip="只拉一次知识库信息:用来分清是凭证/权限不对,还是网络不通"/>
-                            <Button Content="打开分享页" Width="100" Height="26" Margin="8,0,0,0" Command="{Binding OpenImaShareCommand}"
-                                    ToolTip="用默认浏览器打开 ima 分享页(需要完整 https 链接);shareId 无法直接打开"/>
-                            <Button Content="用 ima 检索" Width="100" Height="26" Margin="8,0,0,0" Command="{Binding SearchImaCommand}"
-                                    ToolTip="只查 ima 在线知识库,不动上面「分类/条目」里的本地知识库结果"/>
-                        </StackPanel>
-
-                        <TextBlock Text="{Binding ImaStatus}" TextWrapping="Wrap" Foreground="#23486E" Margin="0,6,0,0"/>
-                        <TextBlock Text="{Binding ImaNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,2,0,0"/>
-                        <TextBlock TextWrapping="Wrap" Foreground="#8A8A8A" Margin="0,2,0,0">
-                            <Run Text="设置文件:"/><Run Text="{Binding ImaSettingsPath, Mode=OneWay}" FontWeight="Bold"/>
-                        </TextBlock>
-                    </StackPanel>
-                </Expander>
-
-                <!-- 主路径之外的 AI 增强(DeepSeek):检索增强,回答必须对着依据核对 -->
-                <Expander Margin="0,6,0,0" IsExpanded="{Binding AiPanelExpanded, Mode=TwoWay}">
-                    <Expander.Header>
-                        <TextBlock>
-                            <Run Text="③ AI 问答(DeepSeek;检索增强 —— 先本地检索依据,再让模型照依据答) —— 当前:"/>
-                            <Run Text="{Binding AiSummary, Mode=OneWay}" FontWeight="Bold"/>
-                        </TextBlock>
-                    </Expander.Header>
-                    <StackPanel Margin="0,4,0,0">
-                        <TextBlock Text="{Binding AiCredentialHelp}" TextWrapping="Wrap" Foreground="#8A6100"/>
-                        <Grid Margin="0,6,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <CheckBox Grid.Row="0" Grid.Column="0" Content="启用 AI 问答(DeepSeek)"
-                                      VerticalAlignment="Center" IsChecked="{Binding AiEnabled, Mode=TwoWay}"
-                                      ToolTip="不勾选(或不保存)时插件只查本地知识库,不会向 DeepSeek 发任何请求"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="依据条数上限" VerticalAlignment="Center" Margin="12,0,8,0"/>
-                            <TextBox Grid.Row="0" Grid.Column="3" Width="60" Height="24" HorizontalAlignment="Left"
-                                     Text="{Binding AiContextLimitText, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="每次最多把几条检索到的依据送给模型(1-20;依据越多越贵,也越容易被无关内容带偏)"/>
-
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="API key" VerticalAlignment="Center" Margin="0,6,8,0"/>
-                            <TextBox Grid.Row="1" Grid.Column="1" Height="24" Margin="0,6,0,0"
-                                     Text="{Binding AiApiKey, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="在 platform.deepseek.com 申请;本机明文保存在 ai.xml,请勿把该文件外发或提交到代码库"/>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="最大生成 token" VerticalAlignment="Center" Margin="12,6,8,0"/>
-                            <TextBox Grid.Row="1" Grid.Column="3" Width="60" Height="24" HorizontalAlignment="Left" Margin="0,6,0,0"
-                                     Text="{Binding AiMaxTokensText, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="单次回答的长度上限(默认 1024);太小会答一半就断"/>
-
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="模型" VerticalAlignment="Center" Margin="0,6,8,0"/>
-                            <TextBox Grid.Row="2" Grid.Column="1" Height="24" Margin="0,6,0,0"
-                                     Text="{Binding AiModelText, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="留空用官方文档给的默认模型;模型名与价格以 DeepSeek 官方文档为准,填错会在状态栏照实报 422 参数错误"/>
-                            <TextBlock Grid.Row="2" Grid.Column="2" Text="接口地址" VerticalAlignment="Center" Margin="12,6,8,0"/>
-                            <TextBox Grid.Row="2" Grid.Column="3" Height="24" Margin="0,6,0,0"
-                                     Text="{Binding AiEndpointText, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="留空用官方 https://api.deepseek.com(OpenAI 兼容,/chat/completions);自建或走代理时才改"/>
-                        </Grid>
-
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <Button Content="保存设置" Width="90" Height="26" Command="{Binding SaveAiCommand}"/>
-                            <Button Content="测试连接" Width="90" Height="26" Margin="8,0,0,0" Command="{Binding TestAiCommand}"
-                                    ToolTip="发一条最小请求(会消耗极少量 token):用来分清是 key/余额问题还是网络不通"/>
-                            <Button Content="申请 API key" Width="110" Height="26" Margin="8,0,0,0" Command="{Binding OpenAiKeyPageCommand}"
-                                    ToolTip="在浏览器打开 platform.deepseek.com/api_keys"/>
-                        </StackPanel>
-
-                        <TextBlock Text="{Binding AiStatus}" TextWrapping="Wrap" Foreground="#23486E" Margin="0,6,0,0"/>
-                        <TextBlock Text="{Binding AiNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,2,0,0"/>
-                        <TextBlock TextWrapping="Wrap" Foreground="#8A8A8A" Margin="0,2,0,0">
-                            <Run Text="设置文件:"/><Run Text="{Binding AiSettingsPath, Mode=OneWay}" FontWeight="Bold"/>
-                        </TextBlock>
-                    </StackPanel>
-                </Expander>
-            </StackPanel>
-        </Border>
-
+        <!-- 底部操作栏 -->
         <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                    <Button Content="提 问" Width="90" Height="30" Command="{Binding AskCommand}" IsDefault="True"
-                            ToolTip="按关键词检索知识库:命中给答复与出处;答不出会说明知识范围并列出最接近的条目"/>
-                    <Button Content="清空对话" Width="96" Height="30" Margin="8,0,0,0" Command="{Binding ResetCommand}"/>
-                    <Button Content="重新导入条文" Width="120" Height="30" Margin="8,0,0,0" Command="{Binding ReloadClausesCommand}"
-                            ToolTip="读取「%AppData%\HVACIDA\规范条文」目录里的标准条文电子版(txt/md/csv/docx);放好文件后点一下即可检索条文原文"/>
-                    <Button Content="导出知识库 Excel" Width="150" Height="30" Margin="8,0,0,0" Command="{Binding ExportExcelCommand}"
-                            ToolTip="把当前筛选下的条目(含出处与关键词)导出为 .xlsx,便于评审与交底"/>
-                </StackPanel>
                 <Button DockPanel.Dock="Right" Content="关 闭" Width="90" Height="30" IsCancel="True"/>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <Button Content="导出知识库 Excel" Width="150" Height="30" Command="{Binding ExportExcelCommand}"
+                            ToolTip="把当前筛选下的条目(含出处与关键词)导出为 .xlsx,便于评审与交底"/>
+                    <Button Content="清空对话" Width="96" Height="30" Margin="8,0,0,0" Command="{Binding ResetCommand}"/>
+                </StackPanel>
             </DockPanel>
+        </Border>
+
+        <!-- 设置区(可收起,默认收起) -->
+        <StackPanel DockPanel.Dock="Bottom">
+            <Expander Margin="8,0,8,6" IsExpanded="{Binding ImaPanelExpanded, Mode=TwoWay}"
+                      ToolTip="ima 在线知识库是辅助路径,可选;只返回标题 + 命中片段,引用请回 ima 打开原文核对">
+                <Expander.Header>
+                    <TextBlock>
+                        <Run Text="② ima 在线知识库 —— 当前:"/>
+                        <Run Text="{Binding ImaSummary, Mode=OneWay}" FontWeight="Bold"/>
+                    </TextBlock>
+                </Expander.Header>
+                <StackPanel Margin="0,4,0,0">
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <CheckBox Grid.Row="0" Grid.Column="0" Content="启用 ima 在线知识库"
+                                  VerticalAlignment="Center" IsChecked="{Binding ImaEnabled, Mode=TwoWay}"
+                                  ToolTip="不勾选(或不保存)时插件只查本地知识库,不会发任何网络请求"/>
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="单次最多显示" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                        <TextBox Grid.Row="0" Grid.Column="3" Width="60" Height="24" HorizontalAlignment="Left"
+                                 Text="{Binding ImaLimitText, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="ima 检索接口没有条数参数,这里只是本地最多显示多少条(1-50)"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Client ID" VerticalAlignment="Center" Margin="0,6,8,0"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Height="24" Margin="0,6,0,0"
+                                 Text="{Binding ImaClientId, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="API Key" VerticalAlignment="Center" Margin="12,6,8,0"/>
+                        <TextBox Grid.Row="1" Grid.Column="3" Height="24" Margin="0,6,0,0"
+                                 Text="{Binding ImaApiKey, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="本机明文保存在 ima.xml;请勿把该文件外发或提交到代码库"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="知识库 ID" VerticalAlignment="Center" Margin="0,6,8,0"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" Height="24" Margin="0,6,0,0"
+                                 Text="{Binding ImaKnowledgeBaseId, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="接口参数 knowledge_base_id:知识库自身的 ID,不是 shareId"/>
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="分享链接" VerticalAlignment="Center" Margin="12,6,8,0"/>
+                        <TextBox Grid.Row="2" Grid.Column="3" Height="24" Margin="0,6,0,0"
+                                 Text="{Binding ImaShareLink, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="整条 https:// 分享链接,供【打开分享页】用;shareId 单独一个值打不开,插件也不拿它当凭证"/>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="保存设置" Width="90" Height="26" Command="{Binding SaveImaCommand}"
+                                ToolTip="{Binding ImaSettingsPath, Mode=OneWay}"/>
+                        <Button Content="测试连接" Width="90" Height="26" Margin="8,0,0,0" Command="{Binding TestImaCommand}"
+                                ToolTip="只拉一次知识库信息:用来分清是凭证/权限不对,还是网络不通"/>
+                        <Button Content="打开分享页" Width="100" Height="26" Margin="8,0,0,0" Command="{Binding OpenImaShareCommand}"
+                                ToolTip="用默认浏览器打开 ima 分享页(需要完整 https 链接);shareId 无法直接打开"/>
+                        <Button Content="用 ima 检索" Width="100" Height="26" Margin="8,0,0,0" Command="{Binding SearchImaCommand}"
+                                ToolTip="只查 ima 在线知识库,不动上面「分类/条目」里的本地知识库结果"/>
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding ImaStatus}" TextWrapping="Wrap" Foreground="#23486E" Margin="0,6,0,0"/>
+                    <TextBlock Text="{Binding ImaNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Expander>
+
+            <Expander Margin="8,0,8,6" IsExpanded="{Binding AiPanelExpanded, Mode=TwoWay}"
+                      ToolTip="先本地检索依据,再让模型照依据答;回答是生成文本,必须对着依据与标准原文核对">
+                <Expander.Header>
+                    <TextBlock>
+                        <Run Text="③ AI 问答(DeepSeek)—— 当前:"/>
+                        <Run Text="{Binding AiSummary, Mode=OneWay}" FontWeight="Bold"/>
+                    </TextBlock>
+                </Expander.Header>
+                <StackPanel Margin="0,4,0,0">
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <CheckBox Grid.Row="0" Grid.Column="0" Content="启用 AI 问答(DeepSeek)"
+                                  VerticalAlignment="Center" IsChecked="{Binding AiEnabled, Mode=TwoWay}"
+                                  ToolTip="不勾选(或不保存)时插件只查本地知识库,不会向 DeepSeek 发任何请求"/>
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="依据条数上限" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                        <TextBox Grid.Row="0" Grid.Column="3" Width="60" Height="24" HorizontalAlignment="Left"
+                                 Text="{Binding AiContextLimitText, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="每次最多把几条检索到的依据送给模型(1-20;依据越多越贵,也越容易被无关内容带偏)"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="API key" VerticalAlignment="Center" Margin="0,6,8,0"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Height="24" Margin="0,6,0,0"
+                                 Text="{Binding AiApiKey, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="在 platform.deepseek.com 申请;本机明文保存在 ai.xml,请勿把该文件外发或提交到代码库"/>
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="最大生成 token" VerticalAlignment="Center" Margin="12,6,8,0"/>
+                        <TextBox Grid.Row="1" Grid.Column="3" Width="60" Height="24" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                 Text="{Binding AiMaxTokensText, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="单次回答的长度上限(默认 1024);太小会答一半就断"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="模型" VerticalAlignment="Center" Margin="0,6,8,0"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" Height="24" Margin="0,6,0,0"
+                                 Text="{Binding AiModelText, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="留空用官方文档给的默认模型;模型名与价格以 DeepSeek 官方文档为准,填错会在状态栏照实报 422 参数错误"/>
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="接口地址" VerticalAlignment="Center" Margin="12,6,8,0"/>
+                        <TextBox Grid.Row="2" Grid.Column="3" Height="24" Margin="0,6,0,0"
+                                 Text="{Binding AiEndpointText, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="留空用官方 https://api.deepseek.com(OpenAI 兼容,/chat/completions);自建或走代理时才改"/>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="保存设置" Width="90" Height="26" Command="{Binding SaveAiCommand}"
+                                ToolTip="{Binding AiSettingsPath, Mode=OneWay}"/>
+                        <Button Content="测试连接" Width="90" Height="26" Margin="8,0,0,0" Command="{Binding TestAiCommand}"
+                                ToolTip="发一条最小请求(会消耗极少量 token):用来分清是 key/余额问题还是网络不通"/>
+                        <Button Content="申请 API key" Width="110" Height="26" Margin="8,0,0,0" Command="{Binding OpenAiKeyPageCommand}"
+                                ToolTip="在浏览器打开 platform.deepseek.com/api_keys"/>
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding AiStatus}" TextWrapping="Wrap" Foreground="#23486E" Margin="0,6,0,0"/>
+                    <TextBlock Text="{Binding AiNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Expander>
+        </StackPanel>
+
+        <!-- 顶部:状态 + 条文原文目录 -->
+        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6"
+                ToolTip="需求 2.7:条目化、可检索、每条都带出处;答不出时说明知识范围,不编答案。接在线大模型时本知识库作为检索到的依据上下文">
+            <StackPanel>
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E"/>
+                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                    <TextBlock Text="条文目录" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ClauseDirectory, Mode=OneWay}" VerticalAlignment="Center" Margin="8,0,0,0"
+                               FontWeight="Bold" ToolTip="导入后手里是整条原文:可离线检索、可按条文号提问、可随知识库一起导出 Excel"/>
+                    <Button Content="打开条文目录" Width="110" Height="26" Margin="12,0,0,0" Command="{Binding OpenClauseFolderCommand}"
+                            ToolTip="在资源管理器里打开条文目录,把标准条文电子版(txt / md / csv / docx)放进去;PDF、Excel 请先用 Word 打开另存为 docx,或复制成 txt"/>
+                    <Button Content="重新导入条文" Width="110" Height="26" Margin="8,0,0,0" Command="{Binding ReloadClausesCommand}"
+                            ToolTip="刚放进去的文件点一下就生效(打开本窗时也会自动读一次该目录)"/>
+                </StackPanel>
+                <TextBlock Text="{Binding ClauseNote}" TextWrapping="Wrap" Foreground="#33691E" Margin="0,4,0,0"/>
+            </StackPanel>
         </Border>
 
         <Grid Margin="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*" MinHeight="240"/>
-                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*" MinHeight="200"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- 一、提问区 -->
+            <!-- 一、提问 -->
             <StackPanel Grid.Row="0" Margin="0,0,0,8">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="问题" VerticalAlignment="Center"/>
-                    <TextBox x:Name="QuestionBox" Width="620" Height="26" Margin="8,0,0,0" VerticalAlignment="Center"
+                    <TextBox x:Name="QuestionBox" Width="560" Height="26" Margin="8,0,0,0" VerticalAlignment="Center"
                              Text="{Binding Question, UpdateSourceTrigger=PropertyChanged}"
                              ToolTip="例如:排烟风机怎么选? / 水力怎么算扬程? / 材料表为什么长度和个数不合并?"/>
+                    <Button Content="提 问" Width="90" Height="26" Margin="8,0,0,0" Command="{Binding AskCommand}" IsDefault="True"
+                            ToolTip="按关键词检索知识库:命中给答复与出处;答不出会说明知识范围并列出最接近的条目"/>
                 </StackPanel>
                 <ItemsControl ItemsSource="{Binding SampleQuestions}" Margin="0,6,0,0">
                     <ItemsControl.ItemsPanel>
@@ -246,7 +231,7 @@
                 <DockPanel Grid.Column="0">
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
                         <TextBlock Text="分类" VerticalAlignment="Center"/>
-                        <ComboBox x:Name="CategoryBox" Width="150" Margin="8,0,0,0" VerticalAlignment="Center"
+                        <ComboBox x:Name="CategoryBox" Width="150" Height="24" Margin="8,0,0,0" VerticalAlignment="Center"
                                   ItemsSource="{Binding Categories}" SelectedItem="{Binding CategoryFilter, Mode=OneWay}"
                                   SelectionChanged="OnCategoryChanged"/>
                         <TextBlock Text="条目" VerticalAlignment="Center" Margin="12,0,0,0"/>
@@ -274,11 +259,11 @@
             </Grid>
 
             <!-- 三、本次答复 -->
-            <TextBlock Grid.Row="2" FontWeight="Bold" Foreground="#23486E" Margin="0,8,0,4"
-                       Text="本次答复(命中条目正文 + 出处)"/>
-            <StackPanel Grid.Row="3">
+            <StackPanel Grid.Row="2" Margin="0,8,0,0">
+                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,0,0,4" Text="本次答复"
+                           ToolTip="命中条目正文 + 出处"/>
                 <TextBox x:Name="AnswerBox" Text="{Binding AnswerText, Mode=OneWay}" IsReadOnly="True"
-                         TextWrapping="Wrap" Height="120" VerticalScrollBarVisibility="Auto"
+                         TextWrapping="Wrap" Height="110" VerticalScrollBarVisibility="Auto"
                          Background="#F7FAFD" BorderBrush="#DDDDDD" BorderThickness="1" Padding="8"
                          FontFamily="Consolas"/>
                 <TextBlock x:Name="ScopeBox" Text="{Binding ScopeNote}" TextWrapping="Wrap"
@@ -286,36 +271,36 @@
             </StackPanel>
 
             <!-- 四、ima 在线知识库命中(没查过 / 没配凭证时不摆空表) -->
-            <StackPanel Grid.Row="4" Visibility="{Binding HasImaHits, Converter={StaticResource BoolToVis}}">
-                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,8,0,4"
-                           Text="ima 在线知识库命中(标题 + 命中片段;**不是**条文全文,引用请回 ima 打开原文核对)"/>
+            <StackPanel Grid.Row="3" Margin="0,8,0,0" Visibility="{Binding HasImaHits, Converter={StaticResource BoolToVis}}">
+                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,0,0,4" Text="ima 在线知识库命中"
+                           ToolTip="标题 + 命中片段,不是条文全文;引用请回 ima 打开原文核对"/>
                 <DataGrid x:Name="ImaGrid" Style="{StaticResource Grid}" ItemsSource="{Binding ImaHits}"
-                          MaxHeight="160" AlternatingRowBackground="#F7FAFD">
+                          MaxHeight="150" AlternatingRowBackground="#F7FAFD">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="条目标题" Width="280" Binding="{Binding Title}"/>
-                        <DataGridTextColumn Header="命中片段(不是全文)" Width="*" Binding="{Binding Highlight}"/>
+                        <DataGridTextColumn Header="命中片段" Width="*" Binding="{Binding Highlight}"/>
                         <DataGridTextColumn Header="media_id" Width="170" Binding="{Binding MediaId}"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </StackPanel>
 
             <!-- 五、AI 回答(DeepSeek)+ 依据清单:回答是草稿,核对的是依据 -->
-            <StackPanel Grid.Row="5" Visibility="{Binding HasAiResult, Converter={StaticResource BoolToVis}}">
-                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,8,0,4"
-                           Text="AI 回答(DeepSeek 生成;**草稿** —— 请逐条对着下面的依据与标准原文核对后再用)"/>
+            <StackPanel Grid.Row="4" Margin="0,8,0,0" Visibility="{Binding HasAiResult, Converter={StaticResource BoolToVis}}">
+                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,0,0,4" Text="AI 回答(DeepSeek 生成)"
+                           ToolTip="草稿 —— 请逐条对着下面的依据与标准原文核对后再用"/>
                 <TextBox x:Name="AiAnswerBox" Text="{Binding AiAnswerText, Mode=OneWay}" IsReadOnly="True"
-                         TextWrapping="Wrap" Height="130" VerticalScrollBarVisibility="Auto"
+                         TextWrapping="Wrap" Height="110" VerticalScrollBarVisibility="Auto"
                          Background="#FFFDE7" BorderBrush="#DDDDDD" BorderThickness="1" Padding="8"
                          FontFamily="Consolas"/>
                 <TextBlock x:Name="AiErrorBox" Text="{Binding AiError}" TextWrapping="Wrap"
                            Foreground="#C0392B" Margin="0,4,0,0"/>
                 <TextBlock Text="{Binding AiNote}" TextWrapping="Wrap" Foreground="#8A6100" Margin="0,2,0,0"/>
 
-                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,6,0,4"
-                           Text="本次送入模型的依据(插件本地检索结果;只发送这些文本,不发送 Revit 模型数据与工程输入)"/>
+                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,6,0,4" Text="本次送入模型的依据"
+                           ToolTip="插件本地检索结果;只发送这些文本,不发送 Revit 模型数据与工程输入"/>
                 <DataGrid x:Name="AiCitationGrid" Style="{StaticResource Grid}" ItemsSource="{Binding AiCitations}"
                           SelectedItem="{Binding SelectedAiCitation, Mode=TwoWay}"
-                          MaxHeight="130" AlternatingRowBackground="#F7FAFD">
+                          MaxHeight="120" AlternatingRowBackground="#F7FAFD">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="序号" Width="50" Binding="{Binding Index}"/>
                         <DataGridTextColumn Header="分类" Width="90" Binding="{Binding Category}"/>
@@ -326,7 +311,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
                 <TextBox x:Name="AiCitationTextBox" Text="{Binding AiCitationText, Mode=OneWay}" IsReadOnly="True"
-                         TextWrapping="Wrap" Height="90" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0"
+                         TextWrapping="Wrap" Height="80" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0"
                          Background="White" BorderBrush="#DDDDDD" BorderThickness="1" Padding="8"
                          FontFamily="Consolas"/>
             </StackPanel>

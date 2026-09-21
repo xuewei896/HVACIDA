@@ -1,4 +1,4 @@
-﻿<Window x:Class="HVACIDA.UI.Views.LargeSystemResultWindow"
+<Window x:Class="HVACIDA.UI.Views.LargeSystemResultWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:HVACIDA.UI.Views"
@@ -35,11 +35,6 @@
     </Window.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
-            <TextBlock TextWrapping="Wrap"
-                       Text="读取「公共区参数 / 负荷计算 / 排烟计算」保存的参数后计算结果(需求 2.2.3.1)。结果以表格分组呈现(客流 / 冷负荷 / 湿负荷 / 焓湿 / 风量与制冷 / 设备选型),口径与《大系统负荷计算公式.docx》一致(北京站算例 30 项逐格核对);排烟结果见下表。"/>
-        </Border>
-
         <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
             <DockPanel>
                 <Button DockPanel.Dock="Left" Content="计 算" Width="100" Height="30"
@@ -66,8 +61,9 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="0" Margin="10,8,0,4" FontWeight="Bold"
-                       Text="一、排烟计算结果(表格;高亮行为风机选型基准区)"/>
+            <TextBlock Grid.Row="0" Margin="10,8,0,4" FontWeight="Bold" Foreground="#23486E"
+                       Text="一、排烟计算结果"
+                       ToolTip="高亮行为风机选型基准区"/>
 
             <DataGrid x:Name="SmokeGrid" Grid.Row="1" Margin="10,0,10,0" Style="{StaticResource ResultGrid}"
                       ItemsSource="{Binding SmokeRows}" SelectionMode="Single" AlternatingRowBackground="#F7FAFD">
@@ -116,8 +112,9 @@
                 <TextBlock Text="{Binding SmokeNote}" Foreground="#8A6100" TextWrapping="Wrap" Margin="0,2,0,0"/>
             </StackPanel>
 
-            <TextBlock Grid.Row="3" Margin="10,10,0,4" FontWeight="Bold"
-                       Text="二、大系统负荷计算结果(按分区分组;数值列右对齐,合计行加粗)"/>
+            <TextBlock Grid.Row="3" Margin="10,10,0,4" FontWeight="Bold" Foreground="#23486E"
+                       Text="二、大系统负荷计算结果"
+                       ToolTip="按分区分组;数值列右对齐,合计行加粗"/>
 
             <views:ResultTableView x:Name="ResultTableHost" Grid.Row="4" Margin="10,0,10,0" Table="{Binding Table}"/>
 

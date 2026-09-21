@@ -18,6 +18,7 @@
         </Style>
         <Style x:Key="FieldInput" TargetType="{x:Type TextBox}">
             <Setter Property="Width" Value="80"/>
+            <Setter Property="Height" Value="24"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="2,2,10,2"/>
             <Setter Property="HorizontalContentAlignment" Value="Right"/>
@@ -40,13 +41,10 @@
     </Window.Resources>
 
     <DockPanel>
-        <!-- 顶部提示条:介质 + 数据来源 + 待补(红字,必须可见) -->
-        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
+        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6"
+                ToolTip="需求 2.3 / 2.4:在模型里选取本系统任意构件 → 自动读管网 → 算最不利环路 → 给出需求全压 / 扬程">
             <StackPanel>
-                <TextBlock TextWrapping="Wrap" Foreground="#23486E">
-                    <Run Text="水力计算 — "/><Run Text="{Binding KindName, Mode=OneWay}" FontWeight="Bold"/>
-                    <Run Text="   需求 2.3 / 2.4:在模型里选取本系统任意构件 → 自动读管网 → 算最不利环路 → 给出需求全压 / 扬程"/>
-                </TextBlock>
+                <TextBlock Text="{Binding KindName, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E"/>
                 <TextBlock Text="{Binding SourceNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,4,0,0"/>
                 <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
             </StackPanel>
@@ -88,7 +86,8 @@
             </Grid.RowDefinitions>
 
             <!-- 一、系统与系数参数 -->
-            <GroupBox Grid.Row="0" Header="一、系统参数与系数(来自模型的值可直接改;系数会随计算书一起输出)" Padding="6" Margin="0,0,0,8">
+            <GroupBox Grid.Row="0" Header="一、系统参数与系数" Padding="6" Margin="0,0,0,8"
+                      ToolTip="来自模型的值可直接改;系数会随计算书一起输出">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="168">
                     <WrapPanel>
                         <StackPanel Orientation="Horizontal" Width="290">
@@ -156,17 +155,17 @@
             </GroupBox>
 
             <!-- 二、管段(模型读入,可改) -->
-            <GroupBox Grid.Row="1" Header="二、管段(断面/长度/流量来自模型;可改长度、流量、粗糙度与局部阻力系数之和)" Padding="6" Margin="0,0,0,8">
+            <GroupBox Grid.Row="1" Header="二、管段" Padding="6" Margin="0,0,0,8"
+                      ToolTip="断面 / 长度 / 流量来自模型;可改长度、流量、粗糙度与局部阻力系数之和">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
                         <Button Content="加行" Width="72" Height="26" Command="{Binding AddSegmentCommand}"/>
                         <Button Content="删除行" Width="72" Height="26" Margin="8,0,0,0" Command="{Binding RemoveSegmentCommand}"/>
-                        <TextBlock VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#5A5A5A"
-                                   Text="★ = 最不利环路上的管段(由模型连接关系判定);Σζ 为该段管件局部阻力系数之和,悬停「管件」列可见组成"/>
                     </StackPanel>
                     <DataGrid x:Name="SegmentGrid" Style="{StaticResource Grid}" ItemsSource="{Binding Segments}"
                               SelectedItem="{Binding SelectedSegment}" AlternatingRowBackground="#F7FAFD"
-                              HorizontalScrollBarVisibility="Auto">
+                              HorizontalScrollBarVisibility="Auto"
+                              ToolTip="★ = 最不利环路上的管段(由模型连接关系判定);Σζ 为该段管件局部阻力系数之和,悬停「管件组成」列可见组成">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="段名" Width="200" IsReadOnly="True" Binding="{Binding Name}"/>
                             <DataGridTextColumn Header="断面" Width="130" IsReadOnly="True" Binding="{Binding SectionText}"/>
@@ -178,7 +177,7 @@
                             <DataGridTextColumn Header="粗糙度 K mm" Width="104" Binding="{Binding RoughnessMm, StringFormat={}{0:0.###}}"/>
                             <DataGridTextColumn Header="Σζ" Width="66" Binding="{Binding LocalZetaSum, StringFormat={}{0:0.###}}"/>
                             <DataGridTextColumn Header="管件组成" Width="260" IsReadOnly="True" Binding="{Binding LocalNote}"/>
-                            <DataGridTemplateColumn Header="环路" Width="54" IsReadOnly="True">
+                            <DataGridTemplateColumn Header="★ 环路" Width="62" IsReadOnly="True">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold" Foreground="#C0392B">
@@ -202,17 +201,17 @@
             </GroupBox>
 
             <!-- 三、末端与设备阻力 -->
-            <GroupBox Grid.Row="2" Header="三、环路阻力项(末端 / 设备;模型参数读不到时请按设备样本填)" Padding="6" Margin="0,0,0,8">
+            <GroupBox Grid.Row="2" Header="三、环路阻力项" Padding="6" Margin="0,0,0,8"
+                      ToolTip="末端 / 设备;模型参数读不到时请按设备样本填">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
                         <Button Content="加行" Width="72" Height="26" Command="{Binding AddTerminalCommand}"/>
                         <Button Content="删除行" Width="72" Height="26" Margin="8,0,0,0" Command="{Binding RemoveTerminalCommand}"/>
-                        <TextBlock VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#5A5A5A"
-                                   Text="阻力单位统一为 Pa(水系统的设备水阻若按 kPa 记,1 kPa = 1000 Pa);「来源」列写清该值取自模型参数、样本还是估算"/>
                     </StackPanel>
                     <DataGrid x:Name="TerminalGrid" Style="{StaticResource Grid}" ItemsSource="{Binding Terminals}"
                               SelectedItem="{Binding SelectedTerminal}" AlternatingRowBackground="#F7FAFD"
-                              HorizontalScrollBarVisibility="Auto">
+                              HorizontalScrollBarVisibility="Auto"
+                              ToolTip="阻力单位统一为 Pa(水系统的设备水阻若按 kPa 记,1 kPa = 1000 Pa);「来源」列写清该值取自模型参数、样本还是估算">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="名称" Width="260" Binding="{Binding Name}"/>
                             <DataGridTextColumn Header="类别" Width="90" IsReadOnly="True" Binding="{Binding KindText}"/>
@@ -232,8 +231,9 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Margin="4,0,0,4" FontWeight="Bold"
-                           Text="四、计算结果(与导出的计算书同源;逐段明细与环路阻力项见「水力计算 → 计算结果」窗)"/>
+                <TextBlock Grid.Row="0" Margin="4,0,0,4" FontWeight="Bold" Foreground="#23486E"
+                           Text="四、计算结果"
+                           ToolTip="与导出的计算书同源;逐段明细与环路阻力项见「水力计算 → 计算结果」窗"/>
                 <Border Grid.Row="1" BorderBrush="#DDDDDD" BorderThickness="1" Background="#FAFAFA" Padding="2">
                     <views:ResultTableView x:Name="ResultTableHost" Table="{Binding Table}"/>
                 </Border>
@@ -246,7 +246,8 @@
 
             <!-- 五、局部阻力系数表(可改) -->
             <Expander Grid.Row="4" Margin="0,8,0,0" Foreground="#23486E"
-                      Header="五、局部阻力系数表(ζ 可改;取值来源见「来源」列 —— 项目可按手册或设备样本替换)">
+                      Header="五、局部阻力系数表"
+                      ToolTip="ζ 可改;取值来源见「来源」列 —— 项目可按手册或设备样本替换">
                 <DataGrid x:Name="LossGrid" Style="{StaticResource Grid}" Height="150" Margin="0,6,0,0"
                           ItemsSource="{Binding Coefficients.LocalLossItems}" AlternatingRowBackground="#F7FAFD"
                           HorizontalScrollBarVisibility="Auto">

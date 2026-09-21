@@ -670,7 +670,7 @@ namespace HVACIDA.UI.ViewModels
             _imaLimitText = _imaSettings.Limit.ToString(CultureInfo.InvariantCulture);
             ImaStatus = _imaSettings.Enabled || _imaSettings.IsConfigured
                 ? ImaSettingsStore.Summary(_imaSettings)
-                : "ima 在线知识库:未启用 —— 只用本地知识库。" + ImaKnowledgeSettings.CredentialHelp;
+                : "ima 在线知识库:未启用。";
             ImaNote = note;
             // ima 是**辅助**路径(只给片段):默认收起,靠标题上的一句话状态让用户知道有没有启用
             _imaPanelExpanded = false;
@@ -701,7 +701,7 @@ namespace HVACIDA.UI.ViewModels
 
                 string path = ImaSettingsStore.Save(_imaSettings);
                 ImaStatus = "ima 设置已保存(" + path + "):" + ImaSettingsStore.Summary(_imaSettings);
-                ImaNote = "已保存。" + ImaKnowledgeSettings.CredentialHelp;
+                ImaNote = "已保存。";
             }
             catch (Exception ex)
             {
@@ -824,7 +824,7 @@ namespace HVACIDA.UI.ViewModels
 
             AiStatus = _aiSettings.Enabled || _aiSettings.IsConfigured
                 ? AiSettingsStore.Summary(_aiSettings)
-                : "AI 问答:未启用 —— 只用本地知识库。" + AiChatSettings.CredentialHelp;
+                : "AI 问答:未启用。";
             AiNote = note;
 
             OnPropertyChanged(nameof(AiEnabled));
@@ -867,7 +867,7 @@ namespace HVACIDA.UI.ViewModels
                 SyncAiSettingsFromUi();
                 string path = AiSettingsStore.Save(_aiSettings);
                 AiStatus = "AI 设置已保存(" + path + "):" + AiSettingsStore.Summary(_aiSettings);
-                AiNote = "已保存。" + AiChatSettings.CredentialHelp;
+                AiNote = "已保存。";
             }
             catch (Exception ex)
             {

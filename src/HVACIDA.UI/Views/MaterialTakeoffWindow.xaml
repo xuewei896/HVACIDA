@@ -33,10 +33,8 @@
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
             <StackPanel>
-                <TextBlock TextWrapping="Wrap" Foreground="#23486E">
-                    <Run Text="出图 — 明细表(材料表统计,需求 2.5):"/><Run Text="{Binding SummaryTitle, Mode=OneWay}" FontWeight="Bold"/>
-                    <Run Text="   ·   按「类别 + 族 + 类型 + 单位」归并,单位进归并键,长度与件数不互相求和"/>
-                </TextBlock>
+                <TextBlock Text="{Binding SummaryTitle, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E"
+                           ToolTip="按「类别 + 族 + 类型 + 单位」归并;单位进归并键,长度与件数不互相求和"/>
                 <TextBlock Text="{Binding SourceNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,4,0,0"/>
                 <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
             </StackPanel>
@@ -66,11 +64,13 @@
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0" Style="{StaticResource SectionTitle}" Margin="4,0,0,4"
-                       Text="一、按类别小计(与计算书 / Excel 同源;单位不一致的类别只给件数)"/>
+                       Text="一、按类别小计"
+                       ToolTip="与计算书 / Excel 同源;单位不一致的类别只给件数"/>
             <views:ResultTableView x:Name="ResultTableHost" Grid.Row="1" Table="{Binding Table}"/>
 
             <TextBlock Grid.Row="2" Style="{StaticResource SectionTitle}"
-                       Text="二、逐类型明细(材料表;类别 / 族 / 类型 / 数量 / 单位 / 件数)"/>
+                       Text="二、逐类型明细"
+                       ToolTip="类别 / 族 / 类型 / 数量 / 单位 / 件数"/>
             <DataGrid Grid.Row="3" x:Name="TakeoffGrid" Style="{StaticResource Grid}"
                       ItemsSource="{Binding Rows}" AlternatingRowBackground="#F7FAFD"
                       HorizontalScrollBarVisibility="Auto">
@@ -81,7 +81,7 @@
                     <DataGridTextColumn Header="数量" Width="110" Binding="{Binding TotalQuantity, StringFormat={}{0:N2}}"/>
                     <DataGridTextColumn Header="单位" Width="70" Binding="{Binding Unit}"/>
                     <DataGridTextColumn Header="件数" Width="80" Binding="{Binding TotalCount, StringFormat={}{0:N0}}"/>
-                    <DataGridTextColumn Header="备注(读数口径)" Width="*" Binding="{Binding Note}"/>
+                    <DataGridTextColumn Header="备注" Width="*" Binding="{Binding Note}"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Grid>

@@ -24,27 +24,25 @@
 
     <DockPanel>
         <!-- 标题与总开关 -->
-        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
+        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6"
+                ToolTip="进程内 function calling:不起 MCP、不配端口。先本地检索依据 → 连同问题发给大模型 → 需要工程数据时由模型调用命令 → 回答以草稿呈现">
             <StackPanel>
-                <TextBlock TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E"
-                           Text="AI 助手(进程内 function calling:不起 MCP、不配端口)"/>
-                <TextBlock TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,2,0,0"
-                           Text="先本地检索依据 → 连同问题发给大模型 → 需要工程数据时由模型调用下面的命令 → 回答以草稿呈现,请对着数据核对。"/>
+                <TextBlock TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E" Text="AI 助手"/>
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                     <CheckBox Content="启用 AI 助手" VerticalAlignment="Center" IsChecked="{Binding Enabled, Mode=TwoWay}"
                               ToolTip="不勾选(或不保存)时不会向大模型发任何请求"/>
-                    <CheckBox Content="操作 Revit(允许模型调用命令)" VerticalAlignment="Center" Margin="14,0,0,0"
+                    <CheckBox Content="操作 Revit" VerticalAlignment="Center" Margin="14,0,0,0"
                               IsChecked="{Binding OperateRevit, Mode=TwoWay}"
-                              ToolTip="默认关闭:关闭时模型看不到命令、命令也不会执行;开启后命令返回的工程数据会随对话发给模型服务方,项目不允许出网时请保持关闭"/>
+                              ToolTip="允许模型调用命令。默认关闭:关闭时模型看不到命令、命令也不会执行;开启后命令返回的工程数据会随对话发给模型服务方,项目不允许出网时请保持关闭"/>
                     <TextBlock Text="{Binding OperateRevitText}" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#8A6100"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                    <CheckBox Content="允许模型修改模型(危险:每条都要你确认)" VerticalAlignment="Center"
+                    <CheckBox Content="允许模型修改模型" VerticalAlignment="Center"
                               IsChecked="{Binding AllowModify, Mode=TwoWay}"
-                              ToolTip="第二级开关,默认关闭:关闭时修改类命令不下发给模型、硬调也被拒绝;开启后每次修改都会弹 Revit 原生对话框(默认按钮是「否」),单次最多改 200 个构件,数值型(带单位)参数一律不写"/>
+                              ToolTip="危险开关,第二级,默认关闭:关闭时修改类命令不下发给模型、硬调也被拒绝;开启后每次修改都会弹 Revit 原生对话框(默认按钮是「否」),单次最多改 200 个构件,数值型(带单位)参数一律不写"/>
                     <TextBlock Text="{Binding AllowModifyText}" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#C0392B"/>
                 </StackPanel>
-                <TextBlock Text="{Binding ToolCountText}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,2,0,0"/>
+                <TextBlock Text="{Binding ToolCountText}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,4,0,0"/>
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="#2E7D32" Margin="0,2,0,0"/>
                 <TextBlock Text="{Binding ScopeText}" TextWrapping="Wrap" Foreground="#8A8A8A" Margin="0,2,0,0"/>
             </StackPanel>
@@ -73,7 +71,7 @@
             <StackPanel Margin="0,4,0,0">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="服务" VerticalAlignment="Center"/>
-                    <ComboBox x:Name="ProviderBox" Width="220" Margin="8,0,0,0" VerticalAlignment="Center"
+                    <ComboBox x:Name="ProviderBox" Width="220" Height="24" Margin="8,0,0,0" VerticalAlignment="Center"
                               ItemsSource="{Binding Providers}" DisplayMemberPath="DisplayText"
                               SelectedItem="{Binding SelectedProvider, Mode=TwoWay}"/>
                     <Button Content="申请 API key" Width="110" Height="24" Margin="8,0,0,0" Command="{Binding OpenKeyPageCommand}"/>
@@ -116,7 +114,8 @@
                                 <TextBlock TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E"
                                            Text="我:" Visibility="{Binding IsUser, Converter={StaticResource BoolToVis}}"/>
                                 <TextBlock TextWrapping="Wrap" FontWeight="Bold" Foreground="#33691E"
-                                           Text="AI 助手(草稿):" Visibility="{Binding IsAssistant, Converter={StaticResource BoolToVis}}"/>
+                                           Text="AI 助手(草稿):" Visibility="{Binding IsAssistant, Converter={StaticResource BoolToVis}}"
+                                           ToolTip="生成文本,不是结论;请对着命令日志与知识库依据核对"/>
                                 <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
                                          Background="Transparent" BorderThickness="0" FontFamily="Consolas"/>
                             </StackPanel>
@@ -126,8 +125,8 @@
             </ScrollViewer>
 
             <StackPanel Grid.Row="1" Visibility="{Binding HasToolLog, Converter={StaticResource BoolToVis}}">
-                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,6,0,4"
-                           Text="命令活动日志(模型调用了哪条命令、结果如何;命令都在本进程内执行)"/>
+                <TextBlock FontWeight="Bold" Foreground="#23486E" Margin="0,6,0,4" Text="命令活动日志"
+                           ToolTip="模型调用了哪条命令、结果如何;命令都在本进程内执行"/>
                 <DataGrid x:Name="ToolGrid" Style="{StaticResource Grid}" ItemsSource="{Binding ToolLog}"
                           MaxHeight="110" AlternatingRowBackground="#F7FAFD">
                     <DataGrid.Columns>

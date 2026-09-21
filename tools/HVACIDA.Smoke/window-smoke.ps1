@@ -61,6 +61,25 @@ try {
 }
 
 # =====================================================================
+# 静态扫描:界面不放"备注说明"
+# —— 窗口可见文本只允许是「控件标签 / 章节标题 / 数据与实时状态」;
+#    需求编号引用、操作口径解释、Markdown 强调符一律进 ToolTip(悬停才出现)。
+#    这是 2026-09-20 用户口径「优化各窗口的 UI,删掉所有备注说明」的防回归闸门。
+# =====================================================================
+try {
+    $noteBad = @()
+    foreach ($x in $xamls) {
+        $hit = Select-String -Path $x.FullName -Pattern '(Text|Header|Content)="[^"]*(需求\s*[0-9]|\*\*|注:|说明:|备注:)'
+        foreach ($h in $hit) { $noteBad += ((Split-Path $x.FullName -Leaf) + ':' + $h.LineNumber) }
+    }
+    if ($noteBad.Count -eq 0) { Write-Host ("PASS  XAML 可见文本无备注说明(需求引用 / 注: / Markdown 符一律在 ToolTip)" ) }
+    else { Write-Host ("FAIL  XAML 可见文本仍含备注说明: " + ($noteBad -join ', ')); $fail++ }
+} catch {
+    Write-Host ("FAIL  备注说明扫描  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
+# =====================================================================
 # 静态绑定一致性门禁(开发流程 §5.2):窗口 XAML 里每个 {Binding 路径} 都必须能在
 # 「ViewModel + 其集合属性的元素类型」上反射解析出来 —— WPF 绑定失败是**静默**的
 # (只写调试跟踪、不抛异常),所以要把它变成硬断言,否则"标签在、数字空"会溜过去。

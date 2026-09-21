@@ -7,13 +7,8 @@
         FontFamily="Microsoft YaHei UI" FontSize="12"
         UseLayoutRounding="True">
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
-            <StackPanel>
-                <TextBlock Text="{Binding Intro}" TextWrapping="Wrap"/>
-                <TextBlock Margin="0,4,0,0" Foreground="#8A6100">
-                    <Run Text="状态:"/><Run Text="{Binding StatusText, Mode=OneWay}"/><Run Text=" —— 详细口径见下方分节。"/>
-                </TextBlock>
-            </StackPanel>
+        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="10,8">
+            <TextBlock Text="{Binding Intro}" TextWrapping="Wrap"/>
         </Border>
 
         <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
@@ -29,10 +24,10 @@
             <ItemsControl ItemsSource="{Binding Sections}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border BorderBrush="#A0A0A0" BorderThickness="1" Background="#FAFAFA"
-                                Padding="8" Margin="0,0,0,8">
+                        <Border BorderBrush="#D6E2F0" BorderThickness="1" Background="#FAFAFA"
+                                Padding="10,8" Margin="0,0,0,8">
                             <StackPanel>
-                                <TextBlock Text="{Binding Heading}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock Text="{Binding Heading}" FontWeight="SemiBold" Foreground="#23486E" Margin="0,0,0,5"/>
                                 <ItemsControl ItemsSource="{Binding Lines}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>

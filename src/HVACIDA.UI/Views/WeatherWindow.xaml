@@ -14,6 +14,7 @@
         </Style>
         <Style x:Key="FieldInput" TargetType="{x:Type TextBox}">
             <Setter Property="Width" Value="150"/>
+            <Setter Property="Height" Value="24"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="2,3,10,3"/>
             <Setter Property="HorizontalContentAlignment" Value="Right"/>
@@ -25,28 +26,25 @@
     </Window.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6">
-            <TextBlock TextWrapping="Wrap"
-                       Text="室外/室内计算参数(需求 2.1.2)。点【从气象数据库获取】取典型值后按工程所在地核对;数值单位为 ℃ / % / kPa。工程基本信息见 Ribbon「项目信息 → 工程信息」。"/>
-        </Border>
-
         <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
             <DockPanel>
                 <Button DockPanel.Dock="Left" Content="从气象数据库获取" Width="140" Height="30"
-                        Command="{Binding FetchWeatherCommand}"/>
+                        Command="{Binding FetchWeatherCommand}"
+                        ToolTip="按工程所在地取典型值,取回后请核对"/>
                 <Button DockPanel.Dock="Left" Content="恢复默认" Width="96" Height="30" Margin="8,0,0,0"
                         Command="{Binding ResetWeatherCommand}"/>
                 <Button DockPanel.Dock="Right" Content="取 消" Width="96" Height="30" IsCancel="True"/>
                 <Button DockPanel.Dock="Right" Content="保 存" Width="100" Height="30" Margin="0,0,8,0"
                         Command="{Binding SaveCommand}" IsDefault="True"/>
-                <TextBlock Text="{Binding WeatherStatus}" VerticalAlignment="Center" Margin="12,0,0,0"
+                <TextBlock Text="{Binding WeatherStatus}" VerticalAlignment="Center" Margin="12,0,12,0"
                            TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
             </DockPanel>
         </Border>
 
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="10">
-                <GroupBox Header="一、大系统室外计算参数(2.1.2)" Style="{StaticResource GroupHeader}">
+                <GroupBox Header="一、大系统室外计算参数" Style="{StaticResource GroupHeader}"
+                          ToolTip="需求 2.1.2;单位 ℃">
                     <UniformGrid Columns="2">
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="夏季空调干球温度 ℃"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.LargeSystemOutdoor.SummerACDryBulbC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="夏季空调湿球温度 ℃"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.LargeSystemOutdoor.SummerACWetBulbC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
@@ -56,7 +54,8 @@
                     </UniformGrid>
                 </GroupBox>
 
-                <GroupBox Header="二、小系统室外计算参数(2.1.2)" Style="{StaticResource GroupHeader}">
+                <GroupBox Header="二、小系统室外计算参数" Style="{StaticResource GroupHeader}"
+                          ToolTip="需求 2.1.2;单位 ℃">
                     <UniformGrid Columns="2">
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="夏季空调干球温度 ℃"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.SmallSystemOutdoor.SummerACDryBulbC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="夏季空调湿球温度 ℃"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.SmallSystemOutdoor.SummerACWetBulbC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
@@ -71,17 +70,14 @@
                     </UniformGrid>
                 </GroupBox>
 
-                <GroupBox Header="四、大系统室内设计参数(站厅 / 站台)" Style="{StaticResource GroupHeader}">
-                    <StackPanel>
-                        <UniformGrid Columns="2">
-                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅计算干球温度 ℃"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.LargeSystemIndoor.HallDryBulbC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅计算相对湿度 %"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.LargeSystemIndoor.HallRelativeHumidityPercent, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台计算干球温度 ℃"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.LargeSystemIndoor.PlatformDryBulbC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台计算相对湿度 %"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.LargeSystemIndoor.PlatformRelativeHumidityPercent, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                        </UniformGrid>
-                        <TextBlock Margin="6,6,0,0" Foreground="#5A5A5A" TextWrapping="Wrap"
-                                   Text="注:站厅与站台送风温度必须一致 —— 由站厅送风温度统一确定,站台不单独计算送风温度。"/>
-                    </StackPanel>
+                <GroupBox Header="四、大系统室内设计参数(站厅 / 站台)" Style="{StaticResource GroupHeader}"
+                          ToolTip="站厅与站台送风温度必须一致:由站厅送风温度统一确定,站台不单独计算送风温度">
+                    <UniformGrid Columns="2">
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅计算干球温度 ℃"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.LargeSystemIndoor.HallDryBulbC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站厅计算相对湿度 %"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.LargeSystemIndoor.HallRelativeHumidityPercent, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台计算干球温度 ℃"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.LargeSystemIndoor.PlatformDryBulbC, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="站台计算相对湿度 %"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Design.LargeSystemIndoor.PlatformRelativeHumidityPercent, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                    </UniformGrid>
                 </GroupBox>
 
                 <GroupBox Header="五、小系统室内设计参数(管理 / 设备用房)" Style="{StaticResource GroupHeader}">
