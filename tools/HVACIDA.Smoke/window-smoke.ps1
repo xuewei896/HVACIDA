@@ -885,6 +885,14 @@ try {
     }
     if ($ww.IsVisible) { $ww.Close() }
 
+    # 2026-09-20 用户口径:两个项目信息窗风格一致(同宽 + 同固定尺寸策略)
+    if ($piw.Width -eq $ww.Width -and $piw.ResizeMode -eq $ww.ResizeMode) {
+        Write-Host ("PASS  工程信息窗与气象参数窗风格一致(同宽 {0},同为 {1})" -f [int]$ww.Width, $ww.ResizeMode)
+    } else {
+        Write-Host ("FAIL  两窗不一致:工程信息 {0}/{1} vs 气象参数 {2}/{3}" -f $piw.Width, $piw.ResizeMode, $ww.Width, $ww.ResizeMode)
+        $fail++
+    }
+
     try { Remove-Item $tmp3 -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
     Write-Host ("FAIL  省市气象库自检  {0}" -f $_.Exception.Message)
