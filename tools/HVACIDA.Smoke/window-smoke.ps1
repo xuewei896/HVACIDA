@@ -852,6 +852,39 @@ try {
         Write-Host "FAIL  工程信息窗未找到【确 定】按钮(ConfirmButton)"; $fail++
     }
     if ($piw.IsVisible) { $piw.Close() }
+
+    # 2026-09-20 用户口径:气象参数窗同款(固定尺寸 + 【确 定】= 保存并关闭 + 无「从气象数据库获取」按钮)
+    $ww = New-Object "$uiNs.WeatherWindow" -ArgumentList $pivm
+    $ww.Show(); $ww.UpdateLayout()
+    if ($ww.ResizeMode.ToString() -eq 'NoResize' -and $ww.MinWidth -eq 0 -and $ww.MinHeight -eq 0) {
+        Write-Host ("PASS  气象参数窗为固定尺寸(ResizeMode=NoResize,{0}x{1})" -f [int]$ww.Width, [int]$ww.Height)
+    } else {
+        Write-Host ("FAIL  气象参数窗仍可缩放: ResizeMode={0} Min={1}x{2}" -f $ww.ResizeMode, $ww.MinWidth, $ww.MinHeight)
+        $fail++
+    }
+
+    # 按钮已删(2026-09-20 用户口径):源文件与窗口里都不应再有该按钮
+    $wx = Get-Content -LiteralPath (Join-Path $viewDir 'WeatherWindow.xaml') -Raw
+    $fetchBind = ($null -ne $pivm.PSObject.Properties['FetchWeatherCommand'])   # 命令保留在 VM,只是不再有按钮
+    if ($wx -notmatch '从气象数据库获取') {
+        Write-Host ("PASS  气象参数窗已无【从气象数据库获取】按钮(VM 命令保留:{0};取数改由「工程信息」选市回填)" -f $fetchBind)
+    } else { Write-Host "FAIL  气象参数窗仍有【从气象数据库获取】按钮"; $fail++ }
+
+    $wOkBtn = $ww.FindName('ConfirmButton')
+    if ($wOkBtn -ne $null -and $wOkBtn.Content -eq '确 定') {
+        Remove-Item (Join-Path $tmp3 'project.xml') -Force -ErrorAction SilentlyContinue
+        $wOkBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        $wSaved = Test-Path (Join-Path $tmp3 'project.xml')
+        if (-not $ww.IsVisible -and $wSaved) {
+            Write-Host "PASS  气象参数窗【确 定】= 保存并关闭(project.xml 重新落盘,窗口已关)"
+        } else {
+            Write-Host ("FAIL  气象参数窗确定行为: closed={0} saved={1}" -f (-not $ww.IsVisible), $wSaved); $fail++
+        }
+    } else {
+        Write-Host "FAIL  气象参数窗未找到【确 定】按钮(ConfirmButton)"; $fail++
+    }
+    if ($ww.IsVisible) { $ww.Close() }
+
     try { Remove-Item $tmp3 -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
     Write-Host ("FAIL  省市气象库自检  {0}" -f $_.Exception.Message)

@@ -289,7 +289,7 @@ namespace HVACIDA.UI.ViewModels
                 return;
             }
 
-            WeatherStatus = result.Note + " 已回填:" + result.FilledText + "。请核对后点【保 存】。";
+            WeatherStatus = result.Note + " 已回填:" + result.FilledText + "。请核对后保存。";
         }
 
         private void ResetWeather()
