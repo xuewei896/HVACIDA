@@ -15,14 +15,16 @@ namespace HVACIDA.Core.Services
     /// </summary>
     public static class ExcelReportBuilder
     {
-        /// <summary>把一份结果表渲染成工作表(分区标题 + 项目/数值/单位三列 + 口径)。</summary>
+        /// <summary>把一份结果表渲染成工作表(大标题 + 分区标题跨列合并 + 表头 + 项目/数值/单位三列 + 口径)。</summary>
         public static void AddResultTable(XlsxSheet sheet, ResultTable table)
         {
             if (sheet == null || table == null) return;
-            sheet.AddRow(table.Title);
+            sheet.SetColumnWidths(52, 18, 12);
+            sheet.FreezeRows(1);
+            sheet.AddTitle(table.Title);
             foreach (var section in table.Sections)
             {
-                sheet.AddRow(section.Title);
+                sheet.AddSectionTitle(section.Title, 3);
                 sheet.AddHeader("项目", "数值", "单位");
                 foreach (var row in section.Rows)
                 {
@@ -40,6 +42,11 @@ namespace HVACIDA.Core.Services
             if (sheet == null) return;
             if (headers != null && headers.Count > 0)
             {
+                var widths = new double[headers.Count];
+                for (int i = 0; i < widths.Length; i++) widths[i] = i == 0 ? 24 : 20;
+                sheet.SetColumnWidths(widths);
+                sheet.FreezeRows(1);
+
                 var array = new string[headers.Count];
                 for (int i = 0; i < headers.Count; i++) array[i] = headers[i];
                 sheet.AddHeader(array);
@@ -56,6 +63,8 @@ namespace HVACIDA.Core.Services
         {
             if (workbook == null) return;
             var sheet = workbook.AddSheet("口径与待补");
+            sheet.SetColumnWidths(22, 90);
+            sheet.FreezeRows(1);
             sheet.AddHeader("项", "内容");
             sheet.AddRow("计算书", title);
             sheet.AddRow("导出时间", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));

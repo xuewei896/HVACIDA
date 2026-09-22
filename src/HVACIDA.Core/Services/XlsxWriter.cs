@@ -132,24 +132,39 @@ namespace HVACIDA.Core.Services
             return sb.ToString();
         }
 
-        /// <summary>两种字体(常规 / 加粗),供表头使用;填充与边框给最小合法集合。</summary>
+        /// <summary>
+        /// 样式表:常规 / 加粗 / **表头(加粗+浅蓝底+细边框+居中)** / **分区标题(加粗+更浅底+边框)** /
+        /// **数值(千分位,最多 4 位小数)** / 大标题(加粗 12)。2026-09-20 排版优化:补列宽、冻结首行、合并分区标题。
+        /// </summary>
         private static string Styles()
         {
             return "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
                    "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
-                   "<fonts count=\"2\">" +
+                   "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"#,##0.####\"/></numFmts>" +
+                   "<fonts count=\"3\">" +
                    "<font><sz val=\"11\"/><name val=\"Microsoft YaHei\"/></font>" +
                    "<font><b/><sz val=\"11\"/><name val=\"Microsoft YaHei\"/></font>" +
+                   "<font><b/><sz val=\"12\"/><name val=\"Microsoft YaHei\"/></font>" +
                    "</fonts>" +
-                   "<fills count=\"2\">" +
+                   "<fills count=\"4\">" +
                    "<fill><patternFill patternType=\"none\"/></fill>" +
                    "<fill><patternFill patternType=\"gray125\"/></fill>" +
+                   "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFD9E2F3\"/><bgColor indexed=\"64\"/></patternFill></fill>" +
+                   "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFEEF3F9\"/><bgColor indexed=\"64\"/></patternFill></fill>" +
                    "</fills>" +
-                   "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>" +
+                   "<borders count=\"2\">" +
+                   "<border><left/><right/><top/><bottom/><diagonal/></border>" +
+                   "<border><left style=\"thin\"><color rgb=\"FFBFBFBF\"/></left><right style=\"thin\"><color rgb=\"FFBFBFBF\"/></right>" +
+                   "<top style=\"thin\"><color rgb=\"FFBFBFBF\"/></top><bottom style=\"thin\"><color rgb=\"FFBFBFBF\"/></bottom><diagonal/></border>" +
+                   "</borders>" +
                    "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>" +
-                   "<cellXfs count=\"2\">" +
+                   "<cellXfs count=\"6\">" +
                    "<xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>" +
                    "<xf numFmtId=\"0\" fontId=\"1\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyFont=\"1\"/>" +
+                   "<xf numFmtId=\"0\" fontId=\"1\" fillId=\"2\" borderId=\"1\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\" applyBorder=\"1\" applyAlignment=\"1\"><alignment horizontal=\"center\" vertical=\"center\"/></xf>" +
+                   "<xf numFmtId=\"0\" fontId=\"1\" fillId=\"3\" borderId=\"1\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\" applyBorder=\"1\"/>" +
+                   "<xf numFmtId=\"164\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/>" +
+                   "<xf numFmtId=\"0\" fontId=\"2\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyFont=\"1\"/>" +
                    "</cellXfs>" +
                    "<cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles>" +
                    "</styleSheet>";
@@ -215,10 +230,16 @@ namespace HVACIDA.Core.Services
         }
     }
 
-    /// <summary>XLSX 工作表(只支持顺序追加行:表头加粗、文本内联、数值按不变文化写)。</summary>
+    /// <summary>
+    /// XLSX 工作表(只支持顺序追加行)。2026-09-20 排版优化:可设**列宽**、**冻结首行**、
+    /// **分区标题跨列合并**;数值统一用千分位格式(最多 4 位小数),文本内联。
+    /// </summary>
     public sealed class XlsxSheet
     {
         private readonly List<List<XlsxCell>> _rows = new List<List<XlsxCell>>();
+        private readonly List<double> _columnWidths = new List<double>();
+        private readonly List<string> _merges = new List<string>();
+        private int _freezeRows;
 
         internal XlsxSheet(string name)
         {
@@ -231,10 +252,43 @@ namespace HVACIDA.Core.Services
         /// <summary>已写入的行数(自检用)。</summary>
         public int RowCount => _rows.Count;
 
-        /// <summary>加一行表头(加粗)。</summary>
+        /// <summary>设置各列宽度(0 = 该列用默认宽;只影响显示,不影响数据)。</summary>
+        public void SetColumnWidths(params double[] widths)
+        {
+            _columnWidths.Clear();
+            if (widths == null) return;
+            foreach (var w in widths) _columnWidths.Add(w);
+        }
+
+        /// <summary>冻结前若干行(表头不在第一行时传 0 取消)。</summary>
+        public void FreezeRows(int count)
+        {
+            _freezeRows = count < 0 ? 0 : count;
+        }
+
+        /// <summary>加一行大标题(加粗 12)。</summary>
+        public void AddTitle(string text)
+        {
+            AddStyledRow(XlsxStyles.Title, new object[] { text });
+        }
+
+        /// <summary>加一行分区标题(加粗 + 浅底 + 边框),并跨 <paramref name="columns"/> 列合并。</summary>
+        public void AddSectionTitle(string text, int columns)
+        {
+            int rowIndex = _rows.Count;
+            AddStyledRow(XlsxStyles.Section, new object[] { text });
+            if (columns > 1)
+            {
+                _merges.Add(ColumnName(0) + (rowIndex + 1) + ":" + ColumnName(columns - 1) + (rowIndex + 1));
+            }
+        }
+
+        /// <summary>加一行表头(加粗 + 浅蓝底 + 细边框 + 居中)。</summary>
         public void AddHeader(params string[] cells)
         {
-            AddRow(true, cells);
+            var values = new object[cells == null ? 0 : cells.Length];
+            for (int i = 0; i < values.Length; i++) values[i] = cells[i];
+            AddStyledRow(XlsxStyles.Header, values);
         }
 
         /// <summary>
@@ -243,7 +297,13 @@ namespace HVACIDA.Core.Services
         /// </summary>
         public void AddRow(params object[] cells)
         {
-            AddRow(false, cells);
+            AddStyledRow(XlsxStyles.Body, cells);
+        }
+
+        /// <summary>加一行**整行加粗**的数据(合计行等)。</summary>
+        public void AddBoldRow(params object[] cells)
+        {
+            AddStyledRow(XlsxStyles.Bold, cells);
         }
 
         /// <summary>加一个空行(用于分组之间的间隔)。</summary>
@@ -252,14 +312,18 @@ namespace HVACIDA.Core.Services
             _rows.Add(new List<XlsxCell>());
         }
 
-        private void AddRow(bool bold, object[] cells)
+        private void AddStyledRow(int style, object[] cells)
         {
             var row = new List<XlsxCell>();
             if (cells != null)
             {
                 foreach (var cell in cells)
                 {
-                    row.Add(XlsxCell.Create(cell, bold));
+                    // 数值在正文行里单独走"千分位"样式;表头/标题/加粗行不套数值格式
+                    int cellStyle = style == XlsxStyles.Body && XlsxCell.IsNumeric(cell)
+                        ? XlsxStyles.Number
+                        : style;
+                    row.Add(XlsxCell.Create(cell, cellStyle));
                 }
             }
             _rows.Add(row);
@@ -270,6 +334,29 @@ namespace HVACIDA.Core.Services
             var sb = new StringBuilder();
             sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
             sb.Append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+
+            if (_freezeRows > 0)
+            {
+                sb.Append("<sheetViews><sheetView workbookViewId=\"0\"><pane ySplit=\"").Append(_freezeRows)
+                  .Append("\" topLeftCell=\"A").Append(_freezeRows + 1)
+                  .Append("\" activePane=\"bottomLeft\" state=\"frozen\"/><selection pane=\"bottomLeft\" activeCell=\"A")
+                  .Append(_freezeRows + 1).Append("\" sqref=\"A").Append(_freezeRows + 1)
+                  .Append("\"/></sheetView></sheetViews>");
+            }
+
+            if (_columnWidths.Count > 0)
+            {
+                sb.Append("<cols>");
+                for (int i = 0; i < _columnWidths.Count; i++)
+                {
+                    if (_columnWidths[i] <= 0) continue;
+                    sb.Append("<col min=\"").Append(i + 1).Append("\" max=\"").Append(i + 1)
+                      .Append("\" width=\"").Append(_columnWidths[i].ToString("0.##", CultureInfo.InvariantCulture))
+                      .Append("\" customWidth=\"1\"/>");
+                }
+                sb.Append("</cols>");
+            }
+
             sb.Append("<sheetData>");
             for (int r = 0; r < _rows.Count; r++)
             {
@@ -281,7 +368,16 @@ namespace HVACIDA.Core.Services
                 }
                 sb.Append("</row>");
             }
-            sb.Append("</sheetData></worksheet>");
+            sb.Append("</sheetData>");
+
+            if (_merges.Count > 0)
+            {
+                sb.Append("<mergeCells count=\"").Append(_merges.Count).Append("\">");
+                foreach (var merge in _merges) sb.Append("<mergeCell ref=\"").Append(merge).Append("\"/>");
+                sb.Append("</mergeCells>");
+            }
+
+            sb.Append("</worksheet>");
             return sb.ToString();
         }
 
@@ -299,17 +395,47 @@ namespace HVACIDA.Core.Services
         }
     }
 
+    /// <summary>工作表/单元格样式索引(与 <c>styles.xml</c> 的 cellXfs 一一对应)。</summary>
+    internal static class XlsxStyles
+    {
+        /// <summary>常规(文本)。</summary>
+        internal const int Body = 0;
+
+        /// <summary>加粗。</summary>
+        internal const int Bold = 1;
+
+        /// <summary>表头:加粗 + 浅蓝底 + 细边框 + 居中。</summary>
+        internal const int Header = 2;
+
+        /// <summary>分区标题:加粗 + 更浅底 + 细边框。</summary>
+        internal const int Section = 3;
+
+        /// <summary>数值:千分位,最多 4 位小数。</summary>
+        internal const int Number = 4;
+
+        /// <summary>大标题:加粗 12。</summary>
+        internal const int Title = 5;
+    }
+
     /// <summary>一个单元格(文本 / 数值 / 空)。</summary>
     internal sealed class XlsxCell
     {
         private bool _isText;
         private string _text;
         private double _number;
-        private bool _bold;
+        private int _style;
 
-        internal static XlsxCell Create(object value, bool bold)
+        internal static bool IsNumeric(object value)
         {
-            var cell = new XlsxCell { _bold = bold };
+            if (value == null || value is string || value is bool) return false;
+            double parsed;
+            return double.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture),
+                NumberStyles.Any, CultureInfo.InvariantCulture, out parsed);
+        }
+
+        internal static XlsxCell Create(object value, int style)
+        {
+            var cell = new XlsxCell { _style = style };
             if (value == null) return cell;
 
             if (value is string)
@@ -341,7 +467,7 @@ namespace HVACIDA.Core.Services
 
         internal string ToXml(string reference)
         {
-            string style = _bold ? " s=\"1\"" : "";
+            string style = _style > 0 ? " s=\"" + _style + "\"" : "";
             if (_isText)
             {
                 if (string.IsNullOrEmpty(_text)) return "<c r=\"" + reference + "\"" + style + "/>";

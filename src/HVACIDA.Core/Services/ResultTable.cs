@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -80,6 +80,149 @@ namespace HVACIDA.Core.Services
             int w = 0;
             foreach (char c in text) w += c > 0x2E80 ? 2 : 1;
             return w;
+        }
+
+        /// <summary>
+        /// 「大系统 → 计算结果」窗的**两段小结**:一、计算参数(8 项)+ 二、选型参数(5 项)。
+        /// <para>
+        /// 与界面表格、文本计算书、Excel 计算书**同源**(§4.8):界面与 Excel 都渲染这一份,
+        /// 不各写一套数字。口径:计算参数取公式文档的**计算量**(C171/D171 为面积×60 的火灾计算排烟量,
+        /// 不含选型系数);选型参数的排烟风机取「排烟计算」窗的**单台选型风量**(含选型系数,见 large-smoke.xml),
+        /// 未做排烟计算时退回公式文档口径 E178(MAX/2)并如实在单元格代号里标出。
+        /// </para>
+        /// <para>
+        /// 「小新风选型风量」= 公式文档 A136 实际新风量 = max(公共区人数 × 空调季新风量指标, 总送风量 × 10%);
+        /// 插件不另乘选型余量(要加余量请给系数,不猜)。
+        /// </para>
+        /// </summary>
+        public static ResultTable ForLargeSystemSummary(LargeSystemResult r, LargeSmokeResult smoke)
+        {
+            var t = new ResultTable
+            {
+                Title = "大系统计算结果:计算参数 / 选型参数",
+                Note = "计算参数为公式文档计算量(排烟为面积 × 60 m³/(h·m²),不含选型系数);" +
+                       "选型参数为单台量(总送风/总制冷/总回风各取一半);排烟风机选型风量取自「排烟计算」窗(含选型系数)。" +
+                       "小新风选型风量按公式文档 A136 实际新风量(人数新风与总送风 10% 取大),未另乘余量。"
+            };
+            if (r == null) return t;
+
+            var calc = t.Section("一、计算参数");
+            calc.Add("站厅站台公共区计算总冷负荷", "E159", r.TotalCoolingKw, "kW", 2);
+            calc.Add("站厅层公共区空调计算送风量", "A125", r.HallSupplyFlowM3H, "m³/h", 0);
+            calc.Add("站台层公共区空调计算送风量", "B125", r.PlatformSupplyFlowM3H, "m³/h", 0);
+            calc.Add("车站公共区总空调计算送风量", "C125", r.TotalSupplyFlowM3H, "m³/h", 0);
+            calc.Add("空调计算新风量", "A136", r.ActualFreshAirM3H, "m³/h", 0);
+            calc.Add("空调计算回排风量", "E136", r.TotalReturnFlowM3H, "m³/h", 0);
+            calc.Add("站厅火灾计算排烟量", "C171", r.HallSmokeFlowM3H, "m³/h", 0);
+            calc.Add("站台火灾计算排烟量", "D171", r.PlatformSmokeFlowM3H, "m³/h", 0);
+
+            var units = t.Section("二、选型参数");
+            units.Add("空调机组选型风量", "A165", r.UnitSupplyFlowM3H, "m³/h", 0);
+            units.Add("空调机组选型制冷量", "B165", r.UnitCoolingKw, "kW", 2);
+            units.Add("小新风选型风量", "A136", r.ActualFreshAirM3H, "m³/h", 0);
+            units.Add("回排风机选型风量", "C178", r.UnitReturnFlowM3H, "m³/h", 0);
+            if (smoke != null)
+                units.Add("排烟风机选型风量", "排烟窗单台选型", smoke.UnitSelectionFlowM3H, "m³/h", 0);
+            else
+                units.Add("排烟风机选型风量", "E178", r.UnitSmokeFlowM3H, "m³/h", 0);
+            return t;
+        }
+
+        /// <summary>
+        /// 大系统**输入参数**表(计算书用,界面不显示)。分组与「大系统 → 负荷计算」窗一致,
+        /// 单元格代号保留在 <see cref="ResultRow.Cell"/> 里(供开发自检逐格核对,§6.3)。
+        /// </summary>
+        public static ResultTable ForLargeSystemInput(LargeSystemInput x)
+        {
+            var t = new ResultTable
+            {
+                Title = "大系统输入参数(与「大系统 → 负荷计算」窗同一份 large-system.xml)",
+                Note = "C5/F4/F6 由「项目信息 → 气象参数」联动(可取消);D55/D56/C13/C14 可由「公共区参数」从模型空间取值。"
+            };
+            if (x == null) return t;
+
+            var air = t.Section("一、空气计算参数及标准");
+            air.Add("夏季空调室外湿球温度", "C5", x.OutdoorWetBulbC, "℃", 2);
+            air.Add("站厅空调计算干球温度", "F4", x.HallDesignTempC, "℃", 2);
+            air.Add("站台空调计算干球温度", "F6", x.PlatformDesignTempC, "℃", 2);
+            air.Add("站厅公共区风温差", "C8", x.SupplyTempDiffC, "℃", 2);
+            air.Add("管道温升", "C10", x.DuctTempRiseC, "℃", 2);
+            air.Add("露点相对湿度", "C118", x.DewPointRelativeHumidityPercent, "%", 1);
+            air.Add("壁面产湿量", "A91", x.WallMoistureEmission, "g/(m²·h)", 2);
+            air.Add("空调季新风量指标", "B132", x.FreshAirPerPersonM3H, "m³/(h·人)", 1);
+
+            var geo = t.Section("二、车站基础资料");
+            geo.Add("站厅公共区面积", "D55", x.HallAreaM2, "m²", 1);
+            geo.Add("站台公共区面积", "D56", x.PlatformAreaM2, "m²", 1);
+            geo.Add("站厅公共区层高", "C13", x.HallHeightM, "m", 2);
+            geo.Add("站厅公共区长度", "C14", x.HallLengthM, "m", 2);
+            geo.Add("出入口A 宽", "", x.EntranceAWidthM, "m", 2);
+            geo.Add("出入口A 高", "", x.EntranceAHeightM, "m", 2);
+            geo.Add("出入口B 宽", "", x.EntranceBWidthM, "m", 2);
+            geo.Add("出入口B 高", "", x.EntranceBHeightM, "m", 2);
+            geo.Add("出入口C 宽", "", x.EntranceCWidthM, "m", 2);
+            geo.Add("出入口C 高", "", x.EntranceCHeightM, "m", 2);
+            geo.Add("出入口D 宽", "", x.EntranceDWidthM, "m", 2);
+            geo.Add("出入口D 高", "", x.EntranceDHeightM, "m", 2);
+            geo.Add("出入口负荷指标", "B82", x.EntranceLoadIndexW, "W", 0);
+
+            var flow = t.Section("三、高峰客流资料");
+            flow.Add("上行线 上客量", "A27", x.UpLineBoardCount, "人次/h", 0);
+            flow.Add("上行线 下客量", "B27", x.UpLineAlightCount, "人次/h", 0);
+            flow.Add("下行线 上客量", "C27", x.DownLineBoardCount, "人次/h", 0);
+            flow.Add("下行线 下客量", "D27", x.DownLineAlightCount, "人次/h", 0);
+            flow.Add("换乘 上客量", "E27", x.TransferBoardCount, "人次/h", 0);
+            flow.Add("换乘 下客量", "F27", x.TransferAlightCount, "人次/h", 0);
+            flow.Add("站厅 上车停站", "D29", x.HallBoardStayMin, "min", 2);
+            flow.Add("站厅 下车停站", "D30", x.HallAlightStayMin, "min", 2);
+            flow.Add("站厅 换乘上车停站", "D31", x.HallTransferBoardStayMin, "min", 2);
+            flow.Add("站厅 换乘下车停站", "D32", x.HallTransferAlightStayMin, "min", 2);
+            flow.Add("站台 上车停站", "F29", x.PlatformBoardStayMin, "min", 2);
+            flow.Add("站台 下车停站", "F30", x.PlatformAlightStayMin, "min", 2);
+            flow.Add("站台 换乘上车停站", "F31", x.PlatformTransferBoardStayMin, "min", 2);
+            flow.Add("站台 换乘下车停站", "F32", x.PlatformTransferAlightStayMin, "min", 2);
+            flow.Add("集群系数", "C37", x.ClusterFactor, "—", 3);
+            flow.Add("超高峰小时系数", "F37", x.SuperPeakHourFactor, "—", 2);
+
+            var people = t.Section("四、人员散热、散湿量标准");
+            people.Add("站厅 显热", "D45", x.HallOccupantSensibleW, "W/人", 0);
+            people.Add("站厅 潜热", "E45", x.HallOccupantLatentW, "W/人", 0);
+            people.Add("站厅 散湿量", "F45", x.HallOccupantMoistureGH, "g/h", 0);
+            people.Add("站台 显热", "D46", x.PlatformOccupantSensibleW, "W/人", 0);
+            people.Add("站台 潜热", "E46", x.PlatformOccupantLatentW, "W/人", 0);
+            people.Add("站台 散湿量", "F46", x.PlatformOccupantMoistureGH, "g/h", 0);
+
+            var heat = t.Section("五、照明 / 广告 / 设备发热量");
+            heat.Add("站厅照明指标", "C55", x.HallLightingWm2, "W/m²", 1);
+            heat.Add("站台照明指标", "C56", x.PlatformLightingWm2, "W/m²", 1);
+            heat.Add("站厅广告牌发热量", "C58", x.HallAdvertKw, "kW", 2);
+            heat.Add("站台广告牌发热量", "C59", x.PlatformAdvertKw, "kW", 2);
+            heat.Add("公共区扶梯指标", "B62", x.EscalatorKwPerUnit, "kW/台", 2);
+            heat.Add("公共区扶梯数量", "B63", x.EscalatorCount, "台", 0);
+            heat.Add("公共区直梯指标", "D62", x.ElevatorKwPerUnit, "kW/台", 2);
+            heat.Add("公共区直梯数量", "D63", x.ElevatorCount, "台", 0);
+            heat.Add("AFC 设备指标", "E62", x.AfcKwPerUnit, "kW/台", 2);
+            heat.Add("AFC 设备数量", "E63", x.AfcCount, "台", 0);
+
+            var psd = t.Section("六、屏蔽门传热 / 漏风 / 发热");
+            psd.Add("传热系数", "A71", x.PsdHeatTransferCoeffWm2C, "W/(m²·℃)", 2);
+            psd.Add("屏蔽门高", "B71", x.PsdHeightM, "m", 2);
+            psd.Add("屏蔽门长", "C71", x.PsdLengthM, "m", 1);
+            psd.Add("内外温差", "D71", x.PsdTempDiffC, "℃", 1);
+            psd.Add("传热安全系数", "E71", x.PsdHeatSafetyFactor, "—", 2);
+            psd.Add("站厅屏蔽门传热量", "D103", x.HallPsdTransferKw, "kW", 2);
+            psd.Add("站厅屏蔽门漏风", "A75", x.HallPsdLeakKw, "kW", 2);
+            psd.Add("站厅屏蔽门发热", "D105", x.HallPsdHeatKw, "kW", 2);
+            psd.Add("站台屏蔽门漏风", "B75", x.PlatformPsdLeakKw, "kW", 2);
+            psd.Add("屏蔽门系统发热", "C76", x.PlatformPsdSystemHeatKw, "kW", 2);
+            psd.Add("站厅其他补充发热", "D106", x.HallExtraHeatKw, "kW", 2);
+            psd.Add("站台其他补充发热", "E106", x.PlatformExtraHeatKw, "kW", 2);
+
+            var moisture = t.Section("七、其他湿负荷");
+            moisture.Add("站厅其他湿负荷", "D110", x.HallOtherMoisture, "g/s", 3);
+            moisture.Add("站台其他湿负荷", "E110", x.PlatformOtherMoisture, "g/s", 3);
+            moisture.Add("站台结构散湿(覆盖,0=不计)", "E109", x.PlatformStructureMoistureOverride, "g/s", 3);
+            return t;
         }
 
         // ================================================================== 大系统负荷

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -1572,6 +1572,28 @@ namespace HVACIDA.Smoke
             }
         }
 
+        /// <summary>读 .xlsx 里任一部件(如 xl/styles.xml)的内容;找不到/读失败返回空串。</summary>
+        private static string ReadXlsxPart(string path, string partName)
+        {
+            try
+            {
+                using (var zip = System.IO.Compression.ZipFile.OpenRead(path))
+                {
+                    foreach (var entry in zip.Entries)
+                    {
+                        if (string.Equals(entry.FullName, partName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return ReadEntry(entry);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+            return "";
+        }
+
         // =====================================================================
         // 场景15:计算书 Excel 导出推广(大系统负荷 / 排烟 / 小系统 / 小系统全站汇总)
         //   断言方式:写出 .xlsx → 解压 → 校验工作表名与"关键单元格确实写进去了",
@@ -1627,6 +1649,67 @@ namespace HVACIDA.Smoke
                 CheckText("排烟分区表写出计算排烟量数值",
                     ss1.Contains(smokeResult.Zones[0].CalculatedFlowM3H.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
                         ? "有" : "缺", "有");
+
+                // ---------- 2c) Excel 排版优化(列宽 / 冻结首行 / 表头底色边框 / 数值千分位 / 分区标题合并) ----------
+                CheckText("xlsx 有列宽定义", s1.Contains("<cols>") && s1.Contains("customWidth=\"1\"") ? "有" : "缺", "有");
+                CheckText("xlsx 冻结首行", s1.Contains("state=\"frozen\"") ? "有" : "缺", "有");
+                CheckText("xlsx 表头带底色/边框样式(样式 2)", s1.Contains(" s=\"2\"") ? "有" : "缺", "有");
+                CheckText("xlsx 数值带千分位格式(样式 4)", s1.Contains(" s=\"4\"") ? "有" : "缺", "有");
+                CheckText("xlsx 分区标题跨列合并", s1.Contains("<mergeCells") && s1.Contains("<mergeCell ref=") ? "有" : "缺", "有");
+                CheckText("xlsx 样式表含千分位数字格式", ReadXlsxPart(loadPath, "xl/styles.xml").Contains("#,##0.####") ? "有" : "缺", "有");
+
+                // ---------- 2d) 「计算结果」窗的两段:计算参数(8 项)+ 选型参数(5 项) ----------
+                var largeSummary = ResultTable.ForLargeSystemSummary(loadResult, smokeResult);
+                CheckInt("小结分区数 = 2", largeSummary.Sections.Count, 2);
+                CheckText("一、计算参数", largeSummary.Sections[0].Title, "一、计算参数");
+                CheckText("二、选型参数", largeSummary.Sections[1].Title, "二、选型参数");
+                CheckInt("计算参数 8 项", largeSummary.Sections[0].Rows.Count, 8);
+                CheckInt("选型参数 5 项", largeSummary.Sections[1].Rows.Count, 5);
+                string[] calcLabels =
+                {
+                    "站厅站台公共区计算总冷负荷", "站厅层公共区空调计算送风量", "站台层公共区空调计算送风量",
+                    "车站公共区总空调计算送风量", "空调计算新风量", "空调计算回排风量",
+                    "站厅火灾计算排烟量", "站台火灾计算排烟量"
+                };
+                string[] unitLabels =
+                {
+                    "空调机组选型风量", "空调机组选型制冷量", "小新风选型风量", "回排风机选型风量", "排烟风机选型风量"
+                };
+                int calcHits = 0, unitHits = 0;
+                for (int i = 0; i < calcLabels.Length; i++)
+                {
+                    if (largeSummary.Sections[0].Rows[i].Label == calcLabels[i]) calcHits++;
+                }
+                for (int i = 0; i < unitLabels.Length; i++)
+                {
+                    if (largeSummary.Sections[1].Rows[i].Label == unitLabels[i]) unitHits++;
+                }
+                CheckInt("计算参数 8 项名称与需求逐字一致", calcHits, 8);
+                CheckInt("选型参数 5 项名称与需求逐字一致", unitHits, 5);
+                Check("总冷负荷 ← E159", largeSummary.Sections[0].Rows[0].Value.Value, loadResult.TotalCoolingKw);
+                Check("总送风量 ← C125", largeSummary.Sections[0].Rows[3].Value.Value, loadResult.TotalSupplyFlowM3H);
+                Check("站厅火灾排烟量 ← C171(不含选型系数)", largeSummary.Sections[0].Rows[6].Value.Value, loadResult.HallSmokeFlowM3H);
+                Check("空调机组选型风量 ← A165", largeSummary.Sections[1].Rows[0].Value.Value, loadResult.UnitSupplyFlowM3H);
+                Check("小新风选型风量 ← A136 实际新风量", largeSummary.Sections[1].Rows[2].Value.Value, loadResult.ActualFreshAirM3H);
+                Check("排烟风机选型风量 ← 排烟窗单台选型量", largeSummary.Sections[1].Rows[4].Value.Value, smokeResult.UnitSelectionFlowM3H);
+
+                // ---------- 2e) 【导出计算书】的完整工作簿:6 页,含所有数据 ----------
+                string largeBookPath = Path.Combine(dir, "大系统完整计算书.xlsx");
+                var fullBook = LargeSystemExcelExporter.BuildLoadAndSmoke(loadInput, loadResult, smokeInput, smokeResult);
+                CheckInt("完整计算书 6 页", fullBook.SheetCount, 6);
+                fullBook.Save(largeBookPath);
+                string lfWb, lfS1, lfEntries, lfSummaryXml, lfInputXml;
+                ReadXlsxSheets(largeBookPath, out lfWb, out lfS1, out lfEntries,
+                    new[] { "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml" }, out lfSummaryXml, out lfInputXml);
+                CheckText("完整计算书页名齐",
+                    lfWb.Contains("计算参数与选型") && lfWb.Contains("输入参数") && lfWb.Contains("负荷汇总") &&
+                    lfWb.Contains("排烟分区") && lfWb.Contains("排烟选型") && lfWb.Contains("口径与待补") ? "齐" : lfWb, "齐");
+                CheckText("首屏含计算参数 8 项 + 选型参数 5 项",
+                    lfSummaryXml.Contains("站厅站台公共区计算总冷负荷") && lfSummaryXml.Contains("站台火灾计算排烟量") &&
+                    lfSummaryXml.Contains("小新风选型风量") && lfSummaryXml.Contains("排烟风机选型风量") ? "齐" : "缺", "齐");
+                CheckText("输入参数页含客流与气象项",
+                    lfInputXml.Contains("夏季空调室外湿球温度") && lfInputXml.Contains("上行线 上客量") &&
+                    lfInputXml.Contains("站台结构散湿") ? "齐" : "缺", "齐");
 
                 // ---------- 3) 小系统(单系统)----------
                 var smallInput = new SmallSystemInput

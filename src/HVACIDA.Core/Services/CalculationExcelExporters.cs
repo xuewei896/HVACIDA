@@ -56,11 +56,31 @@ namespace HVACIDA.Core.Services
             return workbook;
         }
 
-        /// <summary>负荷 + 排烟合并成一个工作簿(「大系统 → 计算结果」窗导出用)。</summary>
+        /// <summary>
+        /// 负荷 + 排烟合并成一份**完整计算书**工作簿(「大系统 → 计算结果」窗【导出计算书】用)。
+        /// <para>
+        /// 6 页,含"所有数据":① 计算参数与选型参数(与界面同源的小结)② 输入参数(全部输入)
+        /// ③ 负荷汇总(7 分区 66 行)④ 排烟分区(逐区域宽表)⑤ 排烟选型 ⑥ 口径与待补。
+        /// </para>
+        /// </summary>
         public static XlsxWorkbook BuildLoadAndSmoke(LargeSystemInput input, LargeSystemResult load,
             LargeSmokeInput smokeInput, LargeSmokeResult smoke)
         {
-            var workbook = BuildLoad(input, load);
+            var workbook = new XlsxWorkbook();
+
+            // ① 计算参数 / 选型参数(界面两段小结,与表格同源)
+            ExcelReportBuilder.AddResultTable(workbook.AddSheet("计算参数与选型"),
+                ResultTable.ForLargeSystemSummary(load, smoke));
+
+            // ② 输入参数(全部输入,便于复算)
+            ExcelReportBuilder.AddResultTable(workbook.AddSheet("输入参数"),
+                ResultTable.ForLargeSystemInput(input));
+
+            // ③ 负荷汇总(7 个分区)
+            ExcelReportBuilder.AddResultTable(workbook.AddSheet("负荷汇总"),
+                ResultTable.ForLargeSystem(input, load));
+
+            // ④⑤ 排烟
             if (smoke != null)
             {
                 var zones = workbook.AddSheet("排烟分区");
@@ -77,10 +97,16 @@ namespace HVACIDA.Core.Services
                     new List<string> { "区域", "面积 m²", "计算排烟量 m³/h", "选型排烟量 m³/h", "单台风机风量 m³/h", "选型基准区" },
                     rows);
                 zones.AddBlankRow();
-                zones.AddRow("风机选型基准区", smoke.GoverningZoneName);
-                zones.AddRow("单台选型风量 m³/h", smoke.UnitSelectionFlowM3H);
+                zones.AddBoldRow("风机选型基准区", smoke.GoverningZoneName);
+                zones.AddBoldRow("单台选型风量 m³/h", smoke.UnitSelectionFlowM3H);
                 ExcelReportBuilder.AddResultTable(workbook.AddSheet("排烟选型"), ResultTable.ForLargeSmoke(smokeInput, smoke));
             }
+
+            // ⑥ 口径与待补(把两边的口径合在一页,不看界面也知道数是怎么来的)
+            ExcelReportBuilder.AddNoteSheet(workbook, "大系统计算书(负荷 + 排烟)",
+                "计算参数 / 选型参数、负荷汇总、排烟分区与选型、输入参数全部同源于 Core 的计算结果;" +
+                "界面表格、文本计算书与本 Excel 由同一份 ResultTable / LargeSystemResult 渲染。",
+                smoke == null ? "" : smoke.PendingNote);
             return workbook;
         }
     }

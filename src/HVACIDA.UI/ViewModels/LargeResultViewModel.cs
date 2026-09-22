@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using System.Windows.Input;
 using HVACIDA.Core.Models;
 using HVACIDA.Core.Services;
@@ -21,6 +24,7 @@ namespace HVACIDA.UI.ViewModels
         private LargeSystemResult _lastResult;
         private LargeSmokeResult _lastSmoke;
         private ResultTable _table;
+        private ResultTable _summaryTable;
         private IList<LargeSmokeZoneRow> _smokeRows = new List<LargeSmokeZoneRow>();
         private string _smokeSummary = "";
         private string _smokeNote = "";
@@ -82,6 +86,16 @@ namespace HVACIDA.UI.ViewModels
         {
             get => _table;
             private set => Set(ref _table, value);
+        }
+
+        /// <summary>
+        /// 本窗页面主体的**两段小结**:一、计算参数(8 项)+ 二、选型参数(5 项)。
+        /// 与 Excel / 文本计算书由同一份 <see cref="ResultTable"/> 渲染(§4.8)。
+        /// </summary>
+        public ResultTable SummaryTable
+        {
+            get => _summaryTable;
+            private set => Set(ref _summaryTable, value);
         }
 
         /// <summary>排烟计算结果表(大系统 → 计算结果;与「排烟计算」窗同源)。</summary>
@@ -153,13 +167,66 @@ namespace HVACIDA.UI.ViewModels
                 SmokeNote = _lastSmoke.Note + "  " + _lastSmoke.PendingNote;
 
                 Table = ResultTable.ForLargeSystem(Input, _lastResult);
+                SummaryTable = ResultTable.ForLargeSystemSummary(_lastResult, _lastSmoke);
                 ResultText = ResultFormatter.FormatLarge(Input, _lastResult);
-                Status = "计算完成(与北京站算例同口径)。结果已按分区列表格呈现,可导出计算书。";
+                Status = "计算完成(与北京站算例同口径)。结果已按「计算参数 / 选型参数」两段呈现,可导出计算书。";
             }
             catch (System.Exception ex)
             {
                 ResultText = "";
                 Status = "计算失败: " + ex.Message;
+            }
+        }
+
+        /// <summary>
+        /// 导出计算书到**用户指定路径**(窗口用"另存为"对话框取路径):
+        /// <c>.xlsx</c> → 排版优化过的完整工作簿(计算参数与选型 / 输入参数 / 负荷汇总 / 排烟分区 / 排烟选型 / 口径与待补);
+        /// 其它扩展名 → 文本计算书(同样含小结 + 输入 + 负荷 + 排烟)。返回是否成功。
+        /// </summary>
+        public bool ExportCalculationBook(string path)
+        {
+            try
+            {
+                if (_lastResult == null)
+                {
+                    Status = "还没有可导出的结果:请先点【计 算】。";
+                    return false;
+                }
+                if (string.IsNullOrEmpty(path))
+                {
+                    Status = "没有选择保存位置,导出已取消。";
+                    return false;
+                }
+
+                var smokeInput = _repository.LoadLargeSmoke();
+
+                if (path.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+                {
+                    var workbook = LargeSystemExcelExporter.BuildLoadAndSmoke(Input, _lastResult, smokeInput, _lastSmoke);
+                    workbook.Save(path);
+                    Status = "Excel 计算书已保存(" + workbook.SheetCount + " 个工作表): " + path;
+                    return true;
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("【大系统计算书】负荷 + 排烟(需求 2.2.3.1)");
+                sb.AppendLine("导出时间:" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                sb.AppendLine();
+                sb.AppendLine(ResultTable.ForLargeSystemSummary(_lastResult, _lastSmoke).ToText());
+                sb.AppendLine();
+                sb.AppendLine(ResultTable.ForLargeSystemInput(Input).ToText());
+                sb.AppendLine();
+                sb.AppendLine(ResultFormatter.FormatLarge(Input, _lastResult));
+                sb.AppendLine();
+                sb.AppendLine(ResultFormatter.FormatLargeSmoke(Input, smokeInput, _lastSmoke));
+                File.WriteAllText(path, sb.ToString(), new UTF8Encoding(true));   // 带 BOM,记事本打开中文不乱码
+                Status = "计算书已保存: " + path;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Status = "导出失败: " + ex.Message;
+                return false;
             }
         }
 

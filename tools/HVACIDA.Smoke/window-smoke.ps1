@@ -50,7 +50,7 @@ try {
     $xamls = @(Get-ChildItem -LiteralPath $srcDir -Recurse -Filter *.xaml -File | Where-Object { $_.FullName -notmatch '\\obj\\' })
     $bad = @()
     foreach ($x in $xamls) {
-        $hit = Select-String -Path $x.FullName -Pattern '(Text|Header|Content)="[^"]*(?:[（(]\s*[A-Z]{1,2}[0-9]{1,3}|\b[A-Z]{1,2}[0-9]{2,3}\b)'
+        $hit = Select-String -Encoding UTF8 -Path $x.FullName -Pattern '(Text|Header|Content)="[^"]*(?:[（(]\s*[A-Z]{1,2}[0-9]{1,3}|\b[A-Z]{1,2}[0-9]{2,3}\b)'
         foreach ($h in $hit) { $bad += ((Split-Path $x.FullName -Leaf) + ':' + $h.LineNumber) }
     }
     if ($bad.Count -eq 0) { Write-Host ("PASS  XAML 可见文本无单元格编号(已扫描 {0} 个 .xaml)" -f $xamls.Count) }
@@ -69,7 +69,7 @@ try {
 try {
     $noteBad = @()
     foreach ($x in $xamls) {
-        $hit = Select-String -Path $x.FullName -Pattern '(Text|Header|Content)="[^"]*(需求\s*[0-9]|\*\*|注:|说明:|备注:|⚠|告警)'
+        $hit = Select-String -Encoding UTF8 -Path $x.FullName -Pattern '(Text|Header|Content)="[^"]*(需求\s*[0-9]|\*\*|注:|说明:|备注:|⚠|告警)'
         foreach ($h in $hit) { $noteBad += ((Split-Path $x.FullName -Leaf) + ':' + $h.LineNumber) }
     }
     if ($noteBad.Count -eq 0) { Write-Host ("PASS  XAML 可见文本无备注说明 / 无告警(需求引用 / 注: / Markdown 符 / ⚠ / 告警 一律在 ToolTip)" ) }
@@ -123,7 +123,7 @@ function Test-WindowBindings([string]$xamlFile, [string]$viewModelTypeName) {
     if ($vmType -eq $null) { Write-Host ("FAIL  绑定门禁:找不到 ViewModel " + $viewModelTypeName); $script:fail++; return }
     $candidates = Get-BindingCandidateTypes $vmType
 
-    $text = Get-Content -LiteralPath $xamlFile -Raw
+    $text = Get-Content -LiteralPath $xamlFile -Raw -Encoding UTF8
     $paths = @()
     $skipKeywords = @('Mode', 'StringFormat', 'UpdateSourceTrigger', 'Converter', 'ConverterParameter',
                       'IsAsync', 'NotifyOnTargetUpdated', 'FallbackValue', 'TargetNullValue',
@@ -756,6 +756,47 @@ try {
     } else { Write-Host ("FAIL  计算结果窗表格: 列={0} 行={1}" -f $rgrid.Columns.Count, $rgrid.Items.Count); $fail++ }
     $rw.Close()
 
+    # 2026-09-20 用户口径:计算结果窗 = 计算参数 + 选型参数两段;【导出计算书】弹"另存为";删【导出 Excel】;【确 定】关窗
+    $rw2 = New-Object "$uiNs.LargeSystemResultWindow" -ArgumentList $rvm
+    $rw2.Show(); $rw2.UpdateLayout()
+    if ($rw2.FindName('SummaryTableHost') -ne $null -and
+        $rvm.SummaryTable.Sections.Count -eq 2 -and
+        $rvm.SummaryTable.Sections[0].Rows.Count -eq 8 -and
+        $rvm.SummaryTable.Sections[1].Rows.Count -eq 5) {
+        Write-Host "PASS  计算结果窗两段小结已绑定(计算参数 8 项 + 选型参数 5 项)"
+    } else {
+        Write-Host ("FAIL  计算结果窗小结: 分区={0} 行={1}/{2}" -f $rvm.SummaryTable.Sections.Count,
+            $rvm.SummaryTable.Sections[0].Rows.Count, $rvm.SummaryTable.Sections[1].Rows.Count); $fail++
+    }
+
+    $rrXaml = Get-Content -LiteralPath (Join-Path $viewDir 'LargeSystemResultWindow.xaml') -Raw -Encoding UTF8
+    $rrCs = Get-Content -LiteralPath (Join-Path $viewDir 'LargeSystemResultWindow.xaml.cs') -Raw -Encoding UTF8
+    if ($rrXaml -notmatch '导出 Excel') { Write-Host "PASS  计算结果窗已删【导出 Excel】按钮" }
+    else { Write-Host "FAIL  计算结果窗仍有【导出 Excel】按钮"; $fail++ }
+    if ($rrCs -match 'SaveFileDialog' -and $rrCs -match 'ExportCalculationBook') {
+        Write-Host "PASS  计算结果窗【导出计算书】先弹「另存为」对话框选保存位置(.xlsx / .txt)"
+    } else { Write-Host "FAIL  导出计算书未接另存为对话框"; $fail++ }
+    if ($rrXaml -match 'Content="取 消"' -and $rrXaml -match 'Click="OnConfirmClick"') {
+        Write-Host "PASS  计算结果窗底栏为【取 消】+【确 定】"
+    } else { Write-Host "FAIL  计算结果窗底栏未改"; $fail++ }
+
+    # 端到端:导出一份完整计算书(xlsx),文件要真的落盘且是合法 ZIP
+    $bookPath = Join-Path $tmp4 '计算结果窗导出.xlsx'
+    $exported = $rvm.ExportCalculationBook($bookPath)
+    if ($exported -and (Test-Path $bookPath) -and (Get-Item $bookPath).Length -gt 2000) {
+        Write-Host ("PASS  计算结果窗导出完整计算书:{0:N0} 字节({1})" -f (Get-Item $bookPath).Length, $rvm.Status)
+    } else {
+        Write-Host ("FAIL  导出完整计算书: ok={0} status='{1}'" -f $exported, $rvm.Status); $fail++
+    }
+
+    $rrOk = $rw2.FindName('ConfirmButton')
+    if ($rrOk -ne $null -and $rrOk.Content -eq '确 定') {
+        $rrOk.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        if (-not $rw2.IsVisible) { Write-Host "PASS  计算结果窗【确 定】= 关闭本窗" }
+        else { Write-Host "FAIL  计算结果窗【确 定】未关窗"; $fail++ }
+    } else { Write-Host "FAIL  计算结果窗未找到【确 定】按钮(ConfirmButton)"; $fail++ }
+    if ($rw2.IsVisible) { $rw2.Close() }
+
     try { Remove-Item $tmp4 -Recurse -Force -ErrorAction Stop } catch { }
 } catch {
     Write-Host ("FAIL  排烟计算自检  {0}" -f $_.Exception.Message)
@@ -874,7 +915,7 @@ try {
     }
 
     # 按钮已删(2026-09-20 用户口径):源文件与窗口里都不应再有该按钮
-    $wx = Get-Content -LiteralPath (Join-Path $viewDir 'WeatherWindow.xaml') -Raw
+    $wx = Get-Content -LiteralPath (Join-Path $viewDir 'WeatherWindow.xaml') -Raw -Encoding UTF8
     $fetchBind = ($null -ne $pivm.PSObject.Properties['FetchWeatherCommand'])   # 命令保留在 VM,只是不再有按钮
     if ($wx -notmatch '从气象数据库获取') {
         Write-Host ("PASS  气象参数窗已无【从气象数据库获取】按钮(VM 命令保留:{0};取数改由「工程信息」选市回填)" -f $fetchBind)
@@ -1375,8 +1416,8 @@ try {
         $hydCmdFile = Join-Path $srcRoot 'HVACIDA.Revit\Commands\HydraulicCommands.cs'
         $infoCmdFile = Join-Path $srcRoot 'HVACIDA.Revit\Commands\ModuleInfoCommands.cs'
         if ((Test-Path -LiteralPath $hydCmdFile) -and (Test-Path -LiteralPath $infoCmdFile)) {
-            $hydText = [string](Get-Content -LiteralPath $hydCmdFile -Raw)
-            $infoText = [string](Get-Content -LiteralPath $infoCmdFile -Raw)
+            $hydText = [string](Get-Content -LiteralPath $hydCmdFile -Raw -Encoding UTF8)
+            $infoText = [string](Get-Content -LiteralPath $infoCmdFile -Raw -Encoding UTF8)
             $moved = $hydText.Contains('class ShowAirHydraulicCommand') -and
                      $hydText.Contains('class ShowWaterHydraulicCommand') -and
                      $hydText.Contains('class ShowHydraulicResultCommand') -and
@@ -1657,7 +1698,7 @@ try {
     $lsVm = New-Object "$vmNs.LargeSystemViewModel" -ArgumentList $repoB
     $lsW = New-Object "$uiNs.LargeSystemWindow" -ArgumentList $lsVm
     $lsW.Show(); $lsW.UpdateLayout()
-    $lsXaml = Get-Content -LiteralPath (Join-Path $viewDir 'LargeSystemWindow.xaml') -Raw
+    $lsXaml = Get-Content -LiteralPath (Join-Path $viewDir 'LargeSystemWindow.xaml') -Raw -Encoding UTF8
     $leftA = @($banned | Where-Object { $lsXaml -match [regex]::Escape($_) })
     if ($leftA.Count -eq 0) { Write-Host "PASS  负荷计算窗已删【保存参数 / 导出计算书 / 导出 Excel】三键" }
     else { Write-Host ("FAIL  负荷计算窗仍保留: " + ($leftA -join ', ')); $fail++ }
@@ -1678,7 +1719,7 @@ try {
     $smVm = New-Object "$vmNs.LargeSmokeViewModel" -ArgumentList $repoB
     $smW = New-Object "$uiNs.LargeSmokeWindow" -ArgumentList $smVm
     $smW.Show(); $smW.UpdateLayout()
-    $smXaml = Get-Content -LiteralPath (Join-Path $viewDir 'LargeSmokeWindow.xaml') -Raw
+    $smXaml = Get-Content -LiteralPath (Join-Path $viewDir 'LargeSmokeWindow.xaml') -Raw -Encoding UTF8
     $leftB = @($banned | Where-Object { $smXaml -match [regex]::Escape($_) })
     if ($leftB.Count -eq 0) { Write-Host "PASS  排烟计算窗已删【保存参数 / 导出计算书 / 导出 Excel】三键" }
     else { Write-Host ("FAIL  排烟计算窗仍保留: " + ($leftB -join ', ')); $fail++ }
@@ -1703,8 +1744,8 @@ try {
     if ($smW.IsVisible) { $smW.Close() }
 
     # ---- ④ 结果表滚轮转发 ----
-    $rtXaml = Get-Content -LiteralPath (Join-Path $viewDir 'ResultTableView.xaml') -Raw
-    $rtCs = Get-Content -LiteralPath (Join-Path $viewDir 'ResultTableView.xaml.cs') -Raw
+    $rtXaml = Get-Content -LiteralPath (Join-Path $viewDir 'ResultTableView.xaml') -Raw -Encoding UTF8
+    $rtCs = Get-Content -LiteralPath (Join-Path $viewDir 'ResultTableView.xaml.cs') -Raw -Encoding UTF8
     if ($rtXaml -match 'PreviewMouseWheel="OnPreviewMouseWheel"' -and $rtCs -match 'ScrollToVerticalOffset') {
         Write-Host "PASS  结果表已接 PreviewMouseWheel 转发(鼠标停在表格上也能滚)"
     } else { Write-Host "FAIL  结果表未接滚轮转发"; $fail++ }
