@@ -839,6 +839,16 @@ try {
         $fail++
     }
 
+    # 比例协调:内容按视口撑满(卡片占满高度),真放不下才允许出现滚动条
+    $piScroll = $piw.FindName('ContentScroll')
+    if ($piScroll -ne $null -and $piScroll.ScrollableHeight -eq 0) {
+        Write-Host ("PASS  工程信息窗两张卡撑满视口且无滚动条(视口 {0}px / 内容 {1}px)" -f `
+            [int]$piScroll.ViewportHeight, [int]$piScroll.ExtentHeight)
+    } else {
+        Write-Host ("FAIL  工程信息窗内容与视口不匹配: scrollable={0}" -f $(if ($piScroll -eq $null) { 'null' } else { $piScroll.ScrollableHeight }))
+        $fail++
+    }
+
     $okBtn = $piw.FindName('ConfirmButton')
     if ($okBtn -ne $null -and $okBtn.Content -eq '确 定') {
         $okBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))

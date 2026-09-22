@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="工程信息 - HVACIDA"
-        Width="940" Height="380" ResizeMode="NoResize"
+        Width="940" Height="580" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         FontFamily="Microsoft YaHei UI" FontSize="12"
         UseLayoutRounding="True">
@@ -27,14 +27,17 @@
         </Style>
         <Style x:Key="Card" TargetType="{x:Type Border}">
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="BorderBrush" Value="#C9DCF2"/>
+            <Setter Property="Background" Value="#FBFDFF"/>
         </Style>
         <Style x:Key="CardHeader" TargetType="{x:Type Border}">
             <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Background" Value="#E3EEFB"/>
         </Style>
         <Style x:Key="CardTitle" TargetType="{x:Type TextBlock}">
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#1B4E8A"/>
         </Style>
     </Window.Resources>
 
@@ -50,17 +53,22 @@
             </DockPanel>
         </Border>
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
-            <StackPanel>
+        <!-- 固定尺寸窗:两张卡按视口高度撑满(内容不足时不留大片空白;真放不下时才出现滚动条) -->
+        <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto" Padding="10">
+            <Grid MinHeight="{Binding ViewportHeight, ElementName=ContentScroll}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
                 <!-- ================= 分区一:工程基本信息 ================= -->
-                <Border Style="{StaticResource Card}" BorderBrush="#C9DCF2" Background="#FBFDFF"
+                <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,0,0,10"
                         ToolTip="需求 2.1.1;项目地点为省 / 市级联下拉,选定城市即自动回填该市室外气象参数">
-                    <StackPanel>
-                        <Border Style="{StaticResource CardHeader}" Background="#E3EEFB">
-                            <TextBlock Style="{StaticResource CardTitle}" Text="一、工程基本信息" Foreground="#1B4E8A"/>
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Style="{StaticResource CardHeader}">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="一、工程基本信息"/>
                         </Border>
-                        <StackPanel Margin="8,4,8,8">
+                        <StackPanel Margin="8,4,8,8" VerticalAlignment="Center">
                             <UniformGrid Columns="2">
                                 <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="工程名称"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Basic.ProjectName, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                                 <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="设计阶段"/><ComboBox Style="{StaticResource FieldCombo}" ItemsSource="{Binding StageOptions}" SelectedItem="{Binding Model.Basic.DesignStage}"/></StackPanel>
@@ -74,15 +82,15 @@
                                 <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="备注"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Model.Basic.Remark, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                             </UniformGrid>
                         </StackPanel>
-                    </StackPanel>
+                    </DockPanel>
                 </Border>
 
                 <!-- ================= 分区二:数据导入与存储 ================= -->
-                <Border Style="{StaticResource Card}" BorderBrush="#D5DBE2" Background="#FBFBFC"
+                <Border Grid.Row="1" Style="{StaticResource Card}"
                         ToolTip="需求 2.1.3:Excel 模板导入待实现;保存后写入本机存储目录">
                     <StackPanel>
-                        <Border Style="{StaticResource CardHeader}" Background="#ECEFF3">
-                            <TextBlock Style="{StaticResource CardTitle}" Text="二、数据导入与存储" Foreground="#3C4858"/>
+                        <Border Style="{StaticResource CardHeader}">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="二、数据导入与存储"/>
                         </Border>
                         <StackPanel Margin="8,4,8,8">
                             <DockPanel>
@@ -94,7 +102,7 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
-            </StackPanel>
+            </Grid>
         </ScrollViewer>
     </DockPanel>
 </Window>
