@@ -634,15 +634,15 @@ try {
     else { Write-Host "FAIL  full-air window has no result table host"; $fail++ }
     $slw.Close()
 
-    # ---- 大系统计算结果窗(表格 + 排烟表)----
+    # ---- 大系统计算结果窗:页面主体 = 计算参数 + 选型参数两段(明细已在其它窗,2026-09-20) ----
     $brvm = New-Object "$vmNs.LargeResultViewModel" -ArgumentList $repo5
     $brvm.CalculateCommand.Execute($null)
     $brw = New-Object "$uiNs.LargeSystemResultWindow" -ArgumentList $brvm
     $brw.Show(); $brw.UpdateLayout()
-    if ($brw.FindName('ResultTableHost') -ne $null -and $brw.FindName('SmokeGrid') -ne $null -and
-        $brw.FindName('SmokeGrid').Columns.Count -eq 5) {
-        Write-Host "PASS  大系统计算结果窗:负荷结果表 + 排烟表(5 列)同窗呈现"
-    } else { Write-Host "FAIL  计算结果窗缺少结果表"; $fail++ }
+    if ($brw.FindName('SummaryTableHost') -ne $null -and $brw.FindName('SummaryTableHost').Table -ne $null -and
+        $brvm.SummaryTable.Sections.Count -eq 2) {
+        Write-Host "PASS  大系统计算结果窗:计算参数 + 选型参数两段同窗呈现"
+    } else { Write-Host "FAIL  计算结果窗缺少两段小结"; $fail++ }
     $brw.Close()
 
     # ---- 小系统计算结果窗:空工程必须"不摆结果,只给指引"(不做兜底假结果) ----
@@ -750,10 +750,10 @@ try {
 
     $rw = New-Object "$uiNs.LargeSystemResultWindow" -ArgumentList $rvm
     $rw.Show(); $rw.UpdateLayout()
-    $rgrid = $rw.FindName('SmokeGrid')
-    if ($rgrid -ne $null -and $rgrid.Columns.Count -eq 5 -and $rgrid.Items.Count -eq 2) {
-        Write-Host ("PASS  计算结果窗排烟表渲染({0} 列 × {1} 行)" -f $rgrid.Columns.Count, $rgrid.Items.Count)
-    } else { Write-Host ("FAIL  计算结果窗表格: 列={0} 行={1}" -f $rgrid.Columns.Count, $rgrid.Items.Count); $fail++ }
+    # 2026-09-20 用户口径:排烟明细 / 负荷明细 / 计算书全文三块已从本窗删除(其它窗都有)
+    if ($rw.FindName('SmokeGrid') -eq $null -and $rw.FindName('ResultTableHost') -eq $null) {
+        Write-Host "PASS  计算结果窗已删排烟明细 / 负荷明细 / 计算书全文三块"
+    } else { Write-Host "FAIL  计算结果窗仍有明细表"; $fail++ }
     $rw.Close()
 
     # 2026-09-20 用户口径:计算结果窗 = 计算参数 + 选型参数两段;【导出计算书】弹"另存为";删【导出 Excel】;【确 定】关窗
@@ -779,6 +779,36 @@ try {
     if ($rrXaml -match 'Content="取 消"' -and $rrXaml -match 'Click="OnConfirmClick"') {
         Write-Host "PASS  计算结果窗底栏为【取 消】+【确 定】"
     } else { Write-Host "FAIL  计算结果窗底栏未改"; $fail++ }
+
+    # 2026-09-20:窗口不可拉伸;内容正好撑满(无滚动条);导出后自动打开计算书
+    if ($rw2.ResizeMode.ToString() -eq 'NoResize' -and $rw2.MinWidth -eq 0 -and $rw2.MinHeight -eq 0) {
+        Write-Host ("PASS  计算结果窗不可拉伸(ResizeMode=NoResize,{0}x{1})" -f [int]$rw2.Width, [int]$rw2.Height)
+    } else {
+        Write-Host ("FAIL  计算结果窗仍可拉伸: ResizeMode={0} Min={1}x{2}" -f $rw2.ResizeMode, $rw2.MinWidth, $rw2.MinHeight); $fail++
+    }
+    $rrScroll = $rw2.FindName('ContentScroll')
+    if ($rrScroll -ne $null -and $rrScroll.ScrollableHeight -eq 0) {
+        Write-Host ("PASS  计算结果窗两段小结正好撑满视口且无滚动条(视口 {0}px / 内容 {1}px)" -f `
+            [int]$rrScroll.ViewportHeight, [int]$rrScroll.ExtentHeight)
+    } else {
+        Write-Host ("FAIL  计算结果窗内容与视口不匹配: scrollable={0}" -f $(if ($rrScroll -eq $null) { 'null' } else { $rrScroll.ScrollableHeight })); $fail++
+    }
+    if ($rrXaml -notmatch 'Header="排烟明细"' -and $rrXaml -notmatch 'Header="负荷计算明细"' -and
+        $rrXaml -notmatch 'Header="计算书全文') {
+        Write-Host "PASS  计算结果窗已删【排烟明细 / 负荷计算明细 / 计算书全文】三块(其它窗已有)"
+    } else { Write-Host "FAIL  计算结果窗仍保留明细块"; $fail++ }
+    $rvmCs = Get-Content -LiteralPath (Join-Path $viewDir '..\ViewModels\LargeResultViewModel.cs') -Raw -Encoding UTF8
+    if ($null -ne $rvm.PSObject.Methods['OpenExportedFile'] -and
+        $rrCs -match 'OpenExportedFile' -and $rvmCs -match 'Process\.Start') {
+        Write-Host "PASS  计算结果窗导出后自动打开计算书(Process.Start + OpenExportedFile)"
+    } else { Write-Host "FAIL  导出后未接自动打开"; $fail++ }
+    # 自动打开的失败分支:文件不存在时只写状态、不抛异常(自检不去真的启动 Excel/记事本)
+    $missing = Join-Path $tmp4 '不存在的计算书.xlsx'
+    $openOk = $true
+    try { $openOk = $rvm.OpenExportedFile($missing) } catch { $openOk = $true }
+    if ($openOk -eq $false -and $rvm.Status -match '找不到') {
+        Write-Host "PASS  自动打开失败分支:文件不存在时只写状态、不抛异常"
+    } else { Write-Host ("FAIL  自动打开失败分支异常: ok={0} status='{1}'" -f $openOk, $rvm.Status); $fail++ }
 
     # 端到端:导出一份完整计算书(xlsx),文件要真的落盘且是合法 ZIP
     $bookPath = Join-Path $tmp4 '计算结果窗导出.xlsx'

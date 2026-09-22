@@ -19,7 +19,7 @@ namespace HVACIDA.UI.Views
         }
 
         /// <summary>
-        /// 【导出计算书】:先弹"另存为"对话框让用户选保存位置,再写文件
+        /// 【导出计算书】:先弹"另存为"对话框让用户选保存位置,再写文件,然后**自动打开**刚导出的计算书
         /// (.xlsx = 排版优化过的完整工作簿;.txt = 文本计算书,两者都含小结 / 输入 / 负荷 / 排烟)。
         /// </summary>
         private void OnExportClick(object sender, RoutedEventArgs e)
@@ -38,7 +38,11 @@ namespace HVACIDA.UI.Views
                 FileName = "大系统计算书_" + System.DateTime.Now.ToString("yyyyMMdd_HHmm")
             };
 
-            if (dialog.ShowDialog(this) == true) viewModel.ExportCalculationBook(dialog.FileName);
+            if (dialog.ShowDialog(this) == true && viewModel.ExportCalculationBook(dialog.FileName))
+            {
+                // 2026-09-20 用户口径:导出后自动打开计算书(用系统默认程序;失败只写状态,不抛)
+                viewModel.OpenExportedFile(dialog.FileName);
+            }
         }
 
         /// <summary>【确 定】= 关闭本窗(本窗只读展示,不写盘)。</summary>

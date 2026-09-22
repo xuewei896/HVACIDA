@@ -3,37 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:HVACIDA.UI.Views"
         Title="大系统 — 计算结果 - HVACIDA"
-        Width="1040" Height="760" MinWidth="820" MinHeight="560"
+        Width="1040" Height="580" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         FontFamily="Microsoft YaHei UI" FontSize="12"
         UseLayoutRounding="True">
-    <Window.Resources>
-        <Style x:Key="ResultGrid" TargetType="{x:Type DataGrid}">
-            <Setter Property="AutoGenerateColumns" Value="False"/>
-            <Setter Property="IsReadOnly" Value="True"/>
-            <Setter Property="CanUserAddRows" Value="False"/>
-            <Setter Property="CanUserDeleteRows" Value="False"/>
-            <Setter Property="CanUserResizeRows" Value="False"/>
-            <Setter Property="HeadersVisibility" Value="Column"/>
-            <Setter Property="GridLinesVisibility" Value="All"/>
-            <Setter Property="HorizontalGridLinesBrush" Value="#DDDDDD"/>
-            <Setter Property="VerticalGridLinesBrush" Value="#DDDDDD"/>
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="RowHeight" Value="24"/>
-            <Setter Property="ColumnHeaderHeight" Value="28"/>
-        </Style>
-        <Style x:Key="NumCell" TargetType="{x:Type TextBlock}">
-            <Setter Property="HorizontalAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="6,0,8,0"/>
-            <Setter Property="FontFamily" Value="Consolas"/>
-        </Style>
-        <Style x:Key="TextCell" TargetType="{x:Type TextBlock}">
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="8,0,4,0"/>
-        </Style>
-    </Window.Resources>
-
     <DockPanel>
         <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,6">
             <DockPanel>
@@ -42,7 +15,7 @@
                         ToolTip="重新读取已保存的参数并计算(本窗打开时已自动算过一次;点它用于别处又改了参数后刷新)"/>
                 <Button Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0" DockPanel.Dock="Left"
                         Click="OnExportClick"
-                        ToolTip="弹「另存为」对话框选保存位置;.xlsx = 排版好的完整计算书(计算参数与选型 / 输入参数 / 负荷汇总 / 排烟分区 / 排烟选型 / 口径与待补),.txt = 文本计算书"/>
+                        ToolTip="弹「另存为」对话框选保存位置,导出后自动打开:.xlsx = 排版好的完整计算书(计算参数与选型 / 输入参数 / 负荷汇总 / 排烟分区 / 排烟选型 / 口径与待补),.txt = 文本计算书"/>
                 <Button DockPanel.Dock="Right" Content="取 消" Width="96" Height="30" IsCancel="True"/>
                 <Button x:Name="ConfirmButton" DockPanel.Dock="Right" Content="确 定" Width="100" Height="30" Margin="0,0,8,0"
                         Click="OnConfirmClick"
@@ -52,76 +25,9 @@
             </DockPanel>
         </Border>
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
-            <StackPanel>
-
-                <!-- ============ 页面主体:一、计算参数 / 二、选型参数(同一份 ResultTable 的两段) ============ -->
-                <views:ResultTableView x:Name="SummaryTableHost" Table="{Binding SummaryTable}"/>
-
-                <!-- ============ 明细(默认收起;数据同时完整写进导出的计算书) ============ -->
-                <Expander Margin="0,4,0,0" Foreground="#23486E" Header="排烟明细"
-                          ToolTip="逐区域排烟量,与「大系统 → 排烟计算」窗同源;加粗高亮行为风机选型基准区">
-                    <StackPanel Margin="0,6,0,0">
-                        <DataGrid x:Name="SmokeGrid" Style="{StaticResource ResultGrid}"
-                                  ItemsSource="{Binding SmokeRows}" SelectionMode="Single" AlternatingRowBackground="#F7FAFD">
-                            <DataGrid.RowStyle>
-                                <Style TargetType="{x:Type DataGridRow}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsGoverning}" Value="True">
-                                            <Setter Property="Background" Value="#FFF4E5"/>
-                                            <Setter Property="FontWeight" Value="Bold"/>
-                                            <Setter Property="ToolTip" Value="风机选型基准区(站厅/站台计算排烟量的较大者)"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </DataGrid.RowStyle>
-                            <DataGrid.Columns>
-                                <DataGridTemplateColumn Header="区域" Width="180">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Style="{StaticResource TextCell}" Text="{Binding ZoneName}"/></DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="面积 m²" Width="130">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Style="{StaticResource NumCell}" Text="{Binding AreaM2, StringFormat={}{0:N1}}"/></DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="计算排烟量 m³/h" Width="170">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Style="{StaticResource NumCell}" Text="{Binding CalculatedFlowM3H, StringFormat={}{0:N1}}"/></DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="选型排烟量 m³/h" Width="170">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Style="{StaticResource NumCell}" Text="{Binding SelectionFlowM3H, StringFormat={}{0:N1}}"/></DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="单台风机风量 m³/h" Width="*">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate><TextBlock Style="{StaticResource NumCell}" Text="{Binding UnitFlowM3H, StringFormat={}{0:N1}}"/></DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                            </DataGrid.Columns>
-                        </DataGrid>
-                        <TextBlock Text="{Binding SmokeSummary}" FontWeight="Bold" Foreground="#23486E" TextWrapping="Wrap" Margin="0,6,0,0"/>
-                        <TextBlock Text="{Binding SmokeNote}" Foreground="#8A6100" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                    </StackPanel>
-                </Expander>
-
-                <Expander Margin="0,4,0,0" Foreground="#23486E" Header="负荷计算明细(7 个分区)"
-                          ToolTip="按分区分组;数值列右对齐,合计行加粗">
-                    <views:ResultTableView x:Name="ResultTableHost" Margin="0,6,0,0" Table="{Binding Table}"/>
-                </Expander>
-
-                <Expander Margin="0,4,0,0" Foreground="#23486E" Header="计算书全文(文本)"
-                          ToolTip="与导出的文本计算书同源;点【导出计算书】可另存为 .txt / .xlsx">
-                    <TextBox Text="{Binding ResultText, Mode=OneWay}" IsReadOnly="True"
-                             FontFamily="Consolas" FontSize="12" Height="220" Margin="0,6,0,0"
-                             Background="White" BorderBrush="#DDDDDD" BorderThickness="1"
-                             VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                             TextWrapping="NoWrap" Padding="8"/>
-                </Expander>
-            </StackPanel>
+        <!-- 固定尺寸窗:页面主体就是两段(一、计算参数 / 二、选型参数);逐区域与逐分区明细、文本计算书在其它窗(§4.2d) -->
+        <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto" Padding="10">
+            <views:ResultTableView x:Name="SummaryTableHost" Table="{Binding SummaryTable}"/>
         </ScrollViewer>
     </DockPanel>
 </Window>

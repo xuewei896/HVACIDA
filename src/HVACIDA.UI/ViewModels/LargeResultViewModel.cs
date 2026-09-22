@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Windows.Input;
@@ -145,6 +146,31 @@ namespace HVACIDA.UI.ViewModels
             catch (System.Exception ex)
             {
                 Status = "导出 Excel 失败: " + ex.Message;
+            }
+        }
+
+        /// <summary>
+        /// 用系统默认程序打开刚导出的计算书(2026-09-20 用户口径:导出后自动打开)。
+        /// 文件不存在或打开失败**只写状态、不抛异常** —— 导出本身已经成功,不该因为打不开就报错。
+        /// </summary>
+        public bool OpenExportedFile(string path)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                {
+                    Status = "找不到刚导出的计算书: " + path;
+                    return false;
+                }
+
+                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                Status = "计算书已保存并打开: " + path;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Status = "计算书已保存,但自动打开失败(" + ex.Message + "): " + path;
+                return false;
             }
         }
 
