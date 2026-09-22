@@ -24,5 +24,18 @@ namespace HVACIDA.UI.Views
             var viewModel = DataContext as LargeSmokeViewModel;
             if (viewModel != null) viewModel.ReloadAreas();
         }
+
+        /// <summary>【确 定】= 保存并关闭;保存失败时不关窗,以便看到失败原因。</summary>
+        private void OnConfirmClick(object sender, RoutedEventArgs e)
+        {
+            var viewModel = DataContext as LargeSmokeViewModel;
+            if (viewModel == null)
+            {
+                Close();
+                return;
+            }
+
+            if (viewModel.TrySave()) Close();
+        }
     }
 }

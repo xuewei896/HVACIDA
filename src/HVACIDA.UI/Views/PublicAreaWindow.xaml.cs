@@ -46,6 +46,13 @@ namespace HVACIDA.UI.Views
             if (viewModel.TrySave()) Close();
         }
 
+        /// <summary>【保 存】= 只保存、不关窗(便于连续核对/试算);结果写在底栏状态行。</summary>
+        private void OnSaveClick(object sender, RoutedEventArgs e)
+        {
+            var viewModel = DataContext as PublicAreaViewModel;
+            if (viewModel != null) viewModel.TrySave();
+        }
+
         private void OnPickClick(object sender, RoutedEventArgs e)
         {
             var viewModel = DataContext as PublicAreaViewModel;

@@ -259,18 +259,29 @@ namespace HVACIDA.UI.ViewModels
             Status = "已恢复公式文档默认参数(客流量需重新输入)。";
         }
 
-        /// <summary>保存到 %AppData%\HVACIDA\large-system.xml(与公共区参数窗共用)。</summary>
-        private void Save()
+        /// <summary>
+        /// 保存到 %AppData%\HVACIDA\large-system.xml(与公共区参数窗共用);返回是否成功。
+        /// 窗口【确 定】按"保存并关闭"实现,保存失败时<strong>不关窗</strong>,否则用户看不到失败原因。
+        /// </summary>
+        public bool TrySave()
         {
             try
             {
                 _service.Save(Input);
                 Status = "参数已保存: " + _service.StorageDirectory + "\\large-system.xml(「计算结果」窗将按此计算)";
+                return true;
             }
             catch (System.Exception ex)
             {
                 Status = "保存失败: " + ex.Message;
+                return false;
             }
+        }
+
+        /// <summary>保存到 %AppData%\HVACIDA\large-system.xml(与公共区参数窗共用)。</summary>
+        private void Save()
+        {
+            TrySave();
         }
     }
 }

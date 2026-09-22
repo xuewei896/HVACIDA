@@ -208,17 +208,28 @@ namespace HVACIDA.UI.ViewModels
             Status = "已重新读取公共区面积并重算。" + SelectionSummary;
         }
 
-        private void Save()
+        /// <summary>
+        /// 保存排烟参数到 %AppData%\HVACIDA\large-smoke.xml;返回是否成功。
+        /// 窗口【确 定】按"保存并关闭"实现,保存失败时<strong>不关窗</strong>。
+        /// </summary>
+        public bool TrySave()
         {
             try
             {
                 _repository.SaveLargeSmoke(_input);
                 Status = "排烟计算参数已保存: " + _repository.StorageDirectory + "\\large-smoke.xml";
+                return true;
             }
             catch (Exception ex)
             {
                 Status = "保存失败: " + ex.Message;
+                return false;
             }
+        }
+
+        private void Save()
+        {
+            TrySave();
         }
 
         private void Reset()

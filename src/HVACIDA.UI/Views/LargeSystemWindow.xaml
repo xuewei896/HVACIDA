@@ -21,6 +21,15 @@
             <Setter Property="Margin" Value="2,3,10,3"/>
             <Setter Property="HorizontalContentAlignment" Value="Right"/>
         </Style>
+        <!-- 用户必须输入的数据(无公式默认值):琥珀色标签 + 浅琥珀底,与"公式默认参数"区分 -->
+        <Style x:Key="RequiredLabel" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource FieldLabel}">
+            <Setter Property="Foreground" Value="#B45309"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style x:Key="RequiredInput" TargetType="{x:Type TextBox}" BasedOn="{StaticResource FieldInput}">
+            <Setter Property="Background" Value="#FFF8E1"/>
+            <Setter Property="BorderBrush" Value="#E8C06A"/>
+        </Style>
         <Style x:Key="SectionBox" TargetType="{x:Type GroupBox}">
             <Setter Property="Padding" Value="6"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
@@ -46,18 +55,14 @@
                     <Button Content="计 算" Width="90" Height="30" Margin="0,0,8,0"
                             Command="{Binding CalculateCommand}" IsDefault="True"
                             ToolTip="计算并把本次输入保存到 large-system.xml(「大系统 → 计算结果」窗读的就是这份参数,故那边打开即有结果;界面右侧结果区本窗打开时也已自动算过)"/>
-                    <Button Content="保 存 参 数" Width="110" Height="30"
-                            Command="{Binding SaveCommand}"/>
-                    <Button Content="导出计算书" Width="110" Height="30" Margin="8,0,0,0"
-                            Command="{Binding ExportCommand}"/>
-                    <Button Content="导出 Excel" Width="104" Height="30" Margin="8,0,0,0"
-                            Command="{Binding ExportExcelCommand}"
-                            ToolTip="导出 .xlsx:负荷汇总(7 个分区 66 行)+ 口径与待补"/>
-                    <Button Content="恢复默认参数" Width="120" Height="30" Margin="8,0,0,0"
+                    <Button Content="恢复默认参数" Width="120" Height="30"
                             Command="{Binding ResetCommand}"/>
                 </StackPanel>
-                <Button DockPanel.Dock="Right" Content="关 闭" Width="90" Height="30" IsCancel="True"/>
-                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
+                <Button DockPanel.Dock="Right" Content="取 消" Width="96" Height="30" IsCancel="True"/>
+                <Button x:Name="ConfirmButton" DockPanel.Dock="Right" Content="确 定" Width="100" Height="30" Margin="0,0,8,0"
+                        Click="OnConfirmClick"
+                        ToolTip="保存本次参数到 large-system.xml 并关闭本窗;保存失败时不关窗,状态栏给出原因"/>
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,12,0"
                            TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
             </DockPanel>
         </Border>
@@ -114,17 +119,17 @@
                     </GroupBox>
 
                     <GroupBox Header="三、高峰客流资料统计" Style="{StaticResource SectionBox}"
-                              ToolTip="本组为必填项">
+                              ToolTip="本组为必填项:琥珀色字段没有公式默认值,必须由用户按客流预测填写;其余黑色字段为《大系统负荷计算公式.docx》默认值,可不动">
                         <StackPanel>
                             <TextBlock Text="1、高峰小时客流量" FontWeight="Bold" Margin="4,2"
                                ToolTip="单位:人次/h;按上行/下行线的上客量与下客量、换乘上客量与下客量分别填写(共 6 项)"/>
                             <UniformGrid Columns="2">
-                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="上行线 上客量" ToolTip="对应公式文档单元格 A27"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.UpLineBoardCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="上行线 下客量" ToolTip="对应公式文档单元格 B27"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.UpLineAlightCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="下行线 上客量" ToolTip="对应公式文档单元格 C27"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.DownLineBoardCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="下行线 下客量" ToolTip="对应公式文档单元格 D27"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.DownLineAlightCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="换乘 上客量" ToolTip="对应公式文档单元格 E27"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.TransferBoardCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
-                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource FieldLabel}" Text="换乘 下客量" ToolTip="对应公式文档单元格 F27"/><TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.TransferAlightCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource RequiredLabel}" Text="上行线 上客量" ToolTip="必填;对应公式文档单元格 A27"/><TextBox Style="{StaticResource RequiredInput}" Text="{Binding Input.UpLineBoardCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource RequiredLabel}" Text="上行线 下客量" ToolTip="必填;对应公式文档单元格 B27"/><TextBox Style="{StaticResource RequiredInput}" Text="{Binding Input.UpLineAlightCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource RequiredLabel}" Text="下行线 上客量" ToolTip="必填;对应公式文档单元格 C27"/><TextBox Style="{StaticResource RequiredInput}" Text="{Binding Input.DownLineBoardCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource RequiredLabel}" Text="下行线 下客量" ToolTip="必填;对应公式文档单元格 D27"/><TextBox Style="{StaticResource RequiredInput}" Text="{Binding Input.DownLineAlightCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource RequiredLabel}" Text="换乘 上客量" ToolTip="必填;对应公式文档单元格 E27"/><TextBox Style="{StaticResource RequiredInput}" Text="{Binding Input.TransferBoardCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource RequiredLabel}" Text="换乘 下客量" ToolTip="必填;对应公式文档单元格 F27"/><TextBox Style="{StaticResource RequiredInput}" Text="{Binding Input.TransferAlightCount, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
                             </UniformGrid>
                             <TextBlock Text="2、客流停站时间" FontWeight="Bold" Margin="4,6,4,2"
                                ToolTip="单位 min;站厅与站台各 4 项:上车停站、下车停站、换乘上车停站、换乘下车停站"/>

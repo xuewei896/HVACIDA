@@ -1624,6 +1624,97 @@ try {
     $fail++
 }
 
+# =====================================================================
+# 2026-09-20 用户口径:按钮与保存语义
+#   ① 公共区参数窗新增【保 存】(只保存、不关窗)
+#   ② 负荷计算窗:删【保存参数 / 导出计算书 / 导出 Excel】+【确 定】保存并关闭 +【关 闭】→【取 消】
+#   ③ 排烟计算窗:同上,并删「风机选型结论」块
+#   ④ 结果表滚轮转发(结果区由多张 DataGrid 组成,DataGrid 会吃掉 MouseWheel)
+# =====================================================================
+try {
+    $tmpB = Join-Path $env:TEMP ("HVACIDA-WinSmoke-" + [guid]::NewGuid().ToString('N'))
+    $repoB = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmpB
+    $banned = @('保 存 参 数', '导出计算书', '导出 Excel')
+
+    # ---- ① 公共区参数窗 ----
+    $emptySpaces = New-Object 'System.Collections.Generic.List[HVACIDA.Core.Models.SpaceSnapshot]'
+    $paVm = New-Object "$vmNs.PublicAreaViewModel" -ArgumentList $repoB, $emptySpaces, '自检(空模型)', $false
+    $paW = New-Object "$uiNs.PublicAreaWindow" -ArgumentList $paVm
+    $paW.Show(); $paW.UpdateLayout()
+    $saveBtn = $paW.FindName('SaveButton')
+    if ($saveBtn -ne $null -and $saveBtn.Content -eq '保 存') {
+        $saveBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        $paSaved = Test-Path (Join-Path $tmpB 'large-system.xml')
+        if ($paSaved -and $paW.IsVisible) {
+            Write-Host "PASS  公共区参数窗【保 存】已落盘 large-system.xml 且窗口不关(可继续改)"
+        } else {
+            Write-Host ("FAIL  公共区【保 存】: saved={0} stillOpen={1}" -f $paSaved, $paW.IsVisible); $fail++
+        }
+    } else { Write-Host "FAIL  公共区参数窗未找到【保 存】按钮(SaveButton)"; $fail++ }
+    $paW.Close()
+
+    # ---- ② 负荷计算窗 ----
+    $lsVm = New-Object "$vmNs.LargeSystemViewModel" -ArgumentList $repoB
+    $lsW = New-Object "$uiNs.LargeSystemWindow" -ArgumentList $lsVm
+    $lsW.Show(); $lsW.UpdateLayout()
+    $lsXaml = Get-Content -LiteralPath (Join-Path $viewDir 'LargeSystemWindow.xaml') -Raw
+    $leftA = @($banned | Where-Object { $lsXaml -match [regex]::Escape($_) })
+    if ($leftA.Count -eq 0) { Write-Host "PASS  负荷计算窗已删【保存参数 / 导出计算书 / 导出 Excel】三键" }
+    else { Write-Host ("FAIL  负荷计算窗仍保留: " + ($leftA -join ', ')); $fail++ }
+    $lsOk = $lsW.FindName('ConfirmButton')
+    if ($lsOk -ne $null -and $lsOk.Content -eq '确 定') {
+        Remove-Item (Join-Path $tmpB 'large-system.xml') -Force -ErrorAction SilentlyContinue
+        $lsOk.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        $lsSaved = Test-Path (Join-Path $tmpB 'large-system.xml')
+        if (-not $lsW.IsVisible -and $lsSaved) {
+            Write-Host "PASS  负荷计算窗【确 定】= 保存并关闭(large-system.xml 已落盘,窗口已关)"
+        } else {
+            Write-Host ("FAIL  负荷计算窗【确 定】: closed={0} saved={1}" -f (-not $lsW.IsVisible), $lsSaved); $fail++
+        }
+    } else { Write-Host "FAIL  负荷计算窗未找到【确 定】按钮(ConfirmButton)"; $fail++ }
+    if ($lsW.IsVisible) { $lsW.Close() }
+
+    # ---- ③ 排烟计算窗 ----
+    $smVm = New-Object "$vmNs.LargeSmokeViewModel" -ArgumentList $repoB
+    $smW = New-Object "$uiNs.LargeSmokeWindow" -ArgumentList $smVm
+    $smW.Show(); $smW.UpdateLayout()
+    $smXaml = Get-Content -LiteralPath (Join-Path $viewDir 'LargeSmokeWindow.xaml') -Raw
+    $leftB = @($banned | Where-Object { $smXaml -match [regex]::Escape($_) })
+    if ($leftB.Count -eq 0) { Write-Host "PASS  排烟计算窗已删【保存参数 / 导出计算书 / 导出 Excel】三键" }
+    else { Write-Host ("FAIL  排烟计算窗仍保留: " + ($leftB -join ', ')); $fail++ }
+    if ($smXaml -notmatch '风机选型结论') {
+        Write-Host "PASS  排烟计算窗已删「风机选型结论」整块(结论仍见「大系统 → 计算结果」窗)"
+    } else { Write-Host "FAIL  排烟计算窗仍有风机选型结论"; $fail++ }
+    $smGrid = $smW.FindName('SmokeGrid')
+    if ($smGrid -ne $null -and $smGrid.Columns.Count -eq 5) {
+        Write-Host "PASS  排烟结果表仍为 5 列(优化窗口未丢列)"
+    } else { Write-Host "FAIL  排烟结果表列数变了"; $fail++ }
+    $smOk = $smW.FindName('ConfirmButton')
+    if ($smOk -ne $null -and $smOk.Content -eq '确 定') {
+        Remove-Item (Join-Path $tmpB 'large-smoke.xml') -Force -ErrorAction SilentlyContinue
+        $smOk.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        $smSaved = Test-Path (Join-Path $tmpB 'large-smoke.xml')
+        if (-not $smW.IsVisible -and $smSaved) {
+            Write-Host "PASS  排烟计算窗【确 定】= 保存并关闭(large-smoke.xml 已落盘,窗口已关)"
+        } else {
+            Write-Host ("FAIL  排烟计算窗【确 定】: closed={0} saved={1}" -f (-not $smW.IsVisible), $smSaved); $fail++
+        }
+    } else { Write-Host "FAIL  排烟计算窗未找到【确 定】按钮(ConfirmButton)"; $fail++ }
+    if ($smW.IsVisible) { $smW.Close() }
+
+    # ---- ④ 结果表滚轮转发 ----
+    $rtXaml = Get-Content -LiteralPath (Join-Path $viewDir 'ResultTableView.xaml') -Raw
+    $rtCs = Get-Content -LiteralPath (Join-Path $viewDir 'ResultTableView.xaml.cs') -Raw
+    if ($rtXaml -match 'PreviewMouseWheel="OnPreviewMouseWheel"' -and $rtCs -match 'ScrollToVerticalOffset') {
+        Write-Host "PASS  结果表已接 PreviewMouseWheel 转发(鼠标停在表格上也能滚)"
+    } else { Write-Host "FAIL  结果表未接滚轮转发"; $fail++ }
+
+    try { Remove-Item $tmpB -Recurse -Force -ErrorAction Stop } catch { }
+} catch {
+    Write-Host ("FAIL  保存语义/按钮口径自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
+
 # 模块遍历:每个模块都应能生成说明窗(数量按目录取,避免增删模块时门禁变脆)
 try {
     $n = 0

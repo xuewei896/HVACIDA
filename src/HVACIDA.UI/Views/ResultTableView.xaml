@@ -1,7 +1,8 @@
-﻿<UserControl x:Class="HVACIDA.UI.Views.ResultTableView"
+<UserControl x:Class="HVACIDA.UI.Views.ResultTableView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             FontFamily="Microsoft YaHei UI" FontSize="12">
+             FontFamily="Microsoft YaHei UI" FontSize="12"
+             PreviewMouseWheel="OnPreviewMouseWheel">
     <UserControl.Resources>
         <!-- 结果表:一个分区一张表;数值列右对齐 + Consolas。单元格代号不出现在正文,仅悬停提示可见 -->
         <Style x:Key="SectionGrid" TargetType="{x:Type DataGrid}">
@@ -34,7 +35,7 @@
         </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer x:Name="TableScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <ItemsControl ItemsSource="{Binding Table.Sections, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
