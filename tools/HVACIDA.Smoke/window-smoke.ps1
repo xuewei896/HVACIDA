@@ -1210,6 +1210,28 @@ try {
     } else { Write-Host "FAIL  小系统窗未找到【确 定】按钮"; $fail++ }
     if ($mmW.IsVisible) { $mmW.Close() }
 
+    # 2026-09-20 追加口径:系统编号由用户输入(文本框),重复/为空必须拦住,不能互相覆盖
+    $sAir.Systems[0].Code = 'AHU-A101'
+    $sAir.CalculateCommand.Execute($null)
+    $typedSaved = $repo9.LoadSmallSystems().Find([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn, 'AHU-A101')
+    if ($typedSaved -ne $null -and $sAir.Systems[0].Code -eq 'AHU-A101') {
+        Write-Host "PASS  用户输入的系统编号按原样落盘(AHU-A101)"
+    } else { Write-Host "FAIL  用户输入的系统编号未落盘"; $fail++ }
+
+    $sAir.Systems[1].Code = 'AHU-A101'
+    $dupOk = $sAir.TrySaveAll()
+    if ($dupOk -eq $false -and $sAir.Status -match '重复') {
+        Write-Host ("PASS  系统编号重复被拦住:{0}" -f $sAir.Status)
+    } else { Write-Host ("FAIL  重复编号未拦住: ok={0} status='{1}'" -f $dupOk, $sAir.Status); $fail++ }
+    $sAir.Systems[1].Code = ''
+    $blankOk = $sAir.TrySaveAll()
+    if ($blankOk -eq $false -and $sAir.Status -match '不能为空') {
+        Write-Host "PASS  系统编号为空被拦住"
+    } else { Write-Host ("FAIL  空编号未拦住: ok={0} status='{1}'" -f $blankOk, $sAir.Status); $fail++ }
+    $sAir.Systems[1].Code = '2'
+    if ($mmXaml -match 'Text="\{Binding Code') { Write-Host "PASS  系统编号旁是用户可输入的文本框" }
+    else { Write-Host "FAIL  系统编号未接文本框"; $fail++ }
+
     # 端到端:刚算完就打开汇总窗,该系统已在表里(不需要再点保存、也不需要再点计算)
     $sum9 = New-Object "$vmNs.SmallResultViewModel" -ArgumentList $repo9
     $row9 = $sum9.SummaryRows | Where-Object { $_.SystemCode -eq '1' } | Select-Object -First 1

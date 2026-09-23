@@ -110,7 +110,7 @@ namespace HVACIDA.UI.ViewModels
             }
             else
             {
-                for (int i = 0; i < savedList.Count; i++) AddSystem(savedList[i].Rooms);
+                for (int i = 0; i < savedList.Count; i++) AddSystem(savedList[i].Rooms, savedList[i].SystemCode);
             }
             _selectedSystem = _systems[0];
 
@@ -439,15 +439,36 @@ namespace HVACIDA.UI.ViewModels
 
         // ================================================================== 实现
 
-        /// <summary>加一套系统(自动编号;可选带上已保存的房间列表)。</summary>
-        private SmallSystemBlockViewModel AddSystem(IEnumerable<SmallRoomInput> rooms)
+        /// <summary>加一套系统(编号默认取"最小未占用整数",也可由用户随后改写;可选带上已保存的房间列表)。</summary>
+        private SmallSystemBlockViewModel AddSystem(IEnumerable<SmallRoomInput> rooms, string code = null)
         {
-            var block = new SmallSystemBlockViewModel((_systems.Count + 1).ToString(CultureInfo.InvariantCulture));
+            var block = new SmallSystemBlockViewModel(
+                string.IsNullOrEmpty(code) ? NextDefaultCode() : code);
             if (rooms != null) block.LoadRooms(rooms);
             _systems.Add(block);
             OnPropertyChanged(nameof(Systems));
             if (_selectedSystem == null) SelectedSystem = block;
             return block;
+        }
+
+        /// <summary>默认系统编号:当前未被占用的最小正整数(用户可改)。</summary>
+        private string NextDefaultCode()
+        {
+            for (int i = 1; i <= 999; i++)
+            {
+                string candidate = i.ToString(CultureInfo.InvariantCulture);
+                bool used = false;
+                foreach (var block in _systems)
+                {
+                    if (string.Equals((block.Code ?? "").Trim(), candidate, StringComparison.OrdinalIgnoreCase))
+                    {
+                        used = true;
+                        break;
+                    }
+                }
+                if (!used) return candidate;
+            }
+            return (_systems.Count + 1).ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>【添加系统】:再加一套(系统编号顺延)。</summary>
@@ -473,7 +494,6 @@ namespace HVACIDA.UI.ViewModels
                 var block = _selectedSystem ?? _systems[_systems.Count - 1];
                 int index = _systems.IndexOf(block);
                 _systems.Remove(block);
-                RenumberSystems();
                 SelectedSystem = _systems[Math.Min(index, _systems.Count - 1)];
                 Calculate();
                 Status = "已删除「" + block.Title + "」,剩余 " + _systems.Count + " 套(点【确 定】或【计 算】才落盘)。";
@@ -482,16 +502,6 @@ namespace HVACIDA.UI.ViewModels
             {
                 Status = "删除系统失败: " + ex.Message;
             }
-        }
-
-        /// <summary>按窗口内顺序把系统重新编号 1..N(保存时的系统编号)。</summary>
-        private void RenumberSystems()
-        {
-            for (int i = 0; i < _systems.Count; i++)
-            {
-                _systems[i].Code = (i + 1).ToString(CultureInfo.InvariantCulture);
-            }
-            OnPropertyChanged(nameof(Systems));
         }
 
         private void AddRoom()
@@ -560,6 +570,45 @@ namespace HVACIDA.UI.ViewModels
         /// </summary>
         public string SaveAll()
         {
+            string note;
+            SaveAllCore(out note);
+            return note;
+        }
+
+        /// <summary>【确 定】用:保存全部系统;返回是否成功(失败/编号有问题时不关窗,状态栏给原因)。</summary>
+        public bool TrySaveAll()
+        {
+            string note;
+            bool ok = SaveAllCore(out note);
+            Status = note;
+            return ok;
+        }
+
+        /// <summary>
+        /// 保存实现:**先校验系统编号**(非空、同类型内不重复 —— 存储按「类型 + 编号」覆盖,重复会互相覆盖),
+        /// 再逐套落盘。空系统(没有房间行且不是加压送风)不落盘,避免「计算结果」窗里留空系统。
+        /// </summary>
+        private bool SaveAllCore(out string note)
+        {
+            // 1) 编号校验(用户可自填编号,重复/为空必须当场拦住,不能静默互相覆盖)
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var block in _systems)
+            {
+                string code = (block.Code ?? "").Trim();
+                if (code.Length == 0)
+                {
+                    note = "系统编号不能为空:请给「" + block.Title + "」填一个编号(如 1 / AHU-A101)后再保存。";
+                    return false;
+                }
+                if (!seen.Add(code))
+                {
+                    note = "系统编号重复:「" + code + "」出现两次 —— 保存按「系统类型 + 编号」覆盖,请改成不同编号。";
+                    return false;
+                }
+                block.Code = code;                       // 顺手去掉首尾空格
+            }
+
+            // 2) 逐套落盘
             try
             {
                 int saved = 0;
@@ -574,23 +623,18 @@ namespace HVACIDA.UI.ViewModels
 
                 if (saved == 0)
                 {
-                    return "本次没有房间/分区行,未保存(避免在「计算结果」窗里留一套空系统);补全后点【计 算】会一并保存。";
+                    note = "本次没有房间/分区行,未保存(避免在「计算结果」窗里留一套空系统);补全后点【计 算】会一并保存。";
+                    return false;
                 }
 
-                return "本次计算已同时保存 " + saved + " 套系统(当前工程共 " + total + " 套小系统)。";
+                note = "本次计算已同时保存 " + saved + " 套系统(当前工程共 " + total + " 套小系统)。";
+                return true;
             }
             catch (Exception ex)
             {
-                return "⚠ 参数保存失败(" + ex.Message + "),本次结果仅存在于本窗。";
+                note = "⚠ 参数保存失败(" + ex.Message + "),本次结果仅存在于本窗。";
+                return false;
             }
-        }
-
-        /// <summary>【确 定】用:保存全部系统;返回是否成功(失败不关窗,状态栏给原因)。</summary>
-        public bool TrySaveAll()
-        {
-            string note = SaveAll();
-            Status = note;
-            return note.IndexOf("失败", StringComparison.Ordinal) < 0 && note.IndexOf("未保存", StringComparison.Ordinal) < 0;
         }
 
         /// <summary>导出 Excel(.xlsx)计算书(当前系统):系统结果 + 房间明细 + 设备选型 + 口径与待补。</summary>

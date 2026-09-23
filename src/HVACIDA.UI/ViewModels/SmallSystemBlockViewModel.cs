@@ -23,25 +23,33 @@ namespace HVACIDA.UI.ViewModels
         private readonly ObservableCollection<SmallRoomInput> _rooms = new ObservableCollection<SmallRoomInput>();
         private SmallRoomInput _selectedRoom;
         private string _totalsText = "";
+        private string _code = "1";
         private int _roomSequence;
 
         public SmallSystemBlockViewModel(string code)
         {
-            Code = string.IsNullOrEmpty(code) ? "1" : code;
+            _code = string.IsNullOrEmpty(code) ? "1" : code;
             AddRoomCommand = new RelayCommand(() => AddRoom());
             RemoveRoomCommand = new RelayCommand(() => RemoveRoom(), () => _selectedRoom != null);
         }
 
-        /// <summary>系统编号(= 保存时的 SystemCode,按窗口内顺序自动编号 1、2、3…)。</summary>
-        public string Code { get; set; }
+        /// <summary>系统编号(= 保存时的 SystemCode)。2026-09-20:改成**用户可输入的文本框**,默认按顺序给 1、2、3…</summary>
+        public string Code
+        {
+            get => _code;
+            set
+            {
+                if (Set(ref _code, value ?? "")) OnPropertyChanged(nameof(Title));
+            }
+        }
 
         /// <summary>【添加行】/【删除行】(本系统的房间表)。</summary>
         public ICommand AddRoomCommand { get; }
 
         public ICommand RemoveRoomCommand { get; }
 
-        /// <summary>界面上显示的名字:系统编号1、系统编号2…</summary>
-        public string Title => "系统编号" + Code;
+        /// <summary>界面上显示的名字:系统编号 + 用户输入的编号(状态栏文案用)。</summary>
+        public string Title => "系统编号" + _code;
 
         /// <summary>本系统的房间 / 分区行。</summary>
         public ObservableCollection<SmallRoomInput> Rooms => _rooms;

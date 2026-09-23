@@ -242,8 +242,13 @@
                                 <Border BorderBrush="#C9DCF2" BorderThickness="1" Background="#FBFDFF" Margin="0,0,0,8">
                                     <StackPanel>
                                         <Border Background="#E3EEFB" Padding="8,5">
-                                            <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13"
-                                                       Foreground="#1B4E8A"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="系统编号" FontWeight="Bold" FontSize="13"
+                                                           Foreground="#1B4E8A" VerticalAlignment="Center"/>
+                                                <TextBox Width="170" Height="24" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                         Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}"
+                                                         ToolTip="本系统的编号(如 1 / AHU-A101),由用户填写;保存时按「系统类型 + 系统编号」覆盖或新增,同一类型内不能重复"/>
+                                            </StackPanel>
                                         </Border>
                                         <StackPanel Margin="8,4,8,8"
                                                     Visibility="{Binding DataContext.ShowRoomArea, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}">
