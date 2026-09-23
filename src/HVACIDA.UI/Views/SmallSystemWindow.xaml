@@ -236,56 +236,60 @@
                                 ToolTip="删除当前系统(至少保留一套);点【确 定】/【计 算】才落盘"/>
                     </StackPanel>
 
-                    <ItemsControl x:Name="SystemsHost" ItemsSource="{Binding Systems}">
-                        <ItemsControl.ItemTemplate>
+                    <!-- 左右选项卡:左侧竖排「系统编号x」,右侧是该系统的房间表与合计行(2026-09-20 用户口径) -->
+                    <TabControl x:Name="SystemsHost" TabStripPlacement="Left" MinHeight="240"
+                                ItemsSource="{Binding Systems}" SelectedItem="{Binding SelectedSystem, Mode=TwoWay}"
+                                Background="#FBFDFF" BorderBrush="#C9DCF2" BorderThickness="1"
+                                ToolTip="左边选系统(系统编号),右边填该系统的房间参数;下面一行是本系统合计">
+                        <TabControl.ItemTemplate>
                             <DataTemplate>
-                                <Border BorderBrush="#C9DCF2" BorderThickness="1" Background="#FBFDFF" Margin="0,0,0,8">
-                                    <StackPanel>
-                                        <Border Background="#E3EEFB" Padding="8,5">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="系统编号" FontWeight="Bold" FontSize="13"
-                                                           Foreground="#1B4E8A" VerticalAlignment="Center"/>
-                                                <TextBox Width="170" Height="24" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                         Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}"
-                                                         ToolTip="本系统的编号(如 1 / AHU-A101),由用户填写;保存时按「系统类型 + 系统编号」覆盖或新增,同一类型内不能重复"/>
-                                            </StackPanel>
-                                        </Border>
-                                        <StackPanel Margin="8,4,8,8"
-                                                    Visibility="{Binding DataContext.ShowRoomArea, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}">
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                                <Button Content="添加行" Width="84" Height="26" Command="{Binding AddRoomCommand}"/>
-                                                <Button Content="删除行" Width="84" Height="26" Margin="8,0,0,0" Command="{Binding RemoveRoomCommand}"
-                                                        ToolTip="删除本系统中当前选中的房间行"/>
-                                                <Button Content="从模型拾取空间…" Height="26" Margin="8,0,0,0"
-                                                        Click="OnPickSpacesClick"
-                                                        IsEnabled="{Binding DataContext.IsPickAvailable, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                        ToolTip="点击后本窗关闭,在模型中依次选择本系统负责的空间(可多选,回车结束);随后自动回到本窗并把它们追加到本系统"/>
-                                                <Button Content="拾取墙体求外墙总长…" Height="26" Margin="8,0,0,0"
-                                                        Click="OnPickWallClick"
-                                                        IsEnabled="{Binding DataContext.IsPickAvailable, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                        ToolTip="先在本系统的房间表里选中一行,再点本按钮;在模型中选取与该房间接触的多段外墙,自动取其长度之和填入该行"/>
-                                            </StackPanel>
-                                            <DataGrid Loaded="OnRoomGridLoaded" MinHeight="96" MaxHeight="220"
-                                                      AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
-                                                      CanUserResizeRows="False" CanUserSortColumns="False"
-                                                      HeadersVisibility="Column" GridLinesVisibility="All"
-                                                      HorizontalGridLinesBrush="#DDDDDD" VerticalGridLinesBrush="#DDDDDD"
-                                                      Background="White" RowHeight="24" ColumnHeaderHeight="28"
-                                                      AlternatingRowBackground="#F7FAFD" SelectionMode="Single"
-                                                      ItemsSource="{Binding Rooms}" SelectedItem="{Binding SelectedRoom}"
-                                                      ToolTip="房间类型可填「卫生间 / 淋浴间 / 环控机房 / 气瓶间 / 电缆引入间 / 泵房」等;送排风排烟系统的「参与送/排烟/补风」勾选环控机房行"/>
-                                        </StackPanel>
-                                        <!-- 最下行:本系统合计(总送风量 / 总回风量 / 总制冷量;加压送风无房间行时也照常显示) -->
-                                        <Border Background="#EEF3F9" BorderBrush="#C9DCF2" BorderThickness="0,1,0,0"
-                                                Padding="8,5" Margin="0,0,0,0"
-                                                ToolTip="本系统合计:总送风量 / 总回风量 / 总制冷量(该类型另有意义的量非 0 时一并列出)">
-                                            <TextBlock Text="{Binding TotalsText}" FontWeight="Bold" Foreground="#23486E" TextWrapping="Wrap"/>
-                                        </Border>
-                                    </StackPanel>
-                                </Border>
+                                <TextBlock Text="{Binding Title}" Margin="2,4" ToolTip="点它切换到本系统;编号可在右侧改写"/>
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                        </TabControl.ItemTemplate>
+                        <TabControl.ContentTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="8,8,8,0">
+                                        <TextBlock Text="系统编号" FontWeight="SemiBold" Foreground="#1B4E8A" VerticalAlignment="Center"/>
+                                        <TextBox Width="170" Height="24" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                 Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="本系统的编号(如 1 / AHU-A101),由用户填写;保存时按「系统类型 + 系统编号」覆盖或新增,同一类型内不能重复"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="8,6,8,8"
+                                                Visibility="{Binding DataContext.ShowRoomArea, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource BoolToVis}}">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <Button Content="添加行" Width="84" Height="26" Command="{Binding AddRoomCommand}"/>
+                                            <Button Content="删除行" Width="84" Height="26" Margin="8,0,0,0" Command="{Binding RemoveRoomCommand}"
+                                                    ToolTip="删除本系统中当前选中的房间行"/>
+                                            <Button Content="从模型拾取空间…" Height="26" Margin="8,0,0,0"
+                                                    Click="OnPickSpacesClick"
+                                                    IsEnabled="{Binding DataContext.IsPickAvailable, RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                                    ToolTip="点击后本窗关闭,在模型中依次选择本系统负责的空间(可多选,回车结束);随后自动回到本窗并把它们追加到本系统"/>
+                                            <Button Content="拾取墙体求外墙总长…" Height="26" Margin="8,0,0,0"
+                                                    Click="OnPickWallClick"
+                                                    IsEnabled="{Binding DataContext.IsPickAvailable, RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                                    ToolTip="先在本系统的房间表里选中一行,再点本按钮;在模型中选取与该房间接触的多段外墙,自动取其长度之和填入该行"/>
+                                        </StackPanel>
+                                        <DataGrid Loaded="OnRoomGridLoaded" MinHeight="150"
+                                                  AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                                  CanUserResizeRows="False" CanUserSortColumns="False"
+                                                  HeadersVisibility="Column" GridLinesVisibility="All"
+                                                  HorizontalGridLinesBrush="#DDDDDD" VerticalGridLinesBrush="#DDDDDD"
+                                                  Background="White" RowHeight="24" ColumnHeaderHeight="28"
+                                                  AlternatingRowBackground="#F7FAFD" SelectionMode="Single"
+                                                  ItemsSource="{Binding Rooms}" SelectedItem="{Binding SelectedRoom}"
+                                                  ToolTip="房间类型可填「卫生间 / 淋浴间 / 环控机房 / 气瓶间 / 电缆引入间 / 泵房」等;送排风排烟系统的「参与送/排烟/补风」勾选环控机房行"/>
+                                    </StackPanel>
+                                    <!-- 最下行:本系统合计(总送风量 / 总回风量 / 总制冷量;加压送风无房间行时也照常显示) -->
+                                    <Border Background="#EEF3F9" BorderBrush="#C9DCF2" BorderThickness="0,1,0,0"
+                                            Padding="8,5" VerticalAlignment="Bottom"
+                                            ToolTip="本系统合计:总送风量 / 总回风量 / 总制冷量(该类型另有意义的量非 0 时一并列出)">
+                                        <TextBlock Text="{Binding TotalsText}" FontWeight="Bold" Foreground="#23486E" TextWrapping="Wrap"/>
+                                    </Border>
+                                </StackPanel>
+                            </DataTemplate>
+                        </TabControl.ContentTemplate>
+                    </TabControl>
                 </StackPanel>
             </GroupBox>
             </StackPanel>

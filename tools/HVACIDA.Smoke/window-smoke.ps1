@@ -1231,6 +1231,20 @@ try {
     $sAir.Systems[1].Code = '2'
     if ($mmXaml -match 'Text="\{Binding Code') { Write-Host "PASS  系统编号旁是用户可输入的文本框" }
     else { Write-Host "FAIL  系统编号未接文本框"; $fail++ }
+    if ($mmXaml -match '<TabControl' -and $mmXaml -match 'TabStripPlacement="Left"') {
+        Write-Host "PASS  多系统用左右选项卡呈现(左:系统编号 / 右:房间表 + 合计行)"
+    } else { Write-Host "FAIL  多系统未用选项卡"; $fail++ }
+    # 用户添加系统后,原默认系统可以删掉(删到 0 套会自动补一套空白)
+    $before = $sAir.Systems.Count
+    $sAir.SelectedSystem = $sAir.Systems[0]
+    $sAir.RemoveSystemCommand.Execute($null)
+    if ($sAir.Systems.Count -eq $before - 1 -and $sAir.Status -match '已删除') {
+        Write-Host ("PASS  用户添加系统后原默认系统可删除(剩 {0} 套)" -f $sAir.Systems.Count)
+    } else { Write-Host ("FAIL  默认系统删不掉: {0} -> {1}" -f $before, $sAir.Systems.Count); $fail++ }
+    $sAir.RemoveSystemCommand.Execute($null)
+    if ($sAir.Systems.Count -eq 1 -and $sAir.Status -match '自动新建') {
+        Write-Host "PASS  删到一套不剩时自动补一套空白系统(窗口始终可用)"
+    } else { Write-Host ("FAIL  空系统兜底: {0} 套" -f $sAir.Systems.Count); $fail++ }
 
     # 端到端:刚算完就打开汇总窗,该系统已在表里(不需要再点保存、也不需要再点计算)
     $sum9 = New-Object "$vmNs.SmallResultViewModel" -ArgumentList $repo9

@@ -122,7 +122,7 @@ namespace HVACIDA.UI.ViewModels
             ExportExcelCommand = new RelayCommand(ExportExcel, () => _lastResult != null);
             ResetCommand = new RelayCommand(Reset);
             AddSystemCommand = new RelayCommand(() => AddSystem());
-            RemoveSystemCommand = new RelayCommand(RemoveSystem, () => _systems.Count > 1);
+            RemoveSystemCommand = new RelayCommand(RemoveSystem, () => _systems.Count > 0);
 
             Calculate();
         }
@@ -480,20 +480,29 @@ namespace HVACIDA.UI.ViewModels
             return block;
         }
 
-        /// <summary>【删除系统】:至少保留一套。</summary>
+        /// <summary>
+        /// 【删除系统】:删掉当前系统(2026-09-20 用户口径「用户添加系统后,原默认系统就可以删掉了」——
+        /// 不再要求"至少保留一套");若删到一套不剩,自动补一套空白系统,窗口始终可用。
+        /// </summary>
         private void RemoveSystem()
         {
             try
             {
-                if (_systems.Count <= 1)
+                var block = _selectedSystem ?? (_systems.Count > 0 ? _systems[_systems.Count - 1] : null);
+                if (block == null) return;
+
+                int index = _systems.IndexOf(block);
+                _systems.Remove(block);
+
+                if (_systems.Count == 0)
                 {
-                    Status = "至少要保留一套系统。";
+                    var fresh = AddSystem(null);
+                    SelectedSystem = fresh;
+                    Calculate();
+                    Status = "已删除「" + block.Title + "」;本窗至少需要一套系统,已自动新建一套空白系统。";
                     return;
                 }
 
-                var block = _selectedSystem ?? _systems[_systems.Count - 1];
-                int index = _systems.IndexOf(block);
-                _systems.Remove(block);
                 SelectedSystem = _systems[Math.Min(index, _systems.Count - 1)];
                 Calculate();
                 Status = "已删除「" + block.Title + "」,剩余 " + _systems.Count + " 套(点【确 定】或【计 算】才落盘)。";
