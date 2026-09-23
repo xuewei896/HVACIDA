@@ -39,6 +39,16 @@ function Test-Window([string]$name, [scriptblock]$factory) {
 $uiNs = 'HVACIDA.UI.Views'
 $vmNs = 'HVACIDA.UI.ViewModels'
 
+# 视觉树遍历(DataTemplate 内部的 DataGrid 只能用这种方式找:它不在窗口的 namescope 里)
+function Get-VisualDescendants($node) {
+    $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($node)
+    for ($i = 0; $i -lt $count; $i++) {
+        $child = [System.Windows.Media.VisualTreeHelper]::GetChild($node, $i)
+        $child
+        Get-VisualDescendants $child
+    }
+}
+
 # =====================================================================
 # 静态扫描:XAML 的可见文本(Text/Header/Content)不得出现公式文档单元格编号
 # —— 编号只允许出现在 ToolTip(悬停提示)里;这是"插件不体现单元格编号"的防回归闸门
@@ -399,17 +409,15 @@ try {
     }
     $airW = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $air
     $airW.Show(); $airW.UpdateLayout()
-    $ig = $airW.FindName('InputGrid')
-    $rd = $airW.FindName('RoomDetailGrid')
-    $eg = $airW.FindName('EquipmentGrid')
-    $rt = $airW.FindName('ResultTableHost')
+    $hostSys = $airW.FindName('SystemsHost')
+    $grids = @(Get-VisualDescendants $airW | Where-Object { $_ -is [System.Windows.Controls.DataGrid] })
     $expectIn = [HVACIDA.Core.Services.SmallRoomTable]::InputColumnsFor([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn).Count
-    $expectOut = [HVACIDA.Core.Services.SmallRoomTable]::ColumnsFor([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn).Count
-    if ($ig -ne $null -and $ig.Columns.Count -eq $expectIn -and $rd -ne $null -and $rd.Columns.Count -eq $expectOut -and
-        $eg -ne $null -and $eg.Columns.Count -eq 5 -and $rt -ne $null -and $rt.Table -ne $null) {
-        Write-Host ("PASS  小系统窗表格渲染:录入 {0} 列 / 明细 {1} 列 / 设备 5 列,结果表已绑定" -f $ig.Columns.Count, $rd.Columns.Count)
+    if ($hostSys -ne $null -and $hostSys.Items.Count -eq $air.Systems.Count -and $grids.Count -ge 1 -and
+        $grids[0].Columns.Count -eq $expectIn -and $air.Systems[0].Title -eq '系统编号1') {
+        Write-Host ("PASS  小系统窗多系统渲染:{0} 套系统,首套房间表 {1} 列,合计行「{2}」" -f `
+            $hostSys.Items.Count, $grids[0].Columns.Count, $air.Systems[0].TotalsText)
     } else {
-        Write-Host ("FAIL  小系统窗表格: in={0} out={1} equip={2} host={3}" -f $ig.Columns.Count, $rd.Columns.Count, $eg.Columns.Count, ($rt -ne $null))
+        Write-Host ("FAIL  小系统窗多系统: host={0} grids={1}" -f ($hostSys -ne $null), $grids.Count)
         $fail++
     }
     $airW.Close()
@@ -451,8 +459,8 @@ try {
     } else { Write-Host ("FAIL  加压送风: isPress={0} equip={1}" -f $pr.IsPressurization, $pr.EquipmentRows.Count); $fail++ }
     $prW = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $pr
     $prW.Show(); $prW.UpdateLayout()
-    if ($prW.FindName('ResultTableHost') -ne $null) { Write-Host "PASS  加压送风窗可正常构造并显示结果表" }
-    else { Write-Host "FAIL  加压送风窗缺结果表"; $fail++ }
+    if ($prW.FindName('SystemsHost') -ne $null) { Write-Host "PASS  加压送风窗可正常构造并显示系统区(无房间行,只给合计行)" }
+    else { Write-Host "FAIL  加压送风窗缺系统区"; $fail++ }
     $prW.Close()
 
     try { Remove-Item $tmp6 -Recurse -Force -ErrorAction Stop } catch { }
@@ -630,8 +638,8 @@ try {
 
     $slw = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $sload
     $slw.Show(); $slw.UpdateLayout()
-    if ($slw.FindName('ResultTableHost') -ne $null) { Write-Host "PASS  full-air window uses the shared result table view" }
-    else { Write-Host "FAIL  full-air window has no result table host"; $fail++ }
+    if ($slw.FindName('SystemsHost') -ne $null) { Write-Host "PASS  全空气窗显示多系统区(每套 = 房间表 + 合计行)" }
+    else { Write-Host "FAIL  全空气窗缺系统区"; $fail++ }
     $slw.Close()
 
     # ---- 大系统计算结果窗:页面主体 = 计算参数 + 选型参数两段(明细已在其它窗,2026-09-20) ----
@@ -1161,20 +1169,51 @@ try {
         $fail++
     }
 
-    $sAir.Input.SystemCode = 'AHU-B101'
     $sAir.Rooms.Add([HVACIDA.Core.Models.SmallRoomInput]::Create('信号设备室', 32.18, 5.9)) | Out-Null
     $sAir.CalculateCommand.Execute($null)
-    $saved9 = $repo9.LoadSmallSystems().Find([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn, 'AHU-B101')
+    $saved9 = $repo9.LoadSmallSystems().Find([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn, '1')
     if ($saved9 -ne $null -and $saved9.Rooms.Count -eq 1 -and $sAir.Status -match '已同时保存') {
-        Write-Host "PASS  小系统点【计 算】已同时保存(按「类型 + 编号」落盘 AHU-B101,1 个房间)"
+        Write-Host "PASS  小系统点【计 算】已同时保存(系统编号按窗口内顺序自动取「1」,1 个房间)"
     } else {
         Write-Host ("FAIL  小系统计算后未落盘: found={0}" -f ($saved9 -ne $null)); $fail++
     }
 
+    # 2026-09-20 用户口径:多系统(系统编号1..N,可添加)+ 每套合计行 + 三键已删 + 确定保存并关闭
+    $block2 = $sAir.AddSystem()
+    $sAir.SelectedSystem = $block2
+    $sAir.Rooms.Add([HVACIDA.Core.Models.SmallRoomInput]::Create('环控机房', 40, 5.9)) | Out-Null
+    $sAir.CalculateCommand.Execute($null)
+    $savedTwo = $repo9.LoadSmallSystems()
+    if ($sAir.Systems.Count -eq 2 -and $block2.Title -eq '系统编号2' -and $savedTwo.Systems.Count -eq 2 -and
+        $sAir.Systems[0].TotalsText -match '总送风量' -and $sAir.Systems[0].TotalsText -match '总回风量' -and
+        $sAir.Systems[0].TotalsText -match '总制冷量') {
+        Write-Host ("PASS  多系统:添加第 2 套后按「1」「2」落盘;合计行 = {0}" -f $sAir.Systems[1].TotalsText)
+    } else {
+        Write-Host ("FAIL  多系统: systems={0} saved={1}" -f $sAir.Systems.Count, $savedTwo.Systems.Count); $fail++
+    }
+
+    $mmXaml = Get-Content -LiteralPath (Join-Path $viewDir 'SmallSystemWindow.xaml') -Raw -Encoding UTF8
+    if ($mmXaml -notmatch '保 存 参 数' -and $mmXaml -notmatch '导出计算书' -and $mmXaml -notmatch '导出 Excel' -and
+        $mmXaml -notmatch 'Input\.SystemCode' -and $mmXaml -match 'Click="OnConfirmClick"' -and $mmXaml -match 'Content="取 消"') {
+        Write-Host "PASS  小系统窗:已删三键与「系统编号」输入框,底栏为【取 消】+【确 定】"
+    } else { Write-Host "FAIL  小系统窗按钮/编号未按要求改"; $fail++ }
+
+    $mmW = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $sAir
+    $mmW.Show(); $mmW.UpdateLayout()
+    $mmOk = $mmW.FindName('ConfirmButton')
+    if ($mmOk -ne $null -and $mmOk.Content -eq '确 定') {
+        Remove-Item (Join-Path $tmp9 'small-systems.xml') -Force -ErrorAction SilentlyContinue
+        $mmOk.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        $mmSaved = Test-Path (Join-Path $tmp9 'small-systems.xml')
+        if (-not $mmW.IsVisible -and $mmSaved) { Write-Host "PASS  小系统窗【确 定】= 保存全部系统并关闭" }
+        else { Write-Host ("FAIL  小系统窗确定: closed={0} saved={1}" -f (-not $mmW.IsVisible), $mmSaved); $fail++ }
+    } else { Write-Host "FAIL  小系统窗未找到【确 定】按钮"; $fail++ }
+    if ($mmW.IsVisible) { $mmW.Close() }
+
     # 端到端:刚算完就打开汇总窗,该系统已在表里(不需要再点保存、也不需要再点计算)
     $sum9 = New-Object "$vmNs.SmallResultViewModel" -ArgumentList $repo9
-    $row9 = $sum9.SummaryRows | Where-Object { $_.SystemCode -eq 'AHU-B101' } | Select-Object -First 1
-    if ($sum9.Summary.SystemCount -eq 1 -and $row9 -ne $null -and $sum9.Summary.TotalCoolingKw -gt 0) {
+    $row9 = $sum9.SummaryRows | Where-Object { $_.SystemCode -eq '1' } | Select-Object -First 1
+    if ($sum9.Summary.SystemCount -ge 1 -and $row9 -ne $null -and $sum9.Summary.TotalCoolingKw -gt 0) {
         Write-Host ("PASS  端到端:录入窗算完 → 打开汇总窗即有该系统(冷负荷合计 {0:N2} kW)" -f $sum9.Summary.TotalCoolingKw)
     } else {
         Write-Host ("FAIL  汇总窗未出现刚算的系统: count={0} row={1}" -f $sum9.Summary.SystemCount, ($row9 -ne $null)); $fail++

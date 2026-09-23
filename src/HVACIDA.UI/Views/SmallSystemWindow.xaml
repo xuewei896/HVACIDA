@@ -56,44 +56,30 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Button Content="计 算" Width="90" Height="30" Margin="0,0,8,0"
-                            Command="{Binding CalculateCommand}" IsDefault="True"
-                            ToolTip="计算本次输入,并按「系统类型 + 系统编号」保存到 small-systems.xml —— 「小系统 → 计算结果」窗汇总读的就是这份数据,所以那边打开即能看到本系统"/>
-                    <Button Content="保 存 参 数" Width="104" Height="30"
-                            Command="{Binding SaveCommand}"/>
-                    <Button Content="导出计算书" Width="104" Height="30" Margin="8,0,0,0"
-                            Command="{Binding ExportCommand}"/>
-                    <Button Content="导出 Excel" Width="104" Height="30" Margin="8,0,0,0"
-                            Command="{Binding ExportExcelCommand}"
-                            ToolTip="导出 .xlsx:系统结果 + 房间明细 + 设备选型 + 口径与待补"/>
-                    <Button Content="恢复默认" Width="92" Height="30" Margin="8,0,0,0"
+                            Command="{Binding CalculateCommand}"
+                            ToolTip="重算全部系统,并把有房间行的系统按「系统类型 + 系统编号」保存到 small-systems.xml(「小系统 → 计算结果」窗汇总读的就是这份数据)"/>
+                    <Button Content="恢复默认" Width="92" Height="30"
                             Command="{Binding ResetCommand}"
-                            ToolTip="恢复公式文档给定的默认参数(房间列表保留)"/>
+                            ToolTip="恢复公式文档给定的默认参数(各系统房间列表保留)"/>
                 </StackPanel>
-                <Button DockPanel.Dock="Right" Content="关 闭" Width="90" Height="30" IsCancel="True"/>
-                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
+                <Button DockPanel.Dock="Right" Content="取 消" Width="96" Height="30" IsCancel="True"/>
+                <Button x:Name="ConfirmButton" DockPanel.Dock="Right" Content="确 定" Width="100" Height="30" Margin="0,0,8,0"
+                        Click="OnConfirmClick" IsDefault="True"
+                        ToolTip="保存全部系统到 small-systems.xml 并关闭本窗;保存失败时不关窗,状态栏给出原因"/>
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,12,0"
                            TextTrimming="CharacterEllipsis" Foreground="#2E7D32"/>
             </DockPanel>
         </Border>
 
-        <Grid Margin="8">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <GroupBox Grid.Row="0" Header="一、计算参数" Padding="6" Margin="0,0,0,8"
-                      ToolTip="系统级参数;房间参数在录入表逐行填写">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
+            <StackPanel>
+            <GroupBox Header="一、计算参数" Padding="6" Margin="0,0,0,8"
+                      ToolTip="系统级参数,**对本窗全部系统共用**;房间参数在每套系统下面逐行填写">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="196">
                     <StackPanel>
                         <TextBlock Text="{Binding WeatherNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="6,0,6,4"/>
 
                         <WrapPanel>
-                            <StackPanel Orientation="Horizontal" Width="290">
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="系统编号"
-                                           ToolTip="设备编号,写入设备选型表首列;留空时按系统类型取默认前缀"/>
-                                <TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.SystemCode, UpdateSourceTrigger=PropertyChanged}"/>
-                            </StackPanel>
                             <StackPanel Orientation="Horizontal" Width="290">
                                 <CheckBox Content="手工输入室外参数(不随项目信息联动)" VerticalAlignment="Center" Margin="6,2,2,2"
                                           IsChecked="{Binding Input.WeatherManuallyOverridden}"
@@ -239,96 +225,65 @@
                 </ScrollViewer>
             </GroupBox>
 
-            <GroupBox Grid.Row="1" Header="二、房间 / 分区录入" Padding="6" Margin="0,0,0,8"
-                      ToolTip="换气次数留 0 时按房间类型取默认值"
-                      Visibility="{Binding ShowRoomArea, Converter={StaticResource BoolToVis}}">
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
-                        <Button Content="添加行" Width="84" Height="26" Command="{Binding AddRoomCommand}"/>
-                        <Button Content="删除行" Width="84" Height="26" Margin="8,0,0,0" Command="{Binding RemoveRoomCommand}"
-                                ToolTip="删除录入表中当前选中的房间行"/>
-                        <Button x:Name="PickSpacesButton" Content="从模型拾取空间…" Height="26" Margin="8,0,0,0"
-                                Click="OnPickSpacesClick" IsEnabled="{Binding IsPickAvailable}"
-                                ToolTip="点击后本窗关闭,在模型中依次选择本系统负责的空间(可多选,回车结束);随后自动回到本窗并把这些空间追加为房间行"/>
-                        <Button x:Name="PickWallButton" Content="拾取墙体求外墙总长…" Height="26" Margin="8,0,0,0"
-                                Click="OnPickWallClick" IsEnabled="{Binding IsPickAvailable}"
-                                ToolTip="先在房间表中选中一行,再点击本按钮;在模型中选取与该房间接触的多段外墙,自动取其长度之和填入该行的与土壤接触外墙长度"/>
+            <!-- 二、多系统:系统编号1、2、3…;每套 = 房间参数表 + 合计行(2026-09-20 用户口径) -->
+            <GroupBox Header="二、系统" Padding="6" Margin="0,0,0,8"
+                      ToolTip="一个模型可有多套系统;每套列出本系统房间参数,最下行是本系统合计(总送风量 / 总回风量 / 总制冷量)">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                        <Button Content="添加系统" Width="96" Height="26" Command="{Binding AddSystemCommand}"
+                                ToolTip="再加一套系统(系统编号顺延:2、3、4…)"/>
+                        <Button Content="删除系统" Width="96" Height="26" Margin="8,0,0,0" Command="{Binding RemoveSystemCommand}"
+                                ToolTip="删除当前系统(至少保留一套);点【确 定】/【计 算】才落盘"/>
                     </StackPanel>
-                    <DataGrid x:Name="InputGrid" Height="152"
-                              AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
-                              CanUserResizeRows="False" CanUserSortColumns="False"
-                              HeadersVisibility="Column" GridLinesVisibility="All"
-                              HorizontalGridLinesBrush="#DDDDDD" VerticalGridLinesBrush="#DDDDDD"
-                              Background="White" RowHeight="24" ColumnHeaderHeight="28"
-                              AlternatingRowBackground="#F7FAFD" SelectionMode="Single"
-                              ItemsSource="{Binding Rooms}" SelectedItem="{Binding SelectedRoom}"
-                              ToolTip="房间类型可填「卫生间 / 淋浴间 / 环控机房 / 气瓶间 / 电缆引入间 / 泵房」等;送排风排烟系统的「参与送/排烟/补风」勾选环控机房行"/>
-                </DockPanel>
+
+                    <ItemsControl x:Name="SystemsHost" ItemsSource="{Binding Systems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="#C9DCF2" BorderThickness="1" Background="#FBFDFF" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <Border Background="#E3EEFB" Padding="8,5">
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Left" Text="{Binding Title}" FontWeight="Bold" FontSize="13"
+                                                           Foreground="#1B4E8A" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding TotalsText}" FontWeight="Bold" Foreground="#23486E"
+                                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="16,0,0,0"
+                                                           ToolTip="本系统合计:总送风量 / 总回风量 / 总制冷量(该类型另有意义的量非 0 时一并列出)"/>
+                                            </DockPanel>
+                                        </Border>
+                                        <StackPanel Margin="8,4,8,8"
+                                                    Visibility="{Binding DataContext.ShowRoomArea, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                <Button Content="添加行" Width="84" Height="26" Command="{Binding AddRoomCommand}"/>
+                                                <Button Content="删除行" Width="84" Height="26" Margin="8,0,0,0" Command="{Binding RemoveRoomCommand}"
+                                                        ToolTip="删除本系统中当前选中的房间行"/>
+                                                <Button Content="从模型拾取空间…" Height="26" Margin="8,0,0,0"
+                                                        Click="OnPickSpacesClick"
+                                                        IsEnabled="{Binding DataContext.IsPickAvailable, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        ToolTip="点击后本窗关闭,在模型中依次选择本系统负责的空间(可多选,回车结束);随后自动回到本窗并把它们追加到本系统"/>
+                                                <Button Content="拾取墙体求外墙总长…" Height="26" Margin="8,0,0,0"
+                                                        Click="OnPickWallClick"
+                                                        IsEnabled="{Binding DataContext.IsPickAvailable, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        ToolTip="先在本系统的房间表里选中一行,再点本按钮;在模型中选取与该房间接触的多段外墙,自动取其长度之和填入该行"/>
+                                            </StackPanel>
+                                            <DataGrid Loaded="OnRoomGridLoaded" MinHeight="96" MaxHeight="220"
+                                                      AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                                      CanUserResizeRows="False" CanUserSortColumns="False"
+                                                      HeadersVisibility="Column" GridLinesVisibility="All"
+                                                      HorizontalGridLinesBrush="#DDDDDD" VerticalGridLinesBrush="#DDDDDD"
+                                                      Background="White" RowHeight="24" ColumnHeaderHeight="28"
+                                                      AlternatingRowBackground="#F7FAFD" SelectionMode="Single"
+                                                      ItemsSource="{Binding Rooms}" SelectedItem="{Binding SelectedRoom}"
+                                                      ToolTip="房间类型可填「卫生间 / 淋浴间 / 环控机房 / 气瓶间 / 电缆引入间 / 泵房」等;送排风排烟系统的「参与送/排烟/补风」勾选环控机房行"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
             </GroupBox>
-
-            <!-- 三、结果:系统结果表 + 房间明细 + 设备选型 + 口径说明 -->
-            <Grid Grid.Row="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*" MinHeight="130"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*" MinHeight="96"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-
-                <TextBlock Grid.Row="0" Margin="4,0,0,4" FontWeight="Bold" Foreground="#23486E"
-                           Text="三、计算结果"
-                           ToolTip="系统结果,与导出的计算书同源"/>
-                <Border Grid.Row="1" Margin="0,0,0,2" BorderBrush="#DDDDDD" BorderThickness="1" Background="#FAFAFA" Padding="2">
-                    <views:ResultTableView x:Name="ResultTableHost" Table="{Binding Table}"/>
-                </Border>
-
-                <TextBlock Grid.Row="2" Margin="4,6,0,4" FontWeight="Bold" Foreground="#23486E"
-                           Text="房间 / 分区明细"
-                           ToolTip="列与计算书同源,按系统类型取舍"/>
-                <DataGrid Grid.Row="3" x:Name="RoomDetailGrid" Style="{StaticResource ResultGrid}"
-                          ItemsSource="{Binding RoomRows}" AlternatingRowBackground="#F7FAFD"
-                          HorizontalScrollBarVisibility="Auto"/>
-
-                <TextBlock Grid.Row="4" Margin="4,6,0,4" FontWeight="Bold" Foreground="#23486E"
-                           Text="设备编号及选型"
-                           ToolTip="系数 / 风量 m³/h / 冷量 kW"/>
-                <DataGrid Grid.Row="5" x:Name="EquipmentGrid" Style="{StaticResource ResultGrid}"
-                          MaxHeight="132" ItemsSource="{Binding EquipmentRows}" AlternatingRowBackground="#F7FAFD">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="系统代码" Width="150" Binding="{Binding Code}"/>
-                        <DataGridTextColumn Header="设备" Width="180" Binding="{Binding Name}"/>
-                        <DataGridTextColumn Header="系数" Width="90" Binding="{Binding Factor, StringFormat={}{0:N2}}"/>
-                        <DataGridTextColumn Header="风量 m³/h" Width="140" Binding="{Binding FlowM3H, StringFormat={}{0:N0}}"/>
-                        <DataGridTemplateColumn Header="冷量 kW" Width="120">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <!-- 通风类设备无冷量,显示破折号 -->
-                                    <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" Margin="6,0,8,0" FontFamily="Consolas">
-                                        <TextBlock.Style>
-                                            <Style TargetType="{x:Type TextBlock}">
-                                                <Setter Property="Text" Value="{Binding CoolingKw, StringFormat={}{0:N2}}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding HasCooling}" Value="False">
-                                                        <Setter Property="Text" Value="—"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
-
-                <Border Grid.Row="6" Margin="0,8,0,0" Padding="8,6" Background="#F3F7FD"
-                        BorderBrush="#D6E2F0" BorderThickness="1">
-                    <TextBlock Text="{Binding Note}" TextWrapping="Wrap" Foreground="#5A5A5A"/>
-                </Border>
-            </Grid>
-        </Grid>
+            </StackPanel>
+        </ScrollViewer>
     </DockPanel>
 </Window>
+

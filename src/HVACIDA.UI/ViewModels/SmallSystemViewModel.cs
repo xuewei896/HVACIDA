@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows.Input;
 using HVACIDA.Core.Models;
 using HVACIDA.Core.Services;
@@ -28,8 +29,9 @@ namespace HVACIDA.UI.ViewModels
         private readonly ExcelReportGenerator _excel;
 
         private SmallSystemInput _input;
-        private readonly ObservableCollection<SmallRoomInput> _rooms;
-        private SmallRoomInput _selectedRoom;
+        private readonly ObservableCollection<SmallSystemBlockViewModel> _systems = new ObservableCollection<SmallSystemBlockViewModel>();
+        private readonly ObservableCollection<SmallRoomInput> _emptyRooms = new ObservableCollection<SmallRoomInput>();
+        private SmallSystemBlockViewModel _selectedSystem;
         private SmallSystemResult _lastResult;
         private ResultTable _table;
         private IList<SmallRoomResult> _roomRows = new List<SmallRoomResult>();
@@ -39,7 +41,6 @@ namespace HVACIDA.UI.ViewModels
         private string _resultText = "";
         private string _status = "";
         private string _weatherNote = "";
-        private int _roomSequence;
 
         public SmallSystemViewModel()
             : this(SmallSystemType.AllAirOnceReturn, null, false)
@@ -87,22 +88,41 @@ namespace HVACIDA.UI.ViewModels
             _excel = new ExcelReportGenerator(reportsDirectory);
             IsPickAvailable = pickAvailable;
 
-            var saved = _inputService.Load(systemType, "");
-            _input = saved ?? new SmallSystemInput { SystemType = systemType };
-            _input.SystemType = systemType;
-            if (_input.Rooms == null) _input.Rooms = new List<SmallRoomInput>();
+            // 「计算参数」全窗共用:取本类型已保存系统里的一套参数作底(没有就用公式文档默认值)
+            var project = _inputService.LoadProject();
+            var savedList = new List<SmallSystemInput>();
+            if (project != null && project.Systems != null)
+            {
+                foreach (var saved in project.Systems)
+                {
+                    if (saved != null && saved.SystemType == systemType) savedList.Add(saved);
+                }
+            }
 
-            _rooms = new ObservableCollection<SmallRoomInput>(_input.Rooms);
-            _roomSequence = _rooms.Count;
+            _input = savedList.Count > 0 ? savedList[0] : new SmallSystemInput { SystemType = systemType };
+            _input.SystemType = systemType;
             _weatherNote = _inputService.LastWeatherNote ?? "";
 
+            // 系统按窗口内顺序自动编号 1..N(2026-09-20 用户口径:删掉「系统编号」输入框,编号由顺序定)
+            if (savedList.Count == 0)
+            {
+                AddSystem();
+            }
+            else
+            {
+                for (int i = 0; i < savedList.Count; i++) AddSystem(savedList[i].Rooms);
+            }
+            _selectedSystem = _systems[0];
+
             AddRoomCommand = new RelayCommand(AddRoom, () => !IsPressurization);
-            RemoveRoomCommand = new RelayCommand(RemoveRoom, () => _selectedRoom != null);
+            RemoveRoomCommand = new RelayCommand(RemoveRoom, () => SelectedRoom != null);
             CalculateCommand = new RelayCommand(CalculateAndPersist);
             SaveCommand = new RelayCommand(Save);
             ExportCommand = new RelayCommand(Export, () => _lastResult != null);
             ExportExcelCommand = new RelayCommand(ExportExcel, () => _lastResult != null);
             ResetCommand = new RelayCommand(Reset);
+            AddSystemCommand = new RelayCommand(() => AddSystem());
+            RemoveSystemCommand = new RelayCommand(RemoveSystem, () => _systems.Count > 1);
 
             Calculate();
         }
@@ -119,14 +139,41 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>当前系统类型名称(窗口只读展示,类型由 Ribbon 按钮决定;取自 Core 统一用词)。</summary>
         public string SystemTypeName => ResultTable.SystemTypeName(_input.SystemType);
 
-        /// <summary>房间/分区列表(可增删改;计算/保存前同步回 <see cref="Input"/>)。</summary>
-        public ObservableCollection<SmallRoomInput> Rooms => _rooms;
+        /// <summary>**多系统**(系统编号1、2、3…);每套带自己的房间列表与合计行。</summary>
+        public ObservableCollection<SmallSystemBlockViewModel> Systems => _systems;
 
-        /// <summary>录入表中当前选中的房间行(【删除行】的目标)。</summary>
+        /// <summary>当前系统(【添加系统/删除系统】与拾取的目标);默认第一套。</summary>
+        public SmallSystemBlockViewModel SelectedSystem
+        {
+            get => _selectedSystem;
+            set
+            {
+                if (value != null && !_systems.Contains(value)) return;
+                if (Set(ref _selectedSystem, value))
+                {
+                    OnPropertyChanged(nameof(Rooms));
+                    OnPropertyChanged(nameof(SelectedRoom));
+                }
+            }
+        }
+
+        public ICommand AddSystemCommand { get; }
+
+        public ICommand RemoveSystemCommand { get; }
+
+        /// <summary>当前系统的房间/分区列表(等价于 <see cref="SelectedSystem"/>.Rooms)。</summary>
+        public ObservableCollection<SmallRoomInput> Rooms =>
+            _selectedSystem == null ? _emptyRooms : _selectedSystem.Rooms;
+
+        /// <summary>当前系统里选中的房间行(【删除行】的目标)。</summary>
         public SmallRoomInput SelectedRoom
         {
-            get => _selectedRoom;
-            set => Set(ref _selectedRoom, value);
+            get => _selectedSystem == null ? null : _selectedSystem.SelectedRoom;
+            set
+            {
+                if (_selectedSystem != null) _selectedSystem.SelectedRoom = value;
+                OnPropertyChanged();
+            }
         }
 
         /// <summary>室外参数回填说明(来自「项目信息 → 气象参数」)。</summary>
@@ -308,6 +355,13 @@ namespace HVACIDA.UI.ViewModels
                     return;
                 }
 
+                var block = _selectedSystem ?? (_systems.Count > 0 ? _systems[0] : null);
+                if (block == null)
+                {
+                    Status = "请先添加一套系统,再拾取空间。";
+                    return;
+                }
+
                 int added = 0;
                 int skipped = 0;
                 foreach (var space in spaces)
@@ -315,10 +369,10 @@ namespace HVACIDA.UI.ViewModels
                     if (space == null) continue;
 
                     string name = string.IsNullOrEmpty(space.Name) ? (space.Number ?? "") : space.Name;
-                    if (string.IsNullOrEmpty(name)) name = "房间" + (_roomSequence + added + 1);
+                    if (string.IsNullOrEmpty(name)) name = "房间" + (block.RoomSequence + added + 1);
 
                     bool exists = false;
-                    foreach (var room in _rooms)
+                    foreach (var room in block.Rooms)
                     {
                         if (room == null) continue;
                         if (string.Equals((room.Name ?? "").Trim(), name.Trim(), StringComparison.Ordinal))
@@ -338,16 +392,15 @@ namespace HVACIDA.UI.ViewModels
                     picked.EquipmentCoolingW = HVACIDA.Core.Utils.HvacConstants.SmallEquipmentCoolingW;
                     picked.WallLengthM = 0;
                     picked.AirChangePerHour = 0;
-                    _rooms.Add(picked);
+                    block.Rooms.Add(picked);
                     added++;
                 }
 
-                _roomSequence = _rooms.Count;
-                SyncRoomsToInput();
+                block.RoomSequence = block.Rooms.Count;
                 Calculate();
-                Status = "已从模型拾取空间:新增 " + added + " 个、跳过 " + skipped + " 个同名" +
+                Status = "已把拾取到的空间追加到「" + block.Title + "」:新增 " + added + " 个、跳过 " + skipped + " 个同名" +
                          (string.IsNullOrEmpty(note) ? "" : "(" + note + ")") +
-                         ";面积 / 层高 / 屋顶面积已按空间填入,请核对后点【计 算】(会同时保存)或【保 存 参 数】。";
+                         ";面积 / 层高 / 屋顶面积已按空间填入,请核对后点【计 算】(会同时保存)或【确 定】。";
             }
             catch (Exception ex)
             {
@@ -363,20 +416,20 @@ namespace HVACIDA.UI.ViewModels
         {
             try
             {
-                if (_selectedRoom == null)
+                var room = SelectedRoom;
+                if (room == null)
                 {
                     Status = "请先在房间表里选中一行再拾取墙体。";
                     return;
                 }
 
-                _selectedRoom.WallLengthM = lengthM;
-                string name = _selectedRoom.Name ?? "";
-                SyncRoomsToInput();
+                room.WallLengthM = lengthM;
+                string name = room.Name ?? "";
                 Calculate();
                 Status = "已把房间「" + name + "」的与土壤接触外墙长度设为 " +
                          lengthM.ToString("0.##") + " m(所选墙体长度之和)" +
                          (string.IsNullOrEmpty(note) ? "" : "(" + note + ")") +
-                         ";请核对后点【计 算】(会同时保存)或【保 存 参 数】。";
+                         ";请核对后点【计 算】(会同时保存)或【确 定】。";
             }
             catch (Exception ex)
             {
@@ -386,24 +439,76 @@ namespace HVACIDA.UI.ViewModels
 
         // ================================================================== 实现
 
-        /// <summary>把录入表的房间行同步回 <see cref="Input"/>.Rooms(计算/保存前必须调用)。</summary>
-        private void SyncRoomsToInput()
+        /// <summary>加一套系统(自动编号;可选带上已保存的房间列表)。</summary>
+        private SmallSystemBlockViewModel AddSystem(IEnumerable<SmallRoomInput> rooms)
         {
-            if (_input == null) return;
-            _input.Rooms = new List<SmallRoomInput>(_rooms);
+            var block = new SmallSystemBlockViewModel((_systems.Count + 1).ToString(CultureInfo.InvariantCulture));
+            if (rooms != null) block.LoadRooms(rooms);
+            _systems.Add(block);
+            OnPropertyChanged(nameof(Systems));
+            if (_selectedSystem == null) SelectedSystem = block;
+            return block;
+        }
+
+        /// <summary>【添加系统】:再加一套(系统编号顺延)。</summary>
+        public SmallSystemBlockViewModel AddSystem()
+        {
+            var block = AddSystem(null);
+            Calculate();
+            Status = "已添加「" + block.Title + "」——请在它下面点【添加行】或【从模型拾取空间…】录入房间;点【确 定】保存。";
+            return block;
+        }
+
+        /// <summary>【删除系统】:至少保留一套。</summary>
+        private void RemoveSystem()
+        {
+            try
+            {
+                if (_systems.Count <= 1)
+                {
+                    Status = "至少要保留一套系统。";
+                    return;
+                }
+
+                var block = _selectedSystem ?? _systems[_systems.Count - 1];
+                int index = _systems.IndexOf(block);
+                _systems.Remove(block);
+                RenumberSystems();
+                SelectedSystem = _systems[Math.Min(index, _systems.Count - 1)];
+                Calculate();
+                Status = "已删除「" + block.Title + "」,剩余 " + _systems.Count + " 套(点【确 定】或【计 算】才落盘)。";
+            }
+            catch (Exception ex)
+            {
+                Status = "删除系统失败: " + ex.Message;
+            }
+        }
+
+        /// <summary>按窗口内顺序把系统重新编号 1..N(保存时的系统编号)。</summary>
+        private void RenumberSystems()
+        {
+            for (int i = 0; i < _systems.Count; i++)
+            {
+                _systems[i].Code = (i + 1).ToString(CultureInfo.InvariantCulture);
+            }
+            OnPropertyChanged(nameof(Systems));
         }
 
         private void AddRoom()
         {
             try
             {
-                _roomSequence++;
-                // 面积/层高留 0 由用户填写;屋顶面积默认随面积(Core 的 Create 口径)
-                var room = SmallRoomInput.Create("房间" + _roomSequence, 0, 0);
-                _rooms.Add(room);
+                var block = _selectedSystem;
+                if (block == null)
+                {
+                    Status = "请先添加一套系统。";
+                    return;
+                }
+
+                var room = block.AddRoom();
                 SelectedRoom = room;
-                SyncRoomsToInput();
-                Status = "已在录入表末尾添加 1 行,请填写面积 / 层高等参数,再点【计 算】。";
+                Calculate();
+                Status = "已在「" + block.Title + "」末尾添加 1 行,请填写面积 / 层高等参数,再点【计 算】。";
             }
             catch (Exception ex)
             {
@@ -415,13 +520,14 @@ namespace HVACIDA.UI.ViewModels
         {
             try
             {
-                var room = _selectedRoom;
+                var block = _selectedSystem;
+                if (block == null) return;
+
+                var room = block.RemoveRoom();
                 if (room == null) return;
-                int index = _rooms.IndexOf(room);
-                _rooms.Remove(room);
-                SelectedRoom = _rooms.Count == 0 ? null : _rooms[Math.Min(index, _rooms.Count - 1)];
-                SyncRoomsToInput();
-                Status = "已删除房间行「" + (room.Name ?? "") + "」。";
+
+                Calculate();
+                Status = "已从「" + block.Title + "」删除房间行「" + (room.Name ?? "") + "」。";
             }
             catch (Exception ex)
             {
@@ -443,46 +549,64 @@ namespace HVACIDA.UI.ViewModels
         /// </summary>
         private void CalculateAndPersist()
         {
-            SyncRoomsToInput();
-            string saveNote;
-            try
-            {
-                if (!IsPressurization && _rooms.Count == 0)
-                {
-                    // 没有房间/分区行就没有可汇总的内容;此时落盘只会在「计算结果」窗里留一套空系统,
-                    // 故只算不存(补全房间行后再点【计 算】就会一并保存)。加压送风没有房间行,照常保存。
-                    saveNote = "本次没有房间/分区行,未保存(避免在「计算结果」窗里留一套空系统);补全后点【计 算】会一并保存。";
-                }
-                else
-                {
-                    int systemCount = _inputService.Save(_input);
-                    saveNote = "本次计算已同时保存(当前工程共 " + systemCount + " 套小系统)。";
-                }
-            }
-            catch (Exception ex)
-            {
-                saveNote = "⚠ 参数保存失败(" + ex.Message + "),本次结果仅存在于本窗。";
-            }
-
+            string saveNote = SaveAll();
             Calculate();
             Status = saveNote + " " + Status;
         }
 
-        /// <summary>导出 Excel(.xlsx)计算书:系统结果 + 房间明细 + 设备选型 + 口径与待补。</summary>
+        /// <summary>
+        /// 把所有**有房间行**的系统按「系统类型 + 系统编号」落盘(空系统不落盘,避免「计算结果」窗里留空系统;
+        /// 加压送风没有房间行,照常保存)。返回给状态栏的说明。
+        /// </summary>
+        public string SaveAll()
+        {
+            try
+            {
+                int saved = 0;
+                int total = 0;
+                foreach (var block in _systems)
+                {
+                    block.Calculate(_calculator, _input);          // 共用计算参数 + 本系统房间
+                    if (!IsPressurization && block.Rooms.Count == 0) continue;
+                    total = _inputService.Save(block.SystemInput);
+                    saved++;
+                }
+
+                if (saved == 0)
+                {
+                    return "本次没有房间/分区行,未保存(避免在「计算结果」窗里留一套空系统);补全后点【计 算】会一并保存。";
+                }
+
+                return "本次计算已同时保存 " + saved + " 套系统(当前工程共 " + total + " 套小系统)。";
+            }
+            catch (Exception ex)
+            {
+                return "⚠ 参数保存失败(" + ex.Message + "),本次结果仅存在于本窗。";
+            }
+        }
+
+        /// <summary>【确 定】用:保存全部系统;返回是否成功(失败不关窗,状态栏给原因)。</summary>
+        public bool TrySaveAll()
+        {
+            string note = SaveAll();
+            Status = note;
+            return note.IndexOf("失败", StringComparison.Ordinal) < 0 && note.IndexOf("未保存", StringComparison.Ordinal) < 0;
+        }
+
+        /// <summary>导出 Excel(.xlsx)计算书(当前系统):系统结果 + 房间明细 + 设备选型 + 口径与待补。</summary>
         private void ExportExcel()
         {
             try
             {
-                if (_lastResult == null)
+                var block = _selectedSystem ?? (_systems.Count > 0 ? _systems[0] : null);
+                if (block == null || block.Result == null)
                 {
                     Status = "还没有可导出的结果:请先点【计 算】。";
                     return;
                 }
 
-                var workbook = SmallSystemExcelExporter.BuildSystem(_input, _lastResult);
-                string path = _excel.SaveWorkbook(
-                    "小系统计算书_" + SystemTypeName + (string.IsNullOrEmpty(_input.SystemCode) ? "" : "_" + _input.SystemCode),
-                    workbook);
+                var workbook = SmallSystemExcelExporter.BuildSystem(block.SystemInput, block.Result);
+                string path = _excel.SaveWorkbook("小系统计算书_" + SystemTypeName + "_系统编号" + block.Code, workbook);
                 Status = "Excel 计算书已生成(" + workbook.SheetCount + " 个工作表): " + path;
             }
             catch (Exception ex)
@@ -491,24 +615,40 @@ namespace HVACIDA.UI.ViewModels
             }
         }
 
-        /// <summary>内部重算(不写盘):构造函数、拾取回填、恢复默认走这里。</summary>
+        /// <summary>内部重算(不写盘):构造函数、拾取回填、增删系统/房间、恢复默认走这里。刷新各系统合计行。</summary>
         private void Calculate()
         {
             try
             {
-                SyncRoomsToInput();
-                _lastResult = _calculator.Calculate(_input);
+                foreach (var block in _systems) block.Calculate(_calculator, _input);
 
-                Table = ResultTable.ForSmallSystem(_input, _lastResult);
+                var current = _selectedSystem ?? (_systems.Count > 0 ? _systems[0] : null);
+                if (current == null)
+                {
+                    Table = null;
+                    RoomRows = new List<SmallRoomResult>();
+                    EquipmentRows = new List<SmallEquipmentSelection>();
+                    Note = "";
+                    PendingNote = "";
+                    ResultText = "";
+                    Status = "还没有系统。";
+                    return;
+                }
+
+                _lastResult = current.Result;
+                Table = ResultTable.ForSmallSystem(current.SystemInput, _lastResult);
                 RoomRows = new List<SmallRoomResult>(_lastResult.Rooms);
                 EquipmentRows = new List<SmallEquipmentSelection>(_lastResult.Equipments);
                 Note = _lastResult.Note ?? "";
                 PendingNote = _lastResult.PendingNote ?? "";
-                ResultText = ResultFormatter.FormatSmall(_input, _lastResult);
+                ResultText = ResultFormatter.FormatSmall(current.SystemInput, _lastResult);
 
-                Status = _lastResult.Rooms.Count == 0 && !IsPressurization
-                    ? "计算完成,但当前没有房间/分区行 —— 请在录入表点【添加行】并填写参数后重算。"
-                    : "计算完成:结果见「系统结果 / 房间明细 / 设备选型」三张表,可导出计算书。";
+                int rooms = 0;
+                foreach (var block in _systems) rooms += block.Rooms.Count;
+
+                Status = rooms == 0 && !IsPressurization
+                    ? "计算完成,但还没有房间/分区行 —— 请在系统里点【添加行】或【从模型拾取空间…】后重算。"
+                    : "计算完成:" + _systems.Count + " 套系统的合计行已刷新,可导出计算书或点【确 定】保存。";
             }
             catch (Exception ex)
             {
@@ -523,31 +663,23 @@ namespace HVACIDA.UI.ViewModels
             }
         }
 
-        /// <summary>按「系统类型 + 系统编号」保存到 %AppData%\HVACIDA\small-systems.xml(与「小系统 → 计算结果」窗共用)。</summary>
+        /// <summary>保存全部系统(点【保 存】/命令入口;【确 定】走 <see cref="TrySaveAll"/>)。</summary>
         private void Save()
         {
-            try
-            {
-                SyncRoomsToInput();
-                int systemCount = _inputService.Save(_input);
-                Status = "参数与 " + _rooms.Count + " 个房间行已保存(当前工程共 " + systemCount +
-                         " 套小系统): " + _inputService.StorageDirectory + "\\small-systems.xml";
-            }
-            catch (Exception ex)
-            {
-                Status = "保存失败: " + ex.Message;
-            }
+            Status = SaveAll();
         }
 
         private void Export()
         {
             try
             {
-                if (_lastResult == null) return;
+                var block = _selectedSystem ?? (_systems.Count > 0 ? _systems[0] : null);
+                if (block == null || block.Result == null) return;
+
                 var generator = new TextReportGenerator();
                 string path = generator.SaveTextReport(
-                    "小系统计算书",
-                    ResultFormatter.FormatSmall(_input, _lastResult));
+                    "小系统计算书_系统编号" + block.Code,
+                    ResultFormatter.FormatSmall(block.SystemInput, block.Result));
                 Status = "计算书已生成: " + path;
             }
             catch (Exception ex)
@@ -556,20 +688,19 @@ namespace HVACIDA.UI.ViewModels
             }
         }
 
-        /// <summary>恢复公式文档默认参数(房间列表保留);室外干球/湿球温度按气象参数重新回填。</summary>
+        /// <summary>恢复公式文档默认参数(**各系统房间列表保留**);室外干球/湿球温度按气象参数重新回填。</summary>
         private void Reset()
         {
             try
             {
                 _input.SetDocumentDefaults();
-                _input.Rooms = new List<SmallRoomInput>(_rooms);
                 _inputService.Sync(_input);
                 WeatherNote = _inputService.LastWeatherNote ?? "";
 
                 // Input 是同一实例,主动通知一次让所有 Input.* 绑定重新取值
                 OnPropertyChanged(nameof(Input));
                 Calculate();
-                Status = "已恢复公式文档默认参数(房间列表保留)并重算。";
+                Status = "已恢复公式文档默认参数(各系统房间列表保留)并重算。";
             }
             catch (Exception ex)
             {

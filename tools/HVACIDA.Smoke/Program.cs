@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -1710,6 +1710,27 @@ namespace HVACIDA.Smoke
                 CheckText("输入参数页含客流与气象项",
                     lfInputXml.Contains("夏季空调室外湿球温度") && lfInputXml.Contains("上行线 上客量") &&
                     lfInputXml.Contains("站台结构散湿") ? "齐" : "缺", "齐");
+
+                // ---------- 2f) 小系统多系统窗:共用「计算参数」逐属性复制(漏字段即 FAIL) ----------
+                var sharedParams = new SmallSystemInput { SystemType = SmallSystemType.AllAirOnceReturn, SystemCode = "9" };
+                sharedParams.SetDocumentDefaults();
+                sharedParams.IndoorTempC = 26.5;
+                sharedParams.LightingIndexWm2 = 12;
+                sharedParams.SelectionFactor = 1.25;
+                sharedParams.WeatherManuallyOverridden = true;
+                sharedParams.DoorWidthM = 1.7;
+                sharedParams.OutdoorDryBulbC = 33.1;
+                var copiedParams = new SmallSystemInput { SystemType = SmallSystemType.AllAirOnceReturn, SystemCode = "1" };
+                sharedParams.CopyParametersTo(copiedParams);
+                int paramMismatch = 0;
+                foreach (var property in typeof(SmallSystemInput).GetProperties())
+                {
+                    if (property.Name == "Rooms" || property.Name == "SystemCode") continue;
+                    if (!object.Equals(property.GetValue(sharedParams), property.GetValue(copiedParams))) paramMismatch++;
+                }
+                CheckInt("共用计算参数复制:逐属性一致(除 Rooms / SystemCode)", paramMismatch, 0);
+                CheckText("复制不动目标系统编号", copiedParams.SystemCode, "1");
+                CheckInt("复制不搬房间列表", copiedParams.Rooms.Count, 0);
 
                 // ---------- 3) 小系统(单系统)----------
                 var smallInput = new SmallSystemInput

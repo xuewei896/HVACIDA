@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using HVACIDA.Core.Utils;
 
@@ -150,6 +150,53 @@ namespace HVACIDA.Core.Models
 
         /// <summary>K388 ΔP 计算漏风量的平均压力差 Pa(默认 12)。</summary>
         public double PressureDiffPa { get; set; }
+
+        /// <summary>
+        /// 把**系统级参数**复制到另一套系统(房间列表与系统编号不复制)。
+        /// <para>
+        /// 用途:小系统窗(2026-09-20)里「计算参数」全窗共用一套,下面按 系统编号1/2/3… 排多套系统,
+        /// 每套只带自己的房间列表 —— 计算与落盘前把共用参数复制进该系统。
+        /// </para>
+        /// <para>**新增字段必须同步这里**:自检用反射逐属性比对(漏一个就 FAIL),不会静默少复制。</para>
+        /// </summary>
+        public void CopyParametersTo(SmallSystemInput target)
+        {
+            if (target == null) return;
+
+            target.SystemType = SystemType;
+
+            target.OutdoorDryBulbC = OutdoorDryBulbC;
+            target.OutdoorWetBulbC = OutdoorWetBulbC;
+            target.TransitionOutdoorC = TransitionOutdoorC;
+            target.WeatherManuallyOverridden = WeatherManuallyOverridden;
+
+            target.IndoorTempC = IndoorTempC;
+            target.SupplyTempDiffC = SupplyTempDiffC;
+            target.DuctTempRiseC = DuctTempRiseC;
+            target.DewPointRhPct = DewPointRhPct;
+            target.IndoorRhPct = IndoorRhPct;
+
+            target.LightingIndexWm2 = LightingIndexWm2;
+            target.WallMoistureEmission = WallMoistureEmission;
+            target.PersonCoolingW = PersonCoolingW;
+            target.PersonMoistureGH = PersonMoistureGH;
+            target.FreshAirPerPersonM3H = FreshAirPerPersonM3H;
+
+            target.SelectionFactor = SelectionFactor;
+            target.SmokeSelectionFactor = SmokeSelectionFactor;
+            target.MakeupAirRatio = MakeupAirRatio;
+            target.MakeupAirSelectionFactor = MakeupAirSelectionFactor;
+            target.SupplyFromExhaustRatio = SupplyFromExhaustRatio;
+
+            target.DoorWidthM = DoorWidthM;
+            target.DoorHeightM = DoorHeightM;
+            target.DoorLeakageVelocityMs = DoorLeakageVelocityMs;
+            target.OpenDoorCount = OpenDoorCount;
+            target.LeakDoorCount = LeakDoorCount;
+            target.ReliefValveAreaM2 = ReliefValveAreaM2;
+            target.ReliefValveCount = ReliefValveCount;
+            target.PressureDiffPa = PressureDiffPa;
+        }
 
         /// <summary>恢复公式文档默认值(房间列表不动)。</summary>
         public void SetDocumentDefaults()
