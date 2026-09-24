@@ -271,6 +271,7 @@
                                                     ToolTip="先在本系统的房间表里选中一行,再点本按钮;在模型中选取与该房间接触的多段外墙,自动取其长度之和填入该行"/>
                                         </StackPanel>
                                         <DataGrid Loaded="OnRoomGridLoaded" MinHeight="150"
+                                                  Visibility="{Binding DataContext.UsePlainRoomTable, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource BoolToVis}}"
                                                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                                   CanUserResizeRows="False" CanUserSortColumns="False"
                                                   HeadersVisibility="Column" GridLinesVisibility="All"
@@ -279,6 +280,16 @@
                                                   AlternatingRowBackground="#F7FAFD" SelectionMode="Single"
                                                   ItemsSource="{Binding Rooms}" SelectedItem="{Binding SelectedRoom}"
                                                   ToolTip="房间类型可填「卫生间 / 淋浴间 / 环控机房 / 气瓶间 / 电缆引入间 / 泵房」等;送排风排烟系统的「参与送/排烟/补风」勾选环控机房行"/>
+                                        <DataGrid x:Name="MergedRoomsGrid" Loaded="OnRoomGridLoaded" MinHeight="160" Margin="0,6,0,0"
+                                                  Visibility="{Binding DataContext.UseReferenceRoomTable, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource BoolToVis}}"
+                                                  AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                                  CanUserResizeRows="False" CanUserSortColumns="False"
+                                                  HeadersVisibility="Column" GridLinesVisibility="All"
+                                                  HorizontalGridLinesBrush="#DDDDDD" VerticalGridLinesBrush="#DDDDDD"
+                                                  Background="White" RowHeight="24" ColumnHeaderHeight="28"
+                                                  AlternatingRowBackground="#F7FAFD" SelectionMode="Single"
+                                                  ItemsSource="{Binding RoomRows}"
+                                                  ToolTip="按《全空气一次回风系统计算参数展示格式》列出每个房间的数据:前段(名称/面积/层高/外墙/屋顶/设备冷负荷/人数/换气次数)可直接改,后段自动算,改完点【计 算】刷新、点【确 定】保存"/>
                                     </StackPanel>
                                     <!-- 最下行:本系统合计(总送风量 / 总回风量 / 总制冷量;加压送风无房间行时也照常显示) -->
                                     <Border Background="#EEF3F9" BorderBrush="#C9DCF2" BorderThickness="0,1,0,0"

@@ -49,6 +49,37 @@ namespace HVACIDA.UI.Views
             }
         }
 
+        /// <summary>
+        /// 「全空气一次回风」**参考表列**(23 列:前段可编辑、后段只读);
+        /// 列定义来自 Core 的 <see cref="SmallRoomTable.ReferenceColumnsForAllAir"/>。
+        /// </summary>
+        internal static void BuildReference(DataGrid grid)
+        {
+            if (grid == null) return;
+            grid.Columns.Clear();
+
+            foreach (var column in SmallRoomTable.ReferenceColumnsForAllAir())
+            {
+                var binding = new Binding(column.Property);
+                if (column.IsEditable)
+                {
+                    binding.UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged;
+                }
+                else if (!string.Equals(column.Kind, "text", StringComparison.OrdinalIgnoreCase))
+                {
+                    binding.StringFormat = "{0:N" + column.Decimals + "}";      // 只读列:按 Core 小数位显示
+                }
+
+                grid.Columns.Add(new DataGridTextColumn
+                {
+                    Header = column.Header,
+                    Width = column.Width,
+                    IsReadOnly = !column.IsEditable,
+                    Binding = binding
+                });
+            }
+        }
+
         /// <summary>房间**明细(结果)**表列(只读;数值按 Core 给的小数位显示)。</summary>
         internal static void BuildRoomDetail(DataGrid grid, SmallSystemType type)
         {

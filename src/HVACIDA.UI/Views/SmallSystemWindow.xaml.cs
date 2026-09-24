@@ -1,3 +1,4 @@
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 using HVACIDA.UI.ViewModels;
@@ -59,6 +60,13 @@ namespace HVACIDA.UI.Views
             var grid = sender as DataGrid;
             if (viewModel == null || grid == null) return;
             if (grid.Columns.Count > 0) return;                 // 模板复用时会重复触发,装一次即可
+
+            if (string.Equals(grid.Name, "MergedRoomsGrid", StringComparison.Ordinal))
+            {
+                // 全空气一次回风:参考表 23 列(前段可编辑、后段自动算)
+                SmallSystemColumns.BuildReference(grid);
+                return;
+            }
 
             SmallSystemColumns.BuildInput(grid, viewModel.Input.SystemType);
         }

@@ -24,11 +24,15 @@ namespace HVACIDA.UI.ViewModels
         private SmallRoomInput _selectedRoom;
         private string _totalsText = "";
         private string _code = "1";
+        private readonly ObservableCollection<SmallRoomRow> _roomRows = new ObservableCollection<SmallRoomRow>();
         private int _roomSequence;
 
         public SmallSystemBlockViewModel(string code)
         {
             _code = string.IsNullOrEmpty(code) ? "1" : code;
+            // 房间集合一变就重建"合并行"(参考表绑的是合并行,不重建的话点【添加行】界面不会动)
+            _rooms.CollectionChanged += (sender, args) => RebuildRoomRows();
+
             AddRoomCommand = new RelayCommand(() => AddRoom());
             RemoveRoomCommand = new RelayCommand(() => RemoveRoom(), () => _selectedRoom != null);
         }
@@ -73,6 +77,12 @@ namespace HVACIDA.UI.ViewModels
 
         /// <summary>本系统的计算结果(供合计行与导出用)。</summary>
         public SmallSystemResult Result { get; private set; }
+
+        /// <summary>
+        /// 本系统的**房间合并行**(录入项 + 逐房间计算值)。「全空气一次回风」按参考表 23 列渲染,
+        /// 其它类型仍用录入表;每次重算后重建。
+        /// </summary>
+        public ObservableCollection<SmallRoomRow> RoomRows => _roomRows;
 
         /// <summary>本系统已用过的房间序号(自动命名"房间N"用)。</summary>
         public int RoomSequence
@@ -131,8 +141,21 @@ namespace HVACIDA.UI.ViewModels
             SystemInput = input;
 
             Result = calculator.Calculate(input);
+            RebuildRoomRows();
             TotalsText = BuildTotals(Result);
             return Result;
+        }
+
+        /// <summary>重建房间合并行:录入项指向本系统的 SmallRoomInput,计算项取本次结果(顺序一致)。</summary>
+        private void RebuildRoomRows()
+        {
+            _roomRows.Clear();
+            for (int i = 0; i < _rooms.Count; i++)
+            {
+                SmallRoomResult row = null;
+                if (Result != null && Result.Rooms != null && i < Result.Rooms.Count) row = Result.Rooms[i];
+                _roomRows.Add(new SmallRoomRow(i + 1, _rooms[i], row));
+            }
         }
 
         private static string BuildTotals(SmallSystemResult r)

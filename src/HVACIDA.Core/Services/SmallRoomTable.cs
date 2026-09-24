@@ -17,6 +17,9 @@ namespace HVACIDA.Core.Services
         /// <summary>小数位(0 = 整数)。</summary>
         public int Decimals { get; set; } = 1;
 
+        /// <summary>是否可编辑(参考表列用:录入项可改、计算项只读)。</summary>
+        public bool IsEditable { get; set; }
+
         /// <summary>宽度提示(界面用)。</summary>
         public double Width { get; set; } = 90;
 
@@ -148,6 +151,44 @@ namespace HVACIDA.Core.Services
         /// <summary>
         /// 全站汇总"逐系统一行"的列(界面表格用)。零值列表示该系统不涉及该项,界面显示「—」。
         /// </summary>
+        /// <summary>
+        /// 「全空气一次回风」房间表**参考列**(2026-09-24 用户提供的《全空气一次回风系统计算参数展示格式.xlsx》):
+        /// **23 列 = 序号 + 房间名称 + 录入项(可编辑)+ 逐房间计算值(只读)**,表头与顺序与参考表逐字一致。
+        /// <para>
+        /// 绑定目标是界面侧的合并行 <c>HVACIDA.UI.ViewModels.SmallRoomRow</c>(录入项写回 SmallRoomInput、
+        /// 计算项取自 SmallRoomResult)—— 界面与计算书都不另算,数值仍来自 Core。
+        /// </para>
+        /// </summary>
+        public static IList<RoomColumn> ReferenceColumnsForAllAir()
+        {
+            return new List<RoomColumn>
+            {
+                new RoomColumn { Header = "序号", Property = "Index", Decimals = 0, Width = 46 },
+                new RoomColumn { Header = "房间名称", Property = "Name", Decimals = 0, Width = 170, IsEditable = true, Kind = "text" },
+                new RoomColumn { Header = "房间面积(㎡)", Property = "AreaM2", Decimals = 1, Width = 90, IsEditable = true },
+                new RoomColumn { Header = "层高(m)", Property = "HeightM", Decimals = 1, Width = 70, IsEditable = true },
+                new RoomColumn { Header = "与土壤接触外墙长度(m)", Property = "WallLengthM", Decimals = 1, Width = 130, IsEditable = true },
+                new RoomColumn { Header = "与土壤接触屋顶面积(m2)", Property = "RoofAreaM2", Decimals = 1, Width = 140, IsEditable = true },
+                new RoomColumn { Header = "设备冷负荷(w)", Property = "EquipmentCoolingW", Decimals = 0, Width = 100, IsEditable = true },
+                new RoomColumn { Header = "照明冷负荷 (w)", Property = "LightingCoolingW", Decimals = 0, Width = 100 },
+                new RoomColumn { Header = "房间预测人数(人)", Property = "Occupants", Decimals = 0, Width = 100, IsEditable = true },
+                new RoomColumn { Header = "人员冷负荷 (w)", Property = "PeopleCoolingW", Decimals = 0, Width = 100 },
+                new RoomColumn { Header = "人员湿负荷 (g/h)", Property = "PeopleMoistureGH", Decimals = 0, Width = 100 },
+                new RoomColumn { Header = "结构湿负荷 (g/h)", Property = "StructureMoistureGH", Decimals = 0, Width = 100 },
+                new RoomColumn { Header = "房间冷负荷 (kw)", Property = "TotalCoolingKw", Decimals = 2, Width = 100 },
+                new RoomColumn { Header = "湿负荷 (g/s)", Property = "TotalMoistureGps", Decimals = 3, Width = 90 },
+                new RoomColumn { Header = "通风量  (m3/h)", Property = "HeatVentilationM3H", Decimals = 0, Width = 100 },
+                new RoomColumn { Header = "换气次数", Property = "AirChangePerHour", Decimals = 2, Width = 70, IsEditable = true },
+                new RoomColumn { Header = "换气次数通风量(m3/h)", Property = "AchVentilationM3H", Decimals = 0, Width = 130 },
+                new RoomColumn { Header = "实际通风量(m3/h)", Property = "ActualVentilationM3H", Decimals = 0, Width = 120 },
+                new RoomColumn { Header = "实际换气次数", Property = "ActualAch", Decimals = 2, Width = 90 },
+                new RoomColumn { Header = "人员新风量", Property = "FreshAirPersonM3H", Decimals = 0, Width = 90 },
+                new RoomColumn { Header = "10%系统新风量", Property = "FreshAirSystemM3H", Decimals = 0, Width = 110 },
+                new RoomColumn { Header = "房间空调器冷量 (kw)", Property = "UnitCoolingKw", Decimals = 2, Width = 120 },
+                new RoomColumn { Header = "房间回风风量", Property = "ReturnAirM3H", Decimals = 0, Width = 110 }
+            };
+        }
+
         public static IList<RoomColumn> SummaryColumns()
         {
             return new List<RoomColumn>

@@ -1255,7 +1255,40 @@ try {
         Write-Host ("PASS  【确 定】保存了新增与既有系统(窗内 {0} 套,重开 {1} 套)" -f $addVm.Systems.Count, $reopen2.Systems.Count)
     } else {
         Write-Host ("FAIL  新增系统未保存: ok={0} 重开 {1} 套" -f $addOk, $reopen2.Systems.Count); $fail++
-    }    if ($mmXaml -match 'Text="\{Binding Code') { Write-Host "PASS  系统编号旁是用户可输入的文本框" }
+    }    # 2026-09-24 用户口径:全空气房间表按参考表 23 列列出(序号 + 名称 + 录入项 + 逐房间计算值)
+    $refCols = [HVACIDA.Core.Services.SmallRoomTable]::ReferenceColumnsForAllAir()
+    # 2026-09-24 实机反馈:点【添加行】后参考表必须立刻多一行(此前只在重算/重开窗时才重建合并行)
+    $blkX = $sAir.Systems[0]
+    $rowsBefore = $blkX.RoomRows.Count
+    $blkX.AddRoomCommand.Execute($null)
+    if ($blkX.RoomRows.Count -eq $rowsBefore + 1 -and $blkX.Rooms.Count -eq $rowsBefore + 1) {
+        Write-Host ("PASS  点【添加行】参考表立刻多一行({0} -> {1}),无需重算或重开窗" -f $rowsBefore, $blkX.RoomRows.Count)
+    } else {
+        Write-Host ("FAIL  添加行未即时刷新: 参考表 {0}->{1} / 录入 {2}" -f $rowsBefore, $blkX.RoomRows.Count, $blkX.Rooms.Count); $fail++
+    }
+    $blkX.RemoveRoomCommand.Execute($null)
+    if ($blkX.RoomRows.Count -eq $rowsBefore) {
+        Write-Host "PASS  点【删除行】参考表立刻少一行(与录入表同步)"
+    } else { Write-Host ("FAIL  删除行未即时刷新: {0}" -f $blkX.RoomRows.Count); $fail++ }    $refW = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $sAir
+    $refW.Show(); $refW.UpdateLayout()
+    $refG = @(Get-VisualDescendants $refW | Where-Object { $_ -is [System.Windows.Controls.DataGrid] -and $_.Name -eq 'MergedRoomsGrid' }) | Select-Object -First 1
+    $editable = 0; $readonly = 0
+    foreach ($c in $refCols) { if ($c.IsEditable) { $editable++ } else { $readonly++ } }
+    if ($refCols.Count -eq 23 -and $refCols[0].Header -eq '序号' -and $refCols[1].Header -eq '房间名称' -and
+        $refCols[22].Header -eq '房间回风风量' -and $editable -eq 8 -and $readonly -eq 15 -and
+        $refG -ne $null -and $refG.Columns.Count -eq 23) {
+        Write-Host ("PASS  全空气房间表按参考表列出:{0} 列({1} 可编辑 / {2} 只读),表头与参考表一致" -f $refG.Columns.Count, $editable, $readonly)
+    } else {
+        Write-Host ("FAIL  参考表列: def={0} grid={1} 可编辑={2}/{3}" -f $refCols.Count, $(if ($refG -eq $null) { 'null' } else { $refG.Columns.Count }), $editable, $readonly); $fail++
+    }
+    if ($refG -ne $null -and $refG.ItemsSource -ne $null) {
+        $rows = @($refG.ItemsSource)
+        Write-Host ("PASS  参考表已绑定房间行:{0} 行(首行 序号={1} 名称={2})" -f $rows.Count, $(if ($rows.Count -gt 0) { $rows[0].Index } else { '-' }), $(if ($rows.Count -gt 0) { $rows[0].Name } else { '-' }))
+    } else { Write-Host "FAIL  参考表未绑定房间行"; $fail++ }
+    $refW.Close()
+    if ($mmXaml -match 'MergedRoomsGrid' -and $mmXaml -match 'UseReferenceRoomTable' -and $mmXaml -match 'UsePlainRoomTable') {
+        Write-Host "PASS  参考表网格已接入窗口(全空气用参考表、其余五类仍用录入表)"
+    } else { Write-Host "FAIL  参考表网格未接入"; $fail++ }    if ($mmXaml -match 'Text="\{Binding Code') { Write-Host "PASS  系统编号旁是用户可输入的文本框" }
     else { Write-Host "FAIL  系统编号未接文本框"; $fail++ }
     if ($mmXaml -match '<TabControl' -and $mmXaml -match 'TabStripPlacement="Left"') {
         Write-Host "PASS  多系统用左右选项卡呈现(左:系统编号 / 右:房间表 + 合计行)"
