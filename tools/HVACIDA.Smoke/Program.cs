@@ -1732,6 +1732,25 @@ namespace HVACIDA.Smoke
                 CheckText("复制不动目标系统编号", copiedParams.SystemCode, "1");
                 CheckInt("复制不搬房间列表", copiedParams.Rooms.Count, 0);
 
+                // ---------- 2g) 几何参数显示小数位:面积 / 层高 / 长度统一保留 1 位(2026-09-20 用户口径) ----------
+                var geoTable = ResultTable.ForLargeSystemInput(loadInput);
+                string[] geoLabels = { "站厅公共区面积", "站厅公共区层高", "站厅公共区长度", "出入口A 宽", "出入口A 高", "屏蔽门高" };
+                int geoBad = 0;
+                string geoSample = "";
+                foreach (var section in geoTable.Sections)
+                {
+                    foreach (var row in section.Rows)
+                    {
+                        bool watched = false;
+                        foreach (var label in geoLabels) { if (row.Label == label) watched = true; }
+                        if (!watched || !row.Value.HasValue) continue;
+                        geoSample = row.Label + "=" + row.Display;
+                        int dot = row.Display.LastIndexOf('.');
+                        if (dot >= 0 && row.Display.Length - dot - 1 > 1) geoBad++;
+                    }
+                }
+                CheckInt("面积/层高/长度显示 1 位小数(样本 " + geoSample + ")", geoBad, 0);
+
                 // ---------- 3) 小系统(单系统)----------
                 var smallInput = new SmallSystemInput
                 {

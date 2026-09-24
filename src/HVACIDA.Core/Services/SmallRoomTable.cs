@@ -42,8 +42,8 @@ namespace HVACIDA.Core.Services
             switch (type)
             {
                 case SmallSystemType.AllAirOnceReturn:
-                    cols.Add(Col("面积 m²", "AreaM2", 2));
-                    cols.Add(Col("层高 m", "HeightM", 2, 70));
+                    cols.Add(Col("面积 m²", "AreaM2", 1));
+                    cols.Add(Col("层高 m", "HeightM", 1, 70));
                     cols.Add(Col("设备冷负荷 W", "EquipmentCoolingW", 0, 100));
                     cols.Add(Col("照明冷负荷 W", "LightingCoolingW", 1, 100));
                     cols.Add(Col("人数", "Occupants", 0, 60));
@@ -59,8 +59,8 @@ namespace HVACIDA.Core.Services
                     cols.Add(Col("回风量 m³/h", "ReturnAirM3H", 0, 100));
                     break;
                 case SmallSystemType.VrfWithFreshAir:
-                    cols.Add(Col("面积 m²", "AreaM2", 2));
-                    cols.Add(Col("层高 m", "HeightM", 2, 70));
+                    cols.Add(Col("面积 m²", "AreaM2", 1));
+                    cols.Add(Col("层高 m", "HeightM", 1, 70));
                     cols.Add(Col("设备冷负荷 W", "EquipmentCoolingW", 0, 100));
                     cols.Add(Col("照明冷负荷 W", "LightingCoolingW", 1, 100));
                     cols.Add(Col("人数", "Occupants", 0, 60));
@@ -76,19 +76,19 @@ namespace HVACIDA.Core.Services
                     break;
                 case SmallSystemType.ExhaustVentilation:
                     cols.Add(Col("房间类型", "RoomType", 1, 100));
-                    cols.Add(Col("面积 m²", "AreaM2", 2));
-                    cols.Add(Col("层高 m", "HeightM", 2, 70));
+                    cols.Add(Col("面积 m²", "AreaM2", 1));
+                    cols.Add(Col("层高 m", "HeightM", 1, 70));
                     cols.Add(Col("换气次数 次/h", "AirChangePerHour", 0, 100));
                     cols.Add(Col("计算排风量 m³/h", "ExhaustM3H", 0, 130));
                     break;
                 case SmallSystemType.SmokeExhaust:
-                    cols.Add(Col("面积 m²", "AreaM2", 2));
+                    cols.Add(Col("面积 m²", "AreaM2", 1));
                     cols.Add(Col("计算排烟量 m³/h", "SmokeM3H", 0, 130));
                     cols.Add(Col("计算补风量 m³/h", "MakeupAirM3H", 0, 130));
                     break;
                 case SmallSystemType.SupplyExhaustSmoke:
-                    cols.Add(Col("面积 m²", "AreaM2", 2));
-                    cols.Add(Col("层高 m", "HeightM", 2, 70));
+                    cols.Add(Col("面积 m²", "AreaM2", 1));
+                    cols.Add(Col("层高 m", "HeightM", 1, 70));
                     cols.Add(Col("换气次数 次/h", "AirChangePerHour", 0, 100));
                     cols.Add(Col("计算排风量 m³/h", "ExhaustM3H", 0, 120));
                     cols.Add(Col("计算送风量 m³/h", "SupplyM3H", 0, 120));
@@ -118,8 +118,8 @@ namespace HVACIDA.Core.Services
             {
                 case SmallSystemType.AllAirOnceReturn:
                 case SmallSystemType.VrfWithFreshAir:
-                    cols.Add(new RoomColumn { Header = "与土壤接触外墙长度 m", Property = "WallLengthM", Decimals = 2, Width = 130 });
-                    cols.Add(new RoomColumn { Header = "与土壤接触屋顶面积 m²", Property = "RoofAreaM2", Decimals = 2, Width = 140 });
+                    cols.Add(new RoomColumn { Header = "与土壤接触外墙长度 m", Property = "WallLengthM", Decimals = 1, Width = 130 });
+                    cols.Add(new RoomColumn { Header = "与土壤接触屋顶面积 m²", Property = "RoofAreaM2", Decimals = 1, Width = 140 });
                     cols.Add(new RoomColumn { Header = "设备冷负荷 W", Property = "EquipmentCoolingW", Decimals = 0, Width = 100 });
                     cols.Add(new RoomColumn { Header = "预测人数 人", Property = "Occupants", Decimals = 0, Width = 90 });
                     cols.Add(new RoomColumn { Header = "换气次数 次/h", Property = "AirChangePerHour", Decimals = 0, Width = 100 });
@@ -155,7 +155,7 @@ namespace HVACIDA.Core.Services
                 new RoomColumn { Header = "系统类型", Property = "TypeName", Kind = "text", Width = 150 },
                 new RoomColumn { Header = "系统编号", Property = "SystemCode", Kind = "text", Width = 110 },
                 new RoomColumn { Header = "房间/分区", Property = "RoomCount", Decimals = 0, Width = 80 },
-                new RoomColumn { Header = "面积 m²", Property = "TotalAreaM2", Decimals = 2, Width = 90 },
+                new RoomColumn { Header = "面积 m²", Property = "TotalAreaM2", Decimals = 1, Width = 90 },
                 new RoomColumn { Header = "冷负荷 kW", Property = "TotalCoolingKw", Decimals = 2, Width = 95 },
                 new RoomColumn { Header = "送风量 m³/h", Property = "TotalSupplyM3H", Decimals = 0, Width = 105 },
                 new RoomColumn { Header = "回风量 m³/h", Property = "TotalReturnM3H", Decimals = 0, Width = 105 },

@@ -78,7 +78,7 @@
                     <DataGridTextColumn Header="类别" Width="140" Binding="{Binding CategoryName}"/>
                     <DataGridTextColumn Header="族" Width="220" Binding="{Binding FamilyName}"/>
                     <DataGridTextColumn Header="类型" Width="240" Binding="{Binding TypeName}"/>
-                    <DataGridTextColumn Header="数量" Width="110" Binding="{Binding TotalQuantity, StringFormat={}{0:N2}}"/>
+                    <DataGridTextColumn Header="数量" Width="110" Binding="{Binding TotalQuantity, StringFormat={}{0:N1}}"/>
                     <DataGridTextColumn Header="单位" Width="70" Binding="{Binding Unit}"/>
                     <DataGridTextColumn Header="件数" Width="80" Binding="{Binding TotalCount, StringFormat={}{0:N0}}"/>
                     <DataGridTextColumn Header="备注" Width="*" Binding="{Binding Note}"/>

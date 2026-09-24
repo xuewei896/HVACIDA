@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -154,16 +154,16 @@ namespace HVACIDA.Core.Services
             var geo = t.Section("二、车站基础资料");
             geo.Add("站厅公共区面积", "D55", x.HallAreaM2, "m²", 1);
             geo.Add("站台公共区面积", "D56", x.PlatformAreaM2, "m²", 1);
-            geo.Add("站厅公共区层高", "C13", x.HallHeightM, "m", 2);
-            geo.Add("站厅公共区长度", "C14", x.HallLengthM, "m", 2);
-            geo.Add("出入口A 宽", "", x.EntranceAWidthM, "m", 2);
-            geo.Add("出入口A 高", "", x.EntranceAHeightM, "m", 2);
-            geo.Add("出入口B 宽", "", x.EntranceBWidthM, "m", 2);
-            geo.Add("出入口B 高", "", x.EntranceBHeightM, "m", 2);
-            geo.Add("出入口C 宽", "", x.EntranceCWidthM, "m", 2);
-            geo.Add("出入口C 高", "", x.EntranceCHeightM, "m", 2);
-            geo.Add("出入口D 宽", "", x.EntranceDWidthM, "m", 2);
-            geo.Add("出入口D 高", "", x.EntranceDHeightM, "m", 2);
+            geo.Add("站厅公共区层高", "C13", x.HallHeightM, "m", 1);
+            geo.Add("站厅公共区长度", "C14", x.HallLengthM, "m", 1);
+            geo.Add("出入口A 宽", "", x.EntranceAWidthM, "m", 1);
+            geo.Add("出入口A 高", "", x.EntranceAHeightM, "m", 1);
+            geo.Add("出入口B 宽", "", x.EntranceBWidthM, "m", 1);
+            geo.Add("出入口B 高", "", x.EntranceBHeightM, "m", 1);
+            geo.Add("出入口C 宽", "", x.EntranceCWidthM, "m", 1);
+            geo.Add("出入口C 高", "", x.EntranceCHeightM, "m", 1);
+            geo.Add("出入口D 宽", "", x.EntranceDWidthM, "m", 1);
+            geo.Add("出入口D 高", "", x.EntranceDHeightM, "m", 1);
             geo.Add("出入口负荷指标", "B82", x.EntranceLoadIndexW, "W", 0);
 
             var flow = t.Section("三、高峰客流资料");
@@ -206,7 +206,7 @@ namespace HVACIDA.Core.Services
 
             var psd = t.Section("六、屏蔽门传热 / 漏风 / 发热");
             psd.Add("传热系数", "A71", x.PsdHeatTransferCoeffWm2C, "W/(m²·℃)", 2);
-            psd.Add("屏蔽门高", "B71", x.PsdHeightM, "m", 2);
+            psd.Add("屏蔽门高", "B71", x.PsdHeightM, "m", 1);
             psd.Add("屏蔽门长", "C71", x.PsdLengthM, "m", 1);
             psd.Add("内外温差", "D71", x.PsdTempDiffC, "℃", 1);
             psd.Add("传热安全系数", "E71", x.PsdHeatSafetyFactor, "—", 2);
@@ -338,7 +338,7 @@ namespace HVACIDA.Core.Services
 
             var totals = t.Section("一、合计");
             totals.Add("房间/分区数", "", r.Rooms.Count, "个", 0);
-            totals.Add("总面积", "", r.TotalAreaM2, "m²", 2);
+            totals.Add("总面积", "", r.TotalAreaM2, "m²", 1);
             if (r.TotalCoolingKw > 0)
             {
                 totals.AddTotal("冷负荷合计", "", r.TotalCoolingKw, "kW", 2);
@@ -385,7 +385,7 @@ namespace HVACIDA.Core.Services
             if (r.PressurizationFlowM3H > 0)
             {
                 var press = t.Section("三、加压送风(楼梯间)");
-                press.Add("一层内可开启门面积", "", r.DoorAreaM2, "m²", 3);
+                press.Add("一层内可开启门面积", "", r.DoorAreaM2, "m²", 1);
                 press.Add("门开启风量(L1)", "", r.DoorOpenFlowM3H, "m³/h", 0);
                 press.Add("门缝漏风量(L2)", "", r.DoorLeakFlowM3H, "m³/h", 0);
                 press.Add("余压阀漏风量(L3)", "", r.ReliefValveLeakFlowM3H, "m³/h", 0);
@@ -426,7 +426,7 @@ namespace HVACIDA.Core.Services
             totals.Add("小系统套数", "", s.SystemCount, "套", 0);
             totals.Add("房间/分区数", "", s.RoomCount, "个", 0);
             totals.Add("设备台数", "", s.EquipmentCount, "台", 0);
-            totals.Add("总面积", "", s.TotalAreaM2, "m²", 2);
+            totals.Add("总面积", "", s.TotalAreaM2, "m²", 1);
             if (s.TotalCoolingKw > 0) totals.AddTotal("冷负荷合计", "", s.TotalCoolingKw, "kW", 2);
             if (s.TotalUnitCoolingKw > 0) totals.AddTotal("设备冷量合计(空调器/多联机)", "", s.TotalUnitCoolingKw, "kW", 2);
 
@@ -535,7 +535,7 @@ namespace HVACIDA.Core.Services
             if (water)
             {
                 required.Add("计算总阻力", "", r.TotalResistancePa / 1000.0, "kPa", 2);
-                required.AddTotal("需求扬程(计算总阻力 × 富余 ÷ ρg)", "", r.RequiredHeadM, "m", 2);
+                required.AddTotal("需求扬程(计算总阻力 × 富余 ÷ ρg)", "", r.RequiredHeadM, "m", 1);
             }
             else
             {
@@ -545,8 +545,8 @@ namespace HVACIDA.Core.Services
             var check = t.Section("四、设备校核(模型参数)");
             if (water)
             {
-                check.Add("水泵额定扬程", "", r.RatedHeadM, "m", 2);
-                check.Add("需求扬程", "", r.RequiredHeadM, "m", 2);
+                check.Add("水泵额定扬程", "", r.RatedHeadM, "m", 1);
+                check.Add("需求扬程", "", r.RequiredHeadM, "m", 1);
             }
             else
             {
@@ -611,7 +611,7 @@ namespace HVACIDA.Core.Services
 
             var pressure = t.Section("二、需求值(不可加:逐系统列出,此处只给最大值)");
             pressure.Add("最大需求全压(风系统)", "", s.MaxRequiredPressurePa, "Pa", 1);
-            pressure.Add("最大需求扬程(水系统)", "", s.MaxRequiredHeadM, "m", 2);
+            pressure.Add("最大需求扬程(水系统)", "", s.MaxRequiredHeadM, "m", 1);
             pressure.AddText("为什么不求和",
                 "风机全压与水泵扬程对应的是各系统相互独立的管网,阻力不能相加;" +
                 "逐系统的计算总阻力 / 需求值 / 校核结论见「逐系统」表与各系统的计算书。");
