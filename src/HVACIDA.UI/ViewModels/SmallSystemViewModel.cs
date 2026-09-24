@@ -617,26 +617,25 @@ namespace HVACIDA.UI.ViewModels
                 block.Code = code;                       // 顺手去掉首尾空格
             }
 
-            // 2) 逐套落盘
+            // 2) 逐套计算后**整体替换**本类型的系统(只 upsert 的话,窗里删掉的系统下次打开会"复活")
             try
             {
-                int saved = 0;
-                int total = 0;
+                var toSave = new List<SmallSystemInput>();
                 foreach (var block in _systems)
                 {
                     block.Calculate(_calculator, _input);          // 共用计算参数 + 本系统房间
                     if (!IsPressurization && block.Rooms.Count == 0) continue;
-                    total = _inputService.Save(block.SystemInput);
-                    saved++;
+                    toSave.Add(block.SystemInput);
                 }
 
-                if (saved == 0)
+                if (toSave.Count == 0)
                 {
                     note = "本次没有房间/分区行,未保存(避免在「计算结果」窗里留一套空系统);补全后点【计 算】会一并保存。";
                     return false;
                 }
 
-                note = "本次计算已同时保存 " + saved + " 套系统(当前工程共 " + total + " 套小系统)。";
+                int total = _inputService.ReplaceAll(_input.SystemType, toSave);
+                note = "本次计算已同时保存 " + toSave.Count + " 套系统(当前工程共 " + total + " 套小系统)。";
                 return true;
             }
             catch (Exception ex)

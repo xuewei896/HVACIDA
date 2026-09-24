@@ -1229,6 +1229,21 @@ try {
         Write-Host "PASS  系统编号为空被拦住"
     } else { Write-Host ("FAIL  空编号未拦住: ok={0} status='{1}'" -f $blankOk, $sAir.Status); $fail++ }
     $sAir.Systems[1].Code = '2'
+    # 2026-09-20 实机反馈:窗里删掉的系统必须真的从 small-systems.xml 消失(只 upsert 的话重开又回来)
+    $sAir.TrySaveAll() | Out-Null
+    $cntBefore = $repo9.LoadSmallSystems().Systems.Count
+    $sAir.SelectedSystem = $sAir.Systems[0]
+    $sAir.RemoveSystemCommand.Execute($null)
+    $sAir.TrySaveAll() | Out-Null
+    $cntAfter = $repo9.LoadSmallSystems().Systems.Count
+    $reopen = New-Object "$vmNs.SmallSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn), $repo9
+    if ($cntBefore -eq 2 -and $cntAfter -eq 1 -and $reopen.Systems.Count -eq 1) {
+        Write-Host ("PASS  窗里删掉的系统真的落盘删除(存储 {0} -> {1} 套,重开窗 {2} 套)" -f $cntBefore, $cntAfter, $reopen.Systems.Count)
+    } else {
+        Write-Host ("FAIL  删除未落盘: {0} -> {1} 套,重开 {2} 套" -f $cntBefore, $cntAfter, $reopen.Systems.Count); $fail++
+    }
+    $sAir.Systems[0].Code = '1'        # 收尾:编号恢复成 1(后面「汇总窗」断言按编号 1 找行)
+    $sAir.CalculateCommand.Execute($null)
     if ($mmXaml -match 'Text="\{Binding Code') { Write-Host "PASS  系统编号旁是用户可输入的文本框" }
     else { Write-Host "FAIL  系统编号未接文本框"; $fail++ }
     if ($mmXaml -match '<TabControl' -and $mmXaml -match 'TabStripPlacement="Left"') {
@@ -1236,9 +1251,10 @@ try {
     } else { Write-Host "FAIL  多系统未用选项卡"; $fail++ }
     # 用户添加系统后,原默认系统可以删掉(删到 0 套会自动补一套空白)
     $before = $sAir.Systems.Count
+    $sAir.AddSystemCommand.Execute($null)
     $sAir.SelectedSystem = $sAir.Systems[0]
     $sAir.RemoveSystemCommand.Execute($null)
-    if ($sAir.Systems.Count -eq $before - 1 -and $sAir.Status -match '已删除') {
+    if ($sAir.Systems.Count -eq $before -and $sAir.Status -match '已删除') {
         Write-Host ("PASS  用户添加系统后原默认系统可删除(剩 {0} 套)" -f $sAir.Systems.Count)
     } else { Write-Host ("FAIL  默认系统删不掉: {0} -> {1}" -f $before, $sAir.Systems.Count); $fail++ }
     $sAir.RemoveSystemCommand.Execute($null)

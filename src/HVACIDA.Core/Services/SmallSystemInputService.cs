@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using HVACIDA.Core.Models;
 
 namespace HVACIDA.Core.Services
@@ -110,6 +111,38 @@ namespace HVACIDA.Core.Services
         {
             var project = _repository.LoadSmallSystems();
             project.Upsert(input);
+            _repository.SaveSmallSystems(project);
+            return project.Systems.Count;
+        }
+
+        /// <summary>
+        /// 用 <paramref name="systems"/> **整体替换**某类型的全部系统(多系统窗的保存语义)。
+        /// <para>
+        /// 为什么不能只 upsert:用户在小系统窗里【删除系统】后,若只逐套 upsert,
+        /// 被删的那套仍留在 small-systems.xml 里 —— **关窗再打开它又回来了**(2026-09-20 实机反馈)。
+        /// 所以先删掉存储里同类型的现有系统,再把窗内的系统写进去,让窗口状态对该类型是权威的。
+        /// </para>
+        /// <para>其它类型的系统与其它工程数据一概不动。返回保存后该工程的小系统总数。</para>
+        /// </summary>
+        public int ReplaceAll(SmallSystemType type, IList<SmallSystemInput> systems)
+        {
+            var project = _repository.LoadSmallSystems();
+
+            var remaining = new List<SmallSystemInput>();
+            foreach (var existing in project.Systems)
+            {
+                if (existing != null && existing.SystemType != type) remaining.Add(existing);
+            }
+            project.Systems = remaining;
+
+            if (systems != null)
+            {
+                foreach (var system in systems)
+                {
+                    if (system != null) project.Upsert(system);
+                }
+            }
+
             _repository.SaveSmallSystems(project);
             return project.Systems.Count;
         }
