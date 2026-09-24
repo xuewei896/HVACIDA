@@ -654,7 +654,9 @@ try {
     $brw.Close()
 
     # ---- 小系统计算结果窗:空工程必须"不摆结果,只给指引"(不做兜底假结果) ----
-    $srvm = New-Object "$vmNs.SmallResultViewModel" -ArgumentList $repo5
+    $tmpEmpty = Join-Path $env:TEMP ("HVACIDA-WinSmoke-Empty-" + [guid]::NewGuid().ToString('N'))
+    $repoEmpty = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $tmpEmpty
+    $srvm = New-Object "$vmNs.SmallResultViewModel" -ArgumentList $repoEmpty
     $srvm.CalculateCommand.Execute($null)
     if ($srvm.Summary.Rows.Count -eq 0 -and $srvm.Table -eq $null -and $srvm.SummaryRows.Count -eq 0 -and
         $srvm.Note -match '还没有保存过' -and $srvm.Status -match '还没有保存过') {
@@ -1162,8 +1164,8 @@ try {
 
     $sAir.CalculateCommand.Execute($null)
     $proj9Empty = $repo9.LoadSmallSystems()
-    if ($proj9Empty.Systems.Count -eq 0 -and $sAir.Status -match '未保存') {
-        Write-Host "PASS  没有房间行时点【计 算】只算不存(状态栏说明原因)"
+    if ($proj9Empty.Systems.Count -eq 1 -and $sAir.Status -match '已同时保存') {
+        Write-Host "PASS  还没有房间行时点【计 算】也落盘(2026-09-20 口径:新增与既有的系统都要保存)"
     } else {
         Write-Host ("FAIL  空系统被落盘: {0} 套 / status='{1}'" -f $proj9Empty.Systems.Count, $sAir.Status)
         $fail++
@@ -1244,7 +1246,16 @@ try {
     }
     $sAir.Systems[0].Code = '1'        # 收尾:编号恢复成 1(后面「汇总窗」断言按编号 1 找行)
     $sAir.CalculateCommand.Execute($null)
-    if ($mmXaml -match 'Text="\{Binding Code') { Write-Host "PASS  系统编号旁是用户可输入的文本框" }
+    # 2026-09-20 用户口径:【确 定】要把"刚新增、还没填房间"的系统也保存下来
+    $addVm = New-Object "$vmNs.SmallSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn), $repo9
+    $addVm.AddSystemCommand.Execute($null)
+    $addOk = $addVm.TrySaveAll()
+    $reopen2 = New-Object "$vmNs.SmallSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn), $repo9
+    if ($addOk -eq $true -and $reopen2.Systems.Count -eq $addVm.Systems.Count) {
+        Write-Host ("PASS  【确 定】保存了新增与既有系统(窗内 {0} 套,重开 {1} 套)" -f $addVm.Systems.Count, $reopen2.Systems.Count)
+    } else {
+        Write-Host ("FAIL  新增系统未保存: ok={0} 重开 {1} 套" -f $addOk, $reopen2.Systems.Count); $fail++
+    }    if ($mmXaml -match 'Text="\{Binding Code') { Write-Host "PASS  系统编号旁是用户可输入的文本框" }
     else { Write-Host "FAIL  系统编号未接文本框"; $fail++ }
     if ($mmXaml -match '<TabControl' -and $mmXaml -match 'TabStripPlacement="Left"') {
         Write-Host "PASS  多系统用左右选项卡呈现(左:系统编号 / 右:房间表 + 合计行)"
