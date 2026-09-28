@@ -29,6 +29,9 @@ namespace HVACIDA.UI.ViewModels
 
         // ---------- 可编辑(写回 SmallRoomInput) ----------
 
+        /// <summary>本行对应的房间输入对象(界面选中行 → 命令层测量/删除的目标行靠它定位)。</summary>
+        public SmallRoomInput Room => _input;
+
         /// <summary>序号(只读,行序)。</summary>
         public int Index { get; private set; }
 

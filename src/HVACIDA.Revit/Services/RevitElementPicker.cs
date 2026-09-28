@@ -6,7 +6,7 @@ namespace HVACIDA.Revit.Services
     /// <summary>
     /// 手动拾取 Revit 实体(需求 2.2.3.2:小系统"与土壤接触外墙长度"由模型测量取得)。
     /// <para>
-    /// 2026-09-24 用户口径变更:原先"选取多段墙体取长度之和"改为**点击后直接在模型里两点测量**
+    /// 2026-09-28 用户口径变更:原先"选取多段墙体取长度之和"改为**点击后直接在模型里两点测量**
     /// (见 <see cref="MeasureTwoPointsLengthMeters"/>),故墙体选择器与求和逻辑已删除。
     /// </para>
     /// <para>
@@ -21,7 +21,7 @@ namespace HVACIDA.Revit.Services
         /// <summary>
         /// **两点测距**:在模型里依次点取起点、终点,返回两点距离(米)。
         /// <para>
-        /// 2026-09-24 用户口径:"与土壤接触外墙长度填写时,点击后直接从模型测量长度,自动输入进去",
+        /// 2026-09-28 用户口径:"与土壤接触外墙长度填写时,点击后直接从模型测量长度,自动输入进去",
         /// 并删掉"拾取墙体求外墙总长"按钮 —— 不再要求模型里存在可拾取的墙(不限视图剖切、不受墙分段影响),
         /// 直接用 <see cref="Autodesk.Revit.UI.Selection.Selection.PickPoint(string)"/> 量取。
         /// </para>
@@ -58,7 +58,7 @@ namespace HVACIDA.Revit.Services
             }
 
             double meters = ToMeters(feet);
-            // 与"模型拾取数据保留 1 位小数"口径一致(2026-09-24)。
+            // 与"模型拾取数据保留 1 位小数"口径一致(2026-09-28)。
             double rounded = Math.Round(meters, 1, MidpointRounding.AwayFromZero);
             note = "两点测量长度 " + rounded.ToString("0.0") + " m";
             return rounded;

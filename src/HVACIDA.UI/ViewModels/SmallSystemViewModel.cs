@@ -397,7 +397,7 @@ namespace HVACIDA.UI.ViewModels
                         continue;
                     }
 
-                    // 领域确认(2026-09-24 用户口径):从模型拾取的空间数据保留 1 位小数
+                    // 领域确认(2026-09-28 用户口径):从模型拾取的空间数据保留 1 位小数
                     double area = Math.Round(space.AreaM2, 1, MidpointRounding.AwayFromZero);
                     double height = Math.Round(space.HeightM, 1, MidpointRounding.AwayFromZero);
                     var picked = SmallRoomInput.Create(name, area, height);
@@ -442,7 +442,7 @@ namespace HVACIDA.UI.ViewModels
         }
 
         /// <summary>
-        /// **开窗时与模型同步**(2026-09-24 用户口径 选项 A:每次开窗重读模型,拾取来的数据随模型改动自动更新)。
+        /// **开窗时与模型同步**(2026-09-28 用户口径 选项 A:每次开窗重读模型,拾取来的数据随模型改动自动更新)。
         /// <para>
         /// 只处理**来自模型**的房间行(<see cref="SmallRoomInput.SourceSpaceId"/> != 0):
         /// 按 Id 取到空间 → 刷新「面积 / 层高」(保留 1 位小数);屋顶面积**只在它仍等于旧面积时**跟着走
@@ -526,7 +526,7 @@ namespace HVACIDA.UI.ViewModels
 
         /// <summary>
         /// 命令层两点测量后的回填:把**当前选中房间行**的与土壤接触外墙长度设为两点距离
-        /// (2026-09-24 用户口径:点击后直接从模型测量长度并自动输入)。
+        /// (2026-09-28 用户口径:点击后直接从模型测量长度并自动输入)。
         /// </summary>
         public void ApplyPickedWallLength(double lengthM, string note)
         {

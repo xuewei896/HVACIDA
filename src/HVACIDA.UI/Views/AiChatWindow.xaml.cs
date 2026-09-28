@@ -4,7 +4,7 @@ using HVACIDA.UI.ViewModels;
 namespace HVACIDA.UI.Views
 {
     /// <summary>
-    /// 独立「AI 对话」窗(2026-09-24 用户口径:在 AI问答模块里植入 AI 对话框、可调用 AI 工具,
+    /// 独立「AI 对话」窗(2026-09-28 用户口径:在 AI问答模块里植入 AI 对话框、可调用 AI 工具,
     /// 效果对标 Revit 2027 的 Autodesk Assistant)。
     /// <para>
     /// **非模态**:工具调用要经 <c>ExternalEvent</c> 回到 Revit 主线程执行,模态窗会嵌套消息循环、

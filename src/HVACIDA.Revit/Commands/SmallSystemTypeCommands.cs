@@ -16,7 +16,7 @@ namespace HVACIDA.Revit.Commands
     // 本文件承载**模型拾取闭环**(需求 2.2.3.2):
     //   · 拾取空间 → 建房间列表(面积/层高/屋顶面积由模型给出,均保留 1 位小数);
     //   · 测量外墙 → 在模型里点两点直接量距,自动填入所选房间行的"与土壤接触外墙长度"
-    //     (2026-09-24 用户口径:删掉"拾取墙体求外墙总长",改为点击后直接测量);
+    //     (2026-09-28 用户口径:删掉"拾取墙体求外墙总长",改为点击后直接测量);
     //   · 开窗即同步 → 来自模型的房间行按记下的空间 Id 重读模型(选项 A),面积/层高随模型改动自动更新。
     // 拾取规则与「公共区参数」窗一致:WPF 模态窗会在 Win32 层禁用 Revit 主窗,
     // 故必须"关窗 → 命令层拾取 → 用同一 ViewModel 重开窗",循环设上限防死循环。
@@ -44,7 +44,7 @@ namespace HVACIDA.Revit.Commands
                 var repository = new Core.Services.XmlProjectRepository();
                 var viewModel = new UI.ViewModels.SmallSystemViewModel(SystemType, repository, pickAvailable);
 
-                // 2026-09-24 用户口径(选项 A「每次开窗重读模型」):窗内来自模型的房间行按记下的空间 Id
+                // 2026-09-28 用户口径(选项 A「每次开窗重读模型」):窗内来自模型的房间行按记下的空间 Id
                 // 重读模型 —— 模型改了面积/层高,再打开本窗即自动跟上;空间被删则保留上次的值并提示。
                 if (uidoc != null)
                 {
@@ -79,7 +79,7 @@ namespace HVACIDA.Revit.Commands
                         continue;
                     }
 
-                    // 外墙长度 = **在模型里直接两点测量**(2026-09-24 用户口径:删掉"拾取墙体求外墙总长",改为点击后直接测量)
+                    // 外墙长度 = **在模型里直接两点测量**(2026-09-28 用户口径:删掉"拾取墙体求外墙总长",改为点击后直接测量)
                     // 仍要求先选中房间行(窗内已判空,这里再兜一层);Esc 取消时保留原值。
                     viewModel.ClearPickRequests();
                     string wallNote;

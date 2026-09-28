@@ -157,10 +157,10 @@ namespace HVACIDA.Core.Services
             }
 
             r.TotalAreaM2 = TotalArea(x);
-            // 领域确认(2026-09-24 用户口径):**全空气一次回风系统的总制冷量 = Σ 房间空调器冷量(V27)**,
+            // 领域确认(2026-09-28 用户口径):**全空气一次回风系统的总制冷量 = Σ 房间空调器冷量(V27)**,
             // 不是 Σ 房间冷负荷(M27 是房间显热+潜热,不含新回风混合焓差)。逐房间的 M27 仍在每行里,
             // 设备选型本来就用 V37(totalUnitCooling),所以此处只把"系统总制冷量"的口径对齐到 V37。
-            r.TotalCoolingKw = totalUnitCooling;             // V37(原 M37 合计,2026-09-24 改口径)
+            r.TotalCoolingKw = totalUnitCooling;             // V37(原 M37 合计,2026-09-28 改口径)
             r.TotalMoistureGps = sumMoistureGps;             // N37
             r.HeatHumidityRatio = ratio;
             r.TotalSupplyM3H = sumFlow;                      // R37

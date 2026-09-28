@@ -9,6 +9,8 @@
         UseLayoutRounding="True">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- 几何参数(门宽/门高/余压阀面积等)显示与写回统一 1 位小数(2026-09-28 用户口径),见 DecimalConverter 注释 -->
+        <views:DecimalConverter x:Key="Dec1"/>
 
         <Style x:Key="FieldLabel" TargetType="{x:Type TextBlock}">
             <Setter Property="Width" Value="176"/>
@@ -183,12 +185,12 @@
                             <StackPanel Orientation="Horizontal" Width="290" Visibility="{Binding ShowDoorParams, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="一层可开启门宽度 m"
                                            ToolTip="公式文档单元格 B388"/>
-                                <TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.DoorWidthM, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.DoorWidthM, Converter={StaticResource Dec1}, ConverterParameter=1, UpdateSourceTrigger=LostFocus}"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Width="290" Visibility="{Binding ShowDoorParams, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="一层可开启门高度 m"
                                            ToolTip="公式文档单元格 C388"/>
-                                <TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.DoorHeightM, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.DoorHeightM, Converter={StaticResource Dec1}, ConverterParameter=1, UpdateSourceTrigger=LostFocus}"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Width="290" Visibility="{Binding ShowDoorParams, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="门缝隙漏风风速 m/s"
@@ -208,7 +210,7 @@
                             <StackPanel Orientation="Horizontal" Width="290" Visibility="{Binding ShowDoorParams, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="余压阀面积 m²"
                                            ToolTip="单个余压阀面积 Af(公式文档单元格 O388)"/>
-                                <TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.ReliefValveAreaM2, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBox Style="{StaticResource FieldInput}" Text="{Binding Input.ReliefValveAreaM2, Converter={StaticResource Dec1}, ConverterParameter=1, UpdateSourceTrigger=LostFocus}"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Width="290" Visibility="{Binding ShowDoorParams, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="余压阀数量 N3"
@@ -289,6 +291,7 @@
                                                   Background="White" RowHeight="24" ColumnHeaderHeight="28"
                                                   AlternatingRowBackground="#F7FAFD" SelectionMode="Single"
                                                   ItemsSource="{Binding RoomRows}"
+                                                  SelectedItem="{Binding SelectedRoomRow}"
                                                   ToolTip="按《全空气一次回风系统计算参数展示格式》列出每个房间的数据:前段(名称/面积/层高/外墙/屋顶/设备冷负荷/人数/换气次数)可直接改,后段自动算,改完点【计 算】刷新、点【确 定】保存"/>
                                     </StackPanel>
                                     <!-- 最下行:本系统合计(总送风量 / 总回风量 / 总制冷量;加压送风无房间行时也照常显示) -->

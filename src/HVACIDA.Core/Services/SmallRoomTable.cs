@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -113,8 +113,8 @@ namespace HVACIDA.Core.Services
             var cols = new List<RoomColumn>
             {
                 new RoomColumn { Header = "房间/分区名称", Property = "Name", Kind = "text", Width = 160 },
-                new RoomColumn { Header = "面积 m²", Property = "AreaM2", Decimals = 2, Width = 80 },
-                new RoomColumn { Header = "层高 m", Property = "HeightM", Decimals = 2, Width = 70 }
+                new RoomColumn { Header = "面积 m²", Property = "AreaM2", Decimals = 1, Width = 80 },
+                new RoomColumn { Header = "层高 m", Property = "HeightM", Decimals = 1, Width = 70 }
             };
 
             switch (type)

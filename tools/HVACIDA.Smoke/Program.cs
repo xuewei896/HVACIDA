@@ -154,7 +154,7 @@ namespace HVACIDA.Smoke
 
                 var small = repo.LoadSmallSystem();
                 var smokeRoom = SmallRoomInput.Create("烟测房间", 88.5, 4.5);
-                smokeRoom.SourceSpaceId = 4242;          // 2026-09-24:来源空间 Id 必须能落盘(开窗按 Id 重读模型)
+                smokeRoom.SourceSpaceId = 4242;          // 2026-09-28:来源空间 Id 必须能落盘(开窗按 Id 重读模型)
                 small.Rooms.Add(smokeRoom);
                 small.SystemType = SmallSystemType.AllAirOnceReturn;
                 repo.SaveSmallSystem(small);
@@ -1753,6 +1753,24 @@ namespace HVACIDA.Smoke
                     }
                 }
                 CheckInt("面积/层高/长度显示 1 位小数(样本 " + geoSample + ")", geoBad, 0);
+
+                // ---------- 2h) 录入侧几何列也要 1 位(2026-09-28 实机反馈:录入框此前仍是 2 位) ----------
+                string[] geoProps = { "AreaM2", "HeightM", "WallLengthM", "RoofAreaM2" };
+                int inputGeoBad = 0;
+                int inputGeoSeen = 0;
+                foreach (var column in SmallRoomTable.InputColumnsFor(SmallSystemType.AllAirOnceReturn))
+                {
+                    if (Array.IndexOf(geoProps, column.Property) < 0) continue;
+                    inputGeoSeen++;
+                    if (column.Decimals != 1) inputGeoBad++;
+                }
+                foreach (var column in SmallRoomTable.ReferenceColumnsForAllAir())
+                {
+                    if (Array.IndexOf(geoProps, column.Property) < 0) continue;
+                    inputGeoSeen++;
+                    if (column.Decimals != 1) inputGeoBad++;
+                }
+                CheckInt("录入/参考表几何列小数位 = 1(" + inputGeoSeen + " 列)", inputGeoBad, 0);
 
                 // ---------- 3) 小系统(单系统)----------
                 var smallInput = new SmallSystemInput

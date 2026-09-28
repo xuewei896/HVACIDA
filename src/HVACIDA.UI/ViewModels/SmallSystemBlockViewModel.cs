@@ -25,6 +25,7 @@ namespace HVACIDA.UI.ViewModels
         private string _totalsText = "";
         private string _code = "1";
         private readonly ObservableCollection<SmallRoomRow> _roomRows = new ObservableCollection<SmallRoomRow>();
+        private SmallRoomRow _selectedRoomRow;
         private int _roomSequence;
 
         public SmallSystemBlockViewModel(string code)
@@ -58,11 +59,44 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>本系统的房间 / 分区行。</summary>
         public ObservableCollection<SmallRoomInput> Rooms => _rooms;
 
-        /// <summary>本系统当前选中的房间行(【删除行】/【测量外墙长度(两点)】的目标)。</summary>
+        /// <summary>
+        /// 本系统当前选中的房间行(【删除行】/【测量外墙长度(两点)】的目标)。
+        /// <para>
+        /// 表格装载 / 关窗重开时 WPF 会推一个 <c>null</c> 上来:此时**忽略**(保留用户上次选的那行)——
+        /// 否则测量完长度回填时目标会掉到第一行(2026-09-28 实机反馈)。
+        /// 房间被删空时才允许置空(<see cref="RemoveRoom"/>)。
+        /// </para>
+        /// </summary>
         public SmallRoomInput SelectedRoom
         {
             get => _selectedRoom;
-            set => Set(ref _selectedRoom, value);
+            set
+            {
+                if (value == null && _rooms.Count > 0) return;
+
+                if (Set(ref _selectedRoom, value)) SyncSelectedRoomRow();
+            }
+        }
+
+        /// <summary>
+        /// **参考表(合并行)里的选中行** —— `MergedRoomsGrid.SelectedItem` 绑这里。
+        /// <para>
+        /// 参考表的数据源是 <see cref="SmallRoomRow"/>,原先没接选中项,导致全空气窗里"选了哪行"传不回
+        /// <see cref="SelectedRoom"/>,【测量外墙长度(两点)…】总写到第一行(2026-09-28 实机反馈)。
+        /// </para>
+        /// </summary>
+        public SmallRoomRow SelectedRoomRow
+        {
+            get => _selectedRoomRow;
+            set
+            {
+                if (value == null && _rooms.Count > 0) return;
+
+                if (Set(ref _selectedRoomRow, value) && value != null && !ReferenceEquals(_selectedRoom, value.Room))
+                {
+                    SelectedRoom = value.Room;      // 走上面的 setter,SyncSelectedRoomRow 会回到同一行、不再递归
+                }
+            }
         }
 
         /// <summary>本系统的合计行(总送风量 / 总回风量 / 总制冷量;类型相关的量非 0 时追加)。</summary>
@@ -148,7 +182,7 @@ namespace HVACIDA.UI.ViewModels
 
         /// <summary>
         /// 重建本系统的房间合并行(不改数据,只让界面按当前 <see cref="Rooms"/> 重新取值)。
-        /// 2026-09-24:开窗时"与模型同步"改了面积 / 层高后,靠它把参考表刷新到新值。
+        /// 2026-09-28:开窗时"与模型同步"改了面积 / 层高后,靠它把参考表刷新到新值。
         /// </summary>
         public void RefreshRows()
         {
@@ -164,6 +198,27 @@ namespace HVACIDA.UI.ViewModels
                 SmallRoomResult row = null;
                 if (Result != null && Result.Rooms != null && i < Result.Rooms.Count) row = Result.Rooms[i];
                 _roomRows.Add(new SmallRoomRow(i + 1, _rooms[i], row));
+            }
+
+            SyncSelectedRoomRow();      // 重建后重新指向同一房间,重开窗时选中行不跳回第一行
+        }
+
+        /// <summary>把参考表的选中行对齐到 <see cref="_selectedRoom"/>(找不到就置空)。</summary>
+        private void SyncSelectedRoomRow()
+        {
+            SmallRoomRow row = null;
+            if (_selectedRoom != null)
+            {
+                for (int i = 0; i < _roomRows.Count; i++)
+                {
+                    if (ReferenceEquals(_roomRows[i].Room, _selectedRoom)) { row = _roomRows[i]; break; }
+                }
+            }
+
+            if (!ReferenceEquals(_selectedRoomRow, row))
+            {
+                _selectedRoomRow = row;
+                OnPropertyChanged(nameof(SelectedRoomRow));
             }
         }
 

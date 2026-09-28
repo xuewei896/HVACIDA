@@ -576,18 +576,30 @@ try {
     if ($svm2.Rooms.Count -eq $before + 1) { Write-Host "PASS  同名房间重复拾取被跳过(不产生重复行)" }
     else { Write-Host ("FAIL  重复拾取后房间数 = {0}" -f $svm2.Rooms.Count); $fail++ }
 
-    # 2026-09-24 用户口径:外墙长度由"模型两点测量"直接回填(不再拾取墙体求长度之和)
+    # 2026-09-28 用户口径:外墙长度由"模型两点测量"直接回填(不再拾取墙体求长度之和)
     $svm2.SelectedRoom = $newRoom
     $svm2.ApplyPickedWallLength(32.54, '两点测量长度 32.5 m')
     if ([math]::Abs($newRoom.WallLengthM - 32.5) -lt 1e-9) {
         Write-Host "PASS  两点测量 → 选中行外墙长度 = 32.5 m(模型测量值保留 1 位小数)"
     } else { Write-Host ("FAIL  外墙长度 = {0}" -f $newRoom.WallLengthM); $fail++ }
 
-    # 未选中行时测量:只提示,不改数据
+    # 2026-09-28 口径变更:表格装载/关窗重开时 WPF 会推 null,必须忽略(否则测量目标掉到第一行),
+    # 所以"选中行被推成 null"不再清空目标 —— 这里改为验证"系统里根本没有房间行"时的兜底提示。
     $svm2.SelectedRoom = $null
-    $svm2.ApplyPickedWallLength(99, '无选中行')
-    if ([math]::Abs($newRoom.WallLengthM - 32.5) -lt 1e-9) { Write-Host "PASS  未选中行时不落值(仅提示)" }
-    else { Write-Host "FAIL  未选中行却改了外墙长度"; $fail++ }
+    if ($svm2.SelectedRoom -eq $newRoom) { Write-Host "PASS  选中行被推 null 时保留上次选的行(测量目标不丢)" }
+    else { Write-Host "FAIL  选中行被 null 清掉"; $fail++ }
+
+    $emptyDir = Join-Path $env:TEMP ('hvacida-empty-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $emptyDir -Force | Out-Null
+    $emptyRepo = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $emptyDir
+    $emptyVm = New-Object "$vmNs.SmallSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn), $emptyRepo, $false
+    $emptyVm.ApplyPickedWallLength(99, '空系统')
+    if ($emptyVm.Systems[0].Rooms.Count -eq 0 -and $emptyVm.Status -match '请先在房间表里选中一行') {
+        Write-Host "PASS  一条房间行都没有时测量只提示、不落值"
+    } else {
+        Write-Host ("FAIL  空系统测量: rooms={0} status='{1}'" -f $emptyVm.Systems[0].Rooms.Count, $emptyVm.Status); $fail++
+    }
+    try { Remove-Item $emptyDir -Recurse -Force -ErrorAction Stop } catch { }
 
     # 不允许拾取时(无活动文档)按钮应禁用
     $svm3 = New-Object "$vmNs.SmallSystemViewModel" -ArgumentList ([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn), $repo7, $false
@@ -1205,12 +1217,12 @@ try {
         Write-Host "PASS  小系统窗:已删三键与「系统编号」输入框,底栏为【取 消】+【确 定】"
     } else { Write-Host "FAIL  小系统窗按钮/编号未按要求改"; $fail++ }
 
-    # 2026-09-24 用户口径:删掉【拾取墙体求外墙总长…】,改为点击后从模型两点测量
+    # 2026-09-28 用户口径:删掉【拾取墙体求外墙总长…】,改为点击后从模型两点测量
     if ($mmXaml -notmatch '拾取墙体' -and $mmXaml -match '测量外墙长度' -and $mmXaml -match 'Click="OnPickWallClick"') {
         Write-Host "PASS  小系统窗:已删【拾取墙体求外墙总长】,改为【测量外墙长度(两点)】"
     } else { Write-Host "FAIL  外墙长度按钮未改成两点测量"; $fail++ }
 
-    # 2026-09-24 用户口径(选项 A「每次开窗重读模型」):接线自检(命令层按 Id 重读 + VM 给同步提示)
+    # 2026-09-28 用户口径(选项 A「每次开窗重读模型」):接线自检(命令层按 Id 重读 + VM 给同步提示)
     $syncCmdCs = Get-Content -LiteralPath (Join-Path (Split-Path $viewDir -Parent) '..\HVACIDA.Revit\Commands\SmallSystemTypeCommands.cs') -Raw -Encoding UTF8
     $syncVmCs = Get-Content -LiteralPath (Join-Path $viewDir '..\ViewModels\SmallSystemViewModel.cs') -Raw -Encoding UTF8
     if ($syncCmdCs -match 'ReadByIds' -and $syncCmdCs -match 'SyncFromModel' -and
@@ -1276,7 +1288,7 @@ try {
         Write-Host ("FAIL  新增系统未保存: ok={0} 重开 {1} 套" -f $addOk, $reopen2.Systems.Count); $fail++
     }    # 2026-09-24 用户口径:全空气房间表按参考表 23 列列出(序号 + 名称 + 录入项 + 逐房间计算值)
     $refCols = [HVACIDA.Core.Services.SmallRoomTable]::ReferenceColumnsForAllAir()
-    # 2026-09-24 用户口径:从模型拾取的空间数据(面积/层高)保留 1 位小数
+    # 2026-09-28 用户口径:从模型拾取的空间数据(面积/层高)保留 1 位小数
     $pickSpaces = New-Object 'System.Collections.Generic.List[HVACIDA.Core.Models.SpaceSnapshot]'
     $snap = New-Object HVACIDA.Core.Models.SpaceSnapshot
     $snap.Name = '弱电间-自检'; $snap.Number = '901'; $snap.ElementId = 4242
@@ -1291,7 +1303,7 @@ try {
         Write-Host ("FAIL  拾取取整: area={0} height={1} roof={2}" -f $(if($pickedRoom){$pickedRoom.AreaM2}else{'-'}), $(if($pickedRoom){$pickedRoom.HeightM}else{'-'}), $(if($pickedRoom){$pickedRoom.RoofAreaM2}else{'-'})); $fail++
     }
 
-    # 2026-09-24 用户口径(选项 A:每次开窗重读模型):拾取来的行记下来源空间 Id,开窗时按 Id 重读模型
+    # 2026-09-28 用户口径(选项 A:每次开窗重读模型):拾取来的行记下来源空间 Id,开窗时按 Id 重读模型
     if ($pickedRoom -ne $null -and $pickedRoom.SourceSpaceId -eq 4242 -and (@($sAir.SourceSpaceIds()) -contains 4242)) {
         Write-Host "PASS  拾取建行记下来源空间 Id(4242),可供开窗时按 Id 重读模型"
     } else {
@@ -1332,6 +1344,57 @@ try {
         Write-Host ("FAIL  空间被删处理: area={0} text='{1}'" -f $pickedRoom.AreaM2, $missText); $fail++
     }
     if ($pickedRoom -ne $null) { $sAir.Systems[0].Rooms.Remove($pickedRoom) | Out-Null }   # 收尾:自检行不留给后面的断言
+
+    # 2026-09-28 实机反馈:参考表里"我选的那行"必须是测量回填的目标行(此前总写到第一行)
+    $blkSel = $sAir.Systems[0]
+    $blkSel.AddRoomCommand.Execute($null)
+    $blkSel.AddRoomCommand.Execute($null)
+    $rFirst = $blkSel.Rooms[$blkSel.Rooms.Count - 2]
+    $rSecond = $blkSel.Rooms[$blkSel.Rooms.Count - 1]
+    $rowSecond = $blkSel.RoomRows | Where-Object { $_.Room -eq $rSecond } | Select-Object -First 1
+    $blkSel.SelectedRoomRow = $rowSecond
+    if ($sAir.SelectedRoom -eq $rSecond -and $rowSecond -ne $null) {
+        Write-Host "PASS  参考表选中行同步到 VM.SelectedRoom(合并行 -> 房间输入)"
+    } else {
+        Write-Host ("FAIL  参考表选中行未同步: selected={0}" -f $(if($sAir.SelectedRoom){$sAir.SelectedRoom.Name}else{'null'})); $fail++
+    }
+    $blkSel.SelectedRoom = $rFirst
+    if ($blkSel.SelectedRoomRow -ne $null -and $blkSel.SelectedRoomRow.Room -eq $rFirst) {
+        Write-Host "PASS  反向同步:改 VM.SelectedRoom → 参考表选中行跟着走"
+    } else { Write-Host "FAIL  SelectedRoom → SelectedRoomRow 未同步"; $fail++ }
+    $blkSel.SelectedRoomRow = $null            # 关窗重开时 WPF 会推 null:必须忽略,不能把目标行清掉
+    if ($sAir.SelectedRoom -eq $rFirst) { Write-Host "PASS  重开窗推上来的 null 被忽略(选中行不丢)" }
+    else { Write-Host "FAIL  选中行被 null 清掉"; $fail++ }
+
+    # 测量回填必须落在"我选的那行",不能落到第一行
+    $blkSel.SelectedRoomRow = $rowSecond
+    $sAir.ApplyPickedWallLength(12.34, '自检两点测量')
+    if ($rSecond.WallLengthM -eq 12.3 -and $rFirst.WallLengthM -eq 0) {
+        Write-Host ("PASS  测量回填落到所选行(第 2 行 = {0} m,第 1 行仍为 {1} m)" -f $rSecond.WallLengthM, $rFirst.WallLengthM)
+    } else {
+        Write-Host ("FAIL  测量回填落错行: 第2行={0} 第1行={1}" -f $rSecond.WallLengthM, $rFirst.WallLengthM); $fail++
+    }
+    $blkSel.Rooms.Remove($rFirst) | Out-Null
+    $blkSel.Rooms.Remove($rSecond) | Out-Null      # 收尾:两行自检数据不留给后面的断言
+
+    # 2026-09-28 用户口径:面积 / 层高 / 外墙长度 / 屋顶面积 在录入表里也按 1 位小数显示并写回
+    $inCols = [HVACIDA.Core.Services.SmallRoomTable]::InputColumnsFor([HVACIDA.Core.Models.SmallSystemType]::AllAirOnceReturn)
+    $geoCols = @($inCols | Where-Object { $_.Property -eq 'AreaM2' -or $_.Property -eq 'HeightM' -or $_.Property -eq 'WallLengthM' -or $_.Property -eq 'RoofAreaM2' })
+    $geoOk = $true
+    foreach ($c in $geoCols) { if ($c.Decimals -ne 1) { $geoOk = $false } }
+    if ($geoCols.Count -eq 4 -and $geoOk) {
+        Write-Host "PASS  录入表几何列小数位已统一为 1 位(面积 / 层高 / 外墙长度 / 屋顶面积)"
+    } else { Write-Host ("FAIL  录入表几何列小数位: count={0} ok={1}" -f $geoCols.Count, $geoOk); $fail++ }
+
+    $decConv = New-Object "$uiNs.DecimalConverter"
+    $decShown = $decConv.Convert(32.18, [double], '1', [System.Globalization.CultureInfo]::InvariantCulture)
+    $decBack = $decConv.ConvertBack('32.18', [double], '1', [System.Globalization.CultureInfo]::InvariantCulture)
+    $decBad = $decConv.ConvertBack('abc', [double], '1', [System.Globalization.CultureInfo]::InvariantCulture)
+    if ($decShown -eq '32.2' -and [double]$decBack -eq 32.2 -and [object]::ReferenceEquals($decBad, [System.Windows.Data.Binding]::DoNothing)) {
+        Write-Host "PASS  数值转换器:显示 32.18->32.2、写回取整 32.18->32.2、非法输入不改数据"
+    } else {
+        Write-Host ("FAIL  数值转换器: shown='{0}' back={1} bad={2}" -f $decShown, $decBack, $decBad); $fail++
+    }
     # 2026-09-24 实机反馈:点【添加行】后参考表必须立刻多一行(此前只在重算/重开窗时才重建合并行)
     $blkX = $sAir.Systems[0]
     $rowsBefore = $blkX.RoomRows.Count
@@ -1360,10 +1423,46 @@ try {
         $rows = @($refG.ItemsSource)
         Write-Host ("PASS  参考表已绑定房间行:{0} 行(首行 序号={1} 名称={2})" -f $rows.Count, $(if ($rows.Count -gt 0) { $rows[0].Index } else { '-' }), $(if ($rows.Count -gt 0) { $rows[0].Name } else { '-' }))
     } else { Write-Host "FAIL  参考表未绑定房间行"; $fail++ }
+
+    # 2026-09-28 用户口径:参考表里"面积 / 层高 / 外墙长度 / 屋顶面积"这些可编辑单元格
+    # 必须走 DecimalConverter(显示 1 位 + 写回取整),而不是裸绑 double(那会显示 32.18)
+    $areaCell = @($refG.Columns | Where-Object { $_.Header -match '房间面积' }) | Select-Object -First 1
+    $wallCell = @($refG.Columns | Where-Object { $_.Header -match '外墙长度' }) | Select-Object -First 1
+    if ($areaCell -ne $null -and $wallCell -ne $null -and
+        $areaCell.Binding.Converter -is [HVACIDA.UI.Views.DecimalConverter] -and
+        "$($areaCell.Binding.ConverterParameter)" -eq '1' -and
+        $wallCell.Binding.Converter -is [HVACIDA.UI.Views.DecimalConverter] -and
+        $areaCell.Binding.UpdateSourceTrigger.ToString() -eq 'LostFocus') {
+        Write-Host "PASS  参考表几何单元格按 1 位小数显示并写回(DecimalConverter + LostFocus)"
+    } else {
+        Write-Host ("FAIL  参考表几何单元格未接转换器: area={0} wall={1}" -f `
+            $(if($areaCell){"$($areaCell.Binding.Converter)/$($areaCell.Binding.ConverterParameter)"}else{'-'}), `
+            $(if($wallCell){"$($wallCell.Binding.Converter)/$($wallCell.Binding.ConverterParameter)"}else{'-'})); $fail++
+    }
     $refW.Close()
     if ($mmXaml -match 'MergedRoomsGrid' -and $mmXaml -match 'UseReferenceRoomTable' -and $mmXaml -match 'UsePlainRoomTable') {
         Write-Host "PASS  参考表网格已接入窗口(全空气用参考表、其余五类仍用录入表)"
-    } else { Write-Host "FAIL  参考表网格未接入"; $fail++ }    if ($mmXaml -match 'Text="\{Binding Code') { Write-Host "PASS  系统编号旁是用户可输入的文本框" }
+    } else { Write-Host "FAIL  参考表网格未接入"; $fail++ }
+
+    # 2026-09-28 实机反馈:参考表必须把"选中的行"传回 VM(此前没接 SelectedItem → 测量总写第一行)
+    if ($mmXaml -match 'SelectedItem="\{Binding SelectedRoomRow\}"') {
+        Write-Host "PASS  参考表已接选中项(SelectedItem → SelectedRoomRow),测量写入所选行"
+    } else { Write-Host "FAIL  参考表未接选中项"; $fail++ }
+
+    # 2026-09-28 用户口径:几何参数录入框也要 1 位小数(小系统 / 公共区 / 大系统三个窗)
+    $pubXaml = Get-Content -LiteralPath (Join-Path $viewDir 'PublicAreaWindow.xaml') -Raw -Encoding UTF8
+    $lgXaml = Get-Content -LiteralPath (Join-Path $viewDir 'LargeSystemWindow.xaml') -Raw -Encoding UTF8
+    $convUsed = ([regex]::Matches($mmXaml, 'ConverterParameter=1')).Count +
+                ([regex]::Matches($pubXaml, 'ConverterParameter=1')).Count +
+                ([regex]::Matches($lgXaml, 'ConverterParameter=1')).Count
+    if ($mmXaml -match 'views:DecimalConverter' -and $pubXaml -match 'views:DecimalConverter' -and
+        $lgXaml -match 'views:DecimalConverter' -and $pubXaml -match 'HallAreaM2, Converter' -and
+        $lgXaml -match 'EntranceAWidthM, Converter' -and $convUsed -ge 15) {
+        Write-Host ("PASS  几何录入框统一 1 位小数(小系统 / 公共区 / 大系统;共 {0} 处 ConverterParameter=1)" -f $convUsed)
+    } else {
+        Write-Host ("FAIL  几何录入框未统一: 小系统={0} 公共区={1} 大系统={2} 处数={3}" -f `
+            ($mmXaml -match 'views:DecimalConverter'), ($pubXaml -match 'views:DecimalConverter'), ($lgXaml -match 'views:DecimalConverter'), $convUsed); $fail++
+    }    if ($mmXaml -match 'Text="\{Binding Code') { Write-Host "PASS  系统编号旁是用户可输入的文本框" }
     else { Write-Host "FAIL  系统编号未接文本框"; $fail++ }
     if ($mmXaml -match '<TabControl' -and $mmXaml -match 'TabStripPlacement="Left"') {
         Write-Host "PASS  多系统用左右选项卡呈现(左:系统编号 / 右:房间表 + 合计行)"
@@ -1997,7 +2096,7 @@ try {
 }
 
 # =====================================================================
-# 2026-09-24:独立「AI 对话」窗(对标 Revit 2027 Autodesk Assistant)
+# 2026-09-28:独立「AI 对话」窗(对标 Revit 2027 Autodesk Assistant)
 #   ① 窗口能构建、绑定路径全部命中 AiAssistantViewModel(上面的绑定门禁)
 #   ② 工具调用逐条打勾:对话区内 ✓ 完成 / ✗ 失败 + 命令名 + 耗时
 #   ③ 引擎与「AI助手」同一套:面板仍在、命令集注册时机不变
