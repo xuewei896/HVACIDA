@@ -214,6 +214,11 @@ namespace HVACIDA.Core.Services
                 "检索为关键词加权(标题 3 / 关键词 2 / 正文 1);范围外的问题给「知识范围说明 + 提问建议」并列出最接近条目;" +
                 "可按分类浏览、导入条文电子版,并可选接 ima 在线库与 **AI 问答(DeepSeek,检索增强)**;答复仍须挂出处。"),
 
+            new ModuleInfo("ai-chat-window", "AI问答", "AI对话", ModuleStatus.Implemented,
+                "独立「AI 对话」窗:自然语言提问 → 模型按需调用进程内命令取工程数据 → 工具调用逐条打勾(✓ 完成 / ✗ 失败 + 耗时);非模态,开着它也能继续操作模型。",
+                "与「AI助手」同一套引擎:检索依据 + Revit 上下文 → OpenAI 兼容 /chat/completions(SSE)→ function calling → 进程内 CommandBus → ExternalEvent 在 Revit 主线程执行 → 结果回灌模型。",
+                "安全口径与「AI助手」完全一致:「操作 Revit」默认关闭(关闭时模型看不到命令),修改类命令还要第二级开关 + 逐条 Revit 原生确认(默认「否」)+ 单次 ≤200 构件。"),
+
             new ModuleInfo("ai-chat", "AI问答", "AI助手", ModuleStatus.Implemented,
                 "在 Revit 右侧嵌一个 AI 聊天面板:自然语言提问,需要工程数据时由模型调用**进程内命令**去取(不起 MCP、不配端口)",
                 "做法(承《如何将AI大模型(DeepSeek)接入Revit中》):检索依据 + 动态 Revit 上下文 → OpenAI 兼容 /chat/completions " +

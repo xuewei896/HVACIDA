@@ -197,6 +197,7 @@ try {
         @('HydraulicResultWindow.xaml', 'HydraulicResultViewModel'),
         @('KnowledgeWindow.xaml', 'KnowledgeViewModel'),
         @('AiChatPanel.xaml', 'AiAssistantViewModel'),
+        @('AiChatWindow.xaml', 'AiAssistantViewModel'),
         @('InfoWindow.xaml', 'InfoViewModel')
     )
     foreach ($pair in $bindingMap) {
@@ -232,6 +233,10 @@ Test-Window 'AI助手面板 AiChatPanel(停靠面板内容)' {
     $host2.Width = 420; $host2.Height = 640
     $host2.Content = $panel
     $host2
+}
+Test-Window 'AI对话窗 AiChatWindow'          {
+    $aiWin = New-Object "$uiNs.AiChatWindow"
+    $aiWin
 }
 Test-Window '操作指南 InfoWindow(Guide)'      {
     $vm = [HVACIDA.UI.ViewModels.InfoViewModel]::Guide()
@@ -1921,6 +1926,32 @@ try {
     $fail++
 }
 
+# =====================================================================
+# 2026-09-24:独立「AI 对话」窗(对标 Revit 2027 Autodesk Assistant)
+#   ① 窗口能构建、绑定路径全部命中 AiAssistantViewModel(上面的绑定门禁)
+#   ② 工具调用逐条打勾:对话区内 ✓ 完成 / ✗ 失败 + 命令名 + 耗时
+#   ③ 引擎与「AI助手」同一套:面板仍在、命令集注册时机不变
+# =====================================================================
+try {
+    $aiXaml = Get-Content -LiteralPath (Join-Path $viewDir 'AiChatWindow.xaml') -Raw -Encoding UTF8
+    $aiCs = Get-Content -LiteralPath (Join-Path $viewDir 'AiChatWindow.xaml.cs') -Raw -Encoding UTF8
+    if ($aiXaml -match 'ToolLog' -and $aiXaml -match 'ElapsedText' -and
+        $aiXaml -match 'Value="失败"' -and $aiXaml -match "✓" -and $aiXaml -match "✗") {
+        Write-Host "PASS  AI 对话窗:每次工具调用逐条列出(✓ 完成 / ✗ 失败 + 命令名 + 耗时)"
+    } else { Write-Host "FAIL  AI 对话窗缺工具调用行"; $fail++ }
+
+    if ($aiCs -match 'AiAssistantViewModel' -and $aiXaml -match 'OperateRevit' -and $aiXaml -match 'AllowModify') {
+        Write-Host "PASS  AI 对话窗与「AI助手」共用同一引擎与两级安全开关"
+    } else { Write-Host "FAIL  AI 对话窗未复用引擎/开关"; $fail++ }
+
+    $cmdCs = Get-Content -LiteralPath (Join-Path (Split-Path $viewDir -Parent) '..\HVACIDA.Revit\Commands\AiChatWindowCommand.cs') -Raw -Encoding UTF8
+    if ($cmdCs -match 'Show\(\)' -and $cmdCs -match 'static AiChatWindow _window' -and $cmdCs -match 'ContextSnapshotProvider') {
+        Write-Host "PASS  AI 对话窗由命令层非模态打开(静态持有防 GC + 注入上下文委托)"
+    } else { Write-Host "FAIL  AI 对话窗命令未按非模态/防 GC 实现"; $fail++ }
+} catch {
+    Write-Host ("FAIL  AI 对话窗自检  {0}" -f $_.Exception.Message)
+    $fail++
+}
 # 模块遍历:每个模块都应能生成说明窗(数量按目录取,避免增删模块时门禁变脆)
 try {
     $n = 0

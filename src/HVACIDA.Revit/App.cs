@@ -61,6 +61,7 @@ namespace HVACIDA.Revit
             { "guide", typeof(Commands.ShowGuideCommand) },
             { "knowledge", typeof(Commands.ShowKnowledgeCommand) },
             { "ai-chat", typeof(Commands.ShowAiAssistantCommand) },
+                { "ai-chat-window", typeof(Commands.ShowAiChatWindowCommand) },
 
             // 7. 产品支持
             { "feedback", typeof(Commands.ShowFeedbackCommand) },
