@@ -397,8 +397,11 @@ namespace HVACIDA.UI.ViewModels
                         continue;
                     }
 
-                    var picked = SmallRoomInput.Create(name, space.AreaM2, space.HeightM);
-                    picked.RoofAreaM2 = space.AreaM2;
+                    // 领域确认(2026-09-24 用户口径):从模型拾取的空间数据保留 1 位小数
+                    double area = Math.Round(space.AreaM2, 1, MidpointRounding.AwayFromZero);
+                    double height = Math.Round(space.HeightM, 1, MidpointRounding.AwayFromZero);
+                    var picked = SmallRoomInput.Create(name, area, height);
+                    picked.RoofAreaM2 = area;
                     picked.EquipmentCoolingW = HVACIDA.Core.Utils.HvacConstants.SmallEquipmentCoolingW;
                     picked.WallLengthM = 0;
                     picked.AirChangePerHour = 0;

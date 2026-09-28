@@ -298,7 +298,8 @@ namespace HVACIDA.UI.ViewModels
 
         private static double Round(double v)
         {
-            return Math.Round(v, 2);
+            // 领域确认(2026-09-24 用户口径):从模型取到的空间数据(面积/层高/长度)保留 1 位小数
+            return Math.Round(v, 1, MidpointRounding.AwayFromZero);
         }
 
         private void Save()

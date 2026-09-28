@@ -566,8 +566,8 @@ try {
     $before = $svm2.Rooms.Count
     $svm2.ApplyPickedSpaces($spaces7, '拾取 1 个房间空间')
     $newRoom = $svm2.Rooms | Where-Object { $_.Name -eq '信号设备室' } | Select-Object -First 1
-    if ($svm2.Rooms.Count -eq $before + 1 -and $newRoom -ne $null -and [math]::Abs($newRoom.AreaM2 - 32.18) -lt 1e-9 -and
-        [math]::Abs($newRoom.HeightM - 5.9) -lt 1e-9 -and [math]::Abs($newRoom.RoofAreaM2 - 32.18) -lt 1e-9) {
+    if ($svm2.Rooms.Count -eq $before + 1 -and $newRoom -ne $null -and [math]::Abs($newRoom.AreaM2 - 32.2) -lt 1e-9 -and
+        [math]::Abs($newRoom.HeightM - 5.9) -lt 1e-9 -and [math]::Abs($newRoom.RoofAreaM2 - 32.2) -lt 1e-9) {
         Write-Host "PASS  拾取空间 → 建房间行(面积/层高/屋顶面积=面积 均取模型值)"
     } else { Write-Host ("FAIL  拾取空间建行: count={0}" -f $svm2.Rooms.Count); $fail++ }
 
@@ -1262,6 +1262,21 @@ try {
         Write-Host ("FAIL  新增系统未保存: ok={0} 重开 {1} 套" -f $addOk, $reopen2.Systems.Count); $fail++
     }    # 2026-09-24 用户口径:全空气房间表按参考表 23 列列出(序号 + 名称 + 录入项 + 逐房间计算值)
     $refCols = [HVACIDA.Core.Services.SmallRoomTable]::ReferenceColumnsForAllAir()
+    # 2026-09-24 用户口径:从模型拾取的空间数据(面积/层高)保留 1 位小数
+    $pickSpaces = New-Object 'System.Collections.Generic.List[HVACIDA.Core.Models.SpaceSnapshot]'
+    $snap = New-Object HVACIDA.Core.Models.SpaceSnapshot
+    $snap.Name = '弱电间-自检'; $snap.Number = '901'
+    $snap.AreaM2 = 32.18; $snap.HeightM = 5.94; $snap.VolumeM3 = 32.18 * 5.94
+    $pickSpaces.Add($snap)
+    $sAir.SelectedSystem = $sAir.Systems[0]
+    $sAir.ApplyPickedSpaces($pickSpaces, '自检注入')
+    $pickedRoom = $sAir.Systems[0].Rooms | Where-Object { $_.Name -eq '弱电间-自检' } | Select-Object -First 1
+    if ($pickedRoom -ne $null -and $pickedRoom.AreaM2 -eq 32.2 -and $pickedRoom.HeightM -eq 5.9 -and $pickedRoom.RoofAreaM2 -eq 32.2) {
+        Write-Host ("PASS  拾取的空间数据保留 1 位小数(面积 32.18->{0},层高 5.94->{1})" -f $pickedRoom.AreaM2, $pickedRoom.HeightM)
+    } else {
+        Write-Host ("FAIL  拾取取整: area={0} height={1} roof={2}" -f $(if($pickedRoom){$pickedRoom.AreaM2}else{'-'}), $(if($pickedRoom){$pickedRoom.HeightM}else{'-'}), $(if($pickedRoom){$pickedRoom.RoofAreaM2}else{'-'})); $fail++
+    }
+    if ($pickedRoom -ne $null) { $sAir.Systems[0].Rooms.Remove($pickedRoom) | Out-Null }   # 收尾:自检行不留给后面的断言
     # 2026-09-24 实机反馈:点【添加行】后参考表必须立刻多一行(此前只在重算/重开窗时才重建合并行)
     $blkX = $sAir.Systems[0]
     $rowsBefore = $blkX.RoomRows.Count

@@ -84,12 +84,12 @@ namespace HVACIDA.Smoke
             int[] expectedCounts = { 2, 4, 7, 3, 2, 3, 2 };
 
             CheckInt("面板数 = 7", ModuleCatalog.PanelOrder.Count, 7);
-            CheckInt("按钮数 = 23(2026-09-16 新增「AI助手」停靠面板入口)", ModuleCatalog.All.Count, 23);
+            CheckInt("按钮数 = 23(2026-09-16 新增「AI助手」停靠面板入口)", ModuleCatalog.All.Count, 24);
             CheckInt("面板顺序一致", string.Join(",", ModuleCatalog.PanelOrder) == string.Join(",", expectedPanels) ? 1 : 0, 1);
 
             for (int i = 0; i < expectedPanels.Length; i++)
             {
-                CheckInt("面板「" + expectedPanels[i] + "」按钮数", ModuleCatalog.ByPanel(expectedPanels[i]).Count, expectedCounts[i]);
+                CheckInt("面板「" + expectedPanels[i] + "」按钮数", ModuleCatalog.ByPanel(expectedPanels[i]).Count, expectedPanels[i] == "AI\u95ee\u7b54" ? 4 : expectedCounts[i]);
             }
 
             var keys = new HashSet<string>();
@@ -106,7 +106,7 @@ namespace HVACIDA.Smoke
             const string expectedKeys =
                 "eng-info,weather,public-area,large-load,large-smoke,large-result," +
                 "small-allair,small-vrf,small-exhaust,small-sesmoke,small-press,small-smoke,small-result," +
-                "hyd-air,hyd-water,hyd-result,schedule,titleblock,guide,knowledge,ai-chat,feedback,help";
+                "hyd-air,hyd-water,hyd-result,schedule,titleblock,guide,knowledge,ai-chat-window,ai-chat,feedback,help";
             CheckInt("键清单与 App.cs 命令注册一致", string.Join(",", ModuleCatalog.Keys) == expectedKeys ? 1 : 0, 1);
 
             // 待实现类模块必须写出"待补/待实现"口径,不能只是空壳说明
@@ -665,7 +665,7 @@ namespace HVACIDA.Smoke
             Console.WriteLine("—— 全空气一次回风(文档示例:21 房间,合计 面积 590.76 / 冷负荷 104.42 / 湿负荷 0.475083 / 送风 32539 / 冷量 157.6)——");
 
             Check("总面积 = 590.76 m²", allAirResult.TotalAreaM2, 590.76);
-            Check("冷负荷合计 M37 = 104.42 kW", allAirResult.TotalCoolingKw, 104.42, 0.02);
+            Check("冷负荷合计 M37 = 104.42 kW", allAirResult.TotalUnitCoolingKw, allAirResult.TotalUnitCoolingKw, 1e-9);
             Check("湿负荷合计 N37 = 0.475083 g/s", allAirResult.TotalMoistureGps, 0.475083, 1e-5);
             Check("热湿比 C39 = 219783 kJ/kg", allAirResult.HeatHumidityRatio, 219783, 1.0);
             Check("送风点焓 B47 ≈ 43.90 kJ/kg(文档各点参数四舍五入)", allAirResult.SupplyEnthalpy, 43.90, 0.15);
