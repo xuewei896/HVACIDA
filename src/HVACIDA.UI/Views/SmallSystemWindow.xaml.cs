@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using HVACIDA.UI.ViewModels;
@@ -42,7 +42,7 @@ namespace HVACIDA.UI.Views
         /// <summary>【从模型拾取空间…】已请求(本窗已关闭,命令层据此执行拾取)。</summary>
         public bool PickSpacesRequested { get; private set; }
 
-        /// <summary>【拾取墙体求外墙总长…】已请求(本窗已关闭,命令层据此执行拾取)。</summary>
+        /// <summary>【测量外墙长度(两点)…】已请求(本窗已关闭,命令层据此在模型里量距)。</summary>
         public bool PickWallRequested { get; private set; }
 
         private void ApplyViewModel()
@@ -96,7 +96,10 @@ namespace HVACIDA.UI.Views
             Close();
         }
 
-        /// <summary>拾取墙体求外墙总长:必须先在该系统的房间表里选中房间行,为空时只提示、不关窗。</summary>
+        /// <summary>
+        /// 【测量外墙长度(两点)…】:必须先在该系统的房间表里选中房间行,为空时只提示、不关窗。
+        /// 关窗后由命令层在模型里点取起点/终点,量距回填到该行(保留 1 位小数)。
+        /// </summary>
         private void OnPickWallClick(object sender, RoutedEventArgs e)
         {
             var viewModel = DataContext as SmallSystemViewModel;
@@ -105,7 +108,7 @@ namespace HVACIDA.UI.Views
             SelectBlockOf(sender, viewModel);
             if (viewModel.SelectedRoom == null)
             {
-                viewModel.SetStatus("请先在房间表里选中一行,再点【拾取墙体求外墙总长…】。");
+                viewModel.SetStatus("请先在房间表里选中一行,再点【测量外墙长度(两点)…】。");
                 return;
             }
 

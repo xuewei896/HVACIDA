@@ -576,14 +576,14 @@ try {
     if ($svm2.Rooms.Count -eq $before + 1) { Write-Host "PASS  同名房间重复拾取被跳过(不产生重复行)" }
     else { Write-Host ("FAIL  重复拾取后房间数 = {0}" -f $svm2.Rooms.Count); $fail++ }
 
-    # 拾取墙体 → 写入当前选中行的外墙长度
+    # 2026-09-24 用户口径:外墙长度由"模型两点测量"直接回填(不再拾取墙体求长度之和)
     $svm2.SelectedRoom = $newRoom
-    $svm2.ApplyPickedWallLength(32.5, '已选 3 段墙体,合计长度 32.5 m')
+    $svm2.ApplyPickedWallLength(32.54, '两点测量长度 32.5 m')
     if ([math]::Abs($newRoom.WallLengthM - 32.5) -lt 1e-9) {
-        Write-Host "PASS  拾取墙体 → 选中行外墙长度 = 32.5 m(长度之和)"
+        Write-Host "PASS  两点测量 → 选中行外墙长度 = 32.5 m(模型测量值保留 1 位小数)"
     } else { Write-Host ("FAIL  外墙长度 = {0}" -f $newRoom.WallLengthM); $fail++ }
 
-    # 未选中行时拾取墙体:只提示,不改数据
+    # 未选中行时测量:只提示,不改数据
     $svm2.SelectedRoom = $null
     $svm2.ApplyPickedWallLength(99, '无选中行')
     if ([math]::Abs($newRoom.WallLengthM - 32.5) -lt 1e-9) { Write-Host "PASS  未选中行时不落值(仅提示)" }
@@ -1204,6 +1204,11 @@ try {
         $mmXaml -notmatch 'Input\.SystemCode' -and $mmXaml -match 'Click="OnConfirmClick"' -and $mmXaml -match 'Content="取 消"') {
         Write-Host "PASS  小系统窗:已删三键与「系统编号」输入框,底栏为【取 消】+【确 定】"
     } else { Write-Host "FAIL  小系统窗按钮/编号未按要求改"; $fail++ }
+
+    # 2026-09-24 用户口径:删掉【拾取墙体求外墙总长…】,改为点击后从模型两点测量
+    if ($mmXaml -notmatch '拾取墙体' -and $mmXaml -match '测量外墙长度' -and $mmXaml -match 'Click="OnPickWallClick"') {
+        Write-Host "PASS  小系统窗:已删【拾取墙体求外墙总长】,改为【测量外墙长度(两点)】"
+    } else { Write-Host "FAIL  外墙长度按钮未改成两点测量"; $fail++ }
 
     $mmW = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $sAir
     $mmW.Show(); $mmW.UpdateLayout()

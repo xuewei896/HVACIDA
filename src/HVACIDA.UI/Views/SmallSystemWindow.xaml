@@ -265,10 +265,10 @@
                                                     Click="OnPickSpacesClick"
                                                     IsEnabled="{Binding DataContext.IsPickAvailable, RelativeSource={RelativeSource AncestorType=TabControl}}"
                                                     ToolTip="点击后本窗关闭,在模型中依次选择本系统负责的空间(可多选,回车结束);随后自动回到本窗并把它们追加到本系统"/>
-                                            <Button Content="拾取墙体求外墙总长…" Height="26" Margin="8,0,0,0"
+                                            <Button Content="测量外墙长度(两点)…" Height="26" Margin="8,0,0,0"
                                                     Click="OnPickWallClick"
                                                     IsEnabled="{Binding DataContext.IsPickAvailable, RelativeSource={RelativeSource AncestorType=TabControl}}"
-                                                    ToolTip="先在本系统的房间表里选中一行,再点本按钮;在模型中选取与该房间接触的多段外墙,自动取其长度之和填入该行"/>
+                                                    ToolTip="先在本系统的房间表里选中一行,再点本按钮:本窗关闭后在模型里点两点(起点/终点),两点距离自动填入该行的与土壤接触外墙长度(保留 1 位小数);Esc 取消保留原值"/>
                                         </StackPanel>
                                         <DataGrid Loaded="OnRoomGridLoaded" MinHeight="150"
                                                   Visibility="{Binding DataContext.UsePlainRoomTable, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource BoolToVis}}"

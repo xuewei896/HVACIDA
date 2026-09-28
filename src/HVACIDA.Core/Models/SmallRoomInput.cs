@@ -28,7 +28,7 @@ namespace HVACIDA.Core.Models
         /// <summary>房间高度 m(D27 / D64)。</summary>
         public double HeightM { get; set; }
 
-        /// <summary>与土壤接触外墙长度 m(E27,由拾取墙体求和)。</summary>
+        /// <summary>与土壤接触外墙长度 m(E27,由模型两点测量填入,保留 1 位小数)。</summary>
         public double WallLengthM { get; set; }
 
         /// <summary>与土壤接触屋顶面积 m²(F27,默认与面积相同)。</summary>

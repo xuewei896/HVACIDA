@@ -58,7 +58,7 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>本系统的房间 / 分区行。</summary>
         public ObservableCollection<SmallRoomInput> Rooms => _rooms;
 
-        /// <summary>本系统当前选中的房间行(【删除行】/【拾取墙体】的目标)。</summary>
+        /// <summary>本系统当前选中的房间行(【删除行】/【测量外墙长度(两点)】的目标)。</summary>
         public SmallRoomInput SelectedRoom
         {
             get => _selectedRoom;

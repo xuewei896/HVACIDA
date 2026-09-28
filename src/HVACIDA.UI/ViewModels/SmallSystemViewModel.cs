@@ -314,7 +314,7 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>【从模型拾取空间…】已被请求(窗口已关闭,命令层据此执行拾取)。</summary>
         public bool PickSpacesRequested { get; private set; }
 
-        /// <summary>【拾取墙体求外墙总长…】已被请求(窗口已关闭,命令层据此执行拾取)。</summary>
+        /// <summary>【测量外墙长度(两点)…】已被请求(窗口已关闭,命令层据此在模型里量距)。</summary>
         public bool PickWallRequested { get; private set; }
 
         /// <summary>
@@ -330,7 +330,7 @@ namespace HVACIDA.UI.ViewModels
             PickSpacesRequested = true;
         }
 
-        /// <summary>请求拾取墙体求与土壤接触外墙总长(应先选中房间行,窗口侧已判空)。</summary>
+        /// <summary>请求在模型里两点测量"与土壤接触外墙长度"(应先选中房间行,窗口侧已判空)。</summary>
         public void RequestPickWall()
         {
             PickWallRequested = true;
@@ -352,7 +352,7 @@ namespace HVACIDA.UI.ViewModels
         /// <summary>
         /// 命令层拾取空间后的回填:**追加**房间行(同名房间跳过)。
         /// 名称 / 面积 / 层高取自空间快照,屋顶面积默认与面积相同(F27 默认 = C27),
-        /// 设备冷负荷取系统默认 1000 W,外墙长度留 0(由【拾取墙体】按钮填),
+        /// 设备冷负荷取系统默认 1000 W,外墙长度留 0(由【测量外墙长度(两点)…】按钮量取),
         /// 换气次数留 0(= 按房间类型取默认值)。
         /// </summary>
         public void ApplyPickedSpaces(IList<SpaceSnapshot> spaces, string note)
@@ -422,8 +422,8 @@ namespace HVACIDA.UI.ViewModels
         }
 
         /// <summary>
-        /// 命令层拾取墙体后的回填:把**当前选中房间行**的与土壤接触外墙长度设为所选墙体长度之和
-        /// (需求原文:可选取多个墙体,自动获取墙体属性的长度值之和)。
+        /// 命令层两点测量后的回填:把**当前选中房间行**的与土壤接触外墙长度设为两点距离
+        /// (2026-09-24 用户口径:点击后直接从模型测量长度并自动输入)。
         /// </summary>
         public void ApplyPickedWallLength(double lengthM, string note)
         {
@@ -432,21 +432,23 @@ namespace HVACIDA.UI.ViewModels
                 var room = SelectedRoom;
                 if (room == null)
                 {
-                    Status = "请先在房间表里选中一行再拾取墙体。";
+                    Status = "请先在房间表里选中一行再测量外墙长度。";
                     return;
                 }
 
-                room.WallLengthM = lengthM;
+                // 模型测量值同样保留 1 位小数(与拾取空间口径一致)。
+                double rounded = Math.Round(lengthM, 1, MidpointRounding.AwayFromZero);
+                room.WallLengthM = rounded;
                 string name = room.Name ?? "";
                 Calculate();
                 Status = "已把房间「" + name + "」的与土壤接触外墙长度设为 " +
-                         lengthM.ToString("0.##") + " m(所选墙体长度之和)" +
+                         rounded.ToString("0.0") + " m(模型两点测量)" +
                          (string.IsNullOrEmpty(note) ? "" : "(" + note + ")") +
                          ";请核对后点【计 算】(会同时保存)或【确 定】。";
             }
             catch (Exception ex)
             {
-                Status = "拾取墙体回填失败: " + ex.Message;
+                Status = "测量外墙长度回填失败: " + ex.Message;
             }
         }
 
