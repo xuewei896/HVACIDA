@@ -146,6 +146,15 @@ namespace HVACIDA.UI.ViewModels
             return Result;
         }
 
+        /// <summary>
+        /// 重建本系统的房间合并行(不改数据,只让界面按当前 <see cref="Rooms"/> 重新取值)。
+        /// 2026-09-24:开窗时"与模型同步"改了面积 / 层高后,靠它把参考表刷新到新值。
+        /// </summary>
+        public void RefreshRows()
+        {
+            RebuildRoomRows();
+        }
+
         /// <summary>重建房间合并行:录入项指向本系统的 SmallRoomInput,计算项取本次结果(顺序一致)。</summary>
         private void RebuildRoomRows()
         {

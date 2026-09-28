@@ -1210,6 +1210,15 @@ try {
         Write-Host "PASS  小系统窗:已删【拾取墙体求外墙总长】,改为【测量外墙长度(两点)】"
     } else { Write-Host "FAIL  外墙长度按钮未改成两点测量"; $fail++ }
 
+    # 2026-09-24 用户口径(选项 A「每次开窗重读模型」):接线自检(命令层按 Id 重读 + VM 给同步提示)
+    $syncCmdCs = Get-Content -LiteralPath (Join-Path (Split-Path $viewDir -Parent) '..\HVACIDA.Revit\Commands\SmallSystemTypeCommands.cs') -Raw -Encoding UTF8
+    $syncVmCs = Get-Content -LiteralPath (Join-Path $viewDir '..\ViewModels\SmallSystemViewModel.cs') -Raw -Encoding UTF8
+    if ($syncCmdCs -match 'ReadByIds' -and $syncCmdCs -match 'SyncFromModel' -and
+        $syncVmCs -match 'SourceSpaceIds' -and $syncVmCs -match '已与模型同步' -and
+        $syncVmCs -match 'SourceSpaceId = space\.ElementId') {
+        Write-Host "PASS  开窗即同步已接线:命令层 ReadByIds + SyncFromModel,VM 记来源 Id 并给出「已与模型同步」提示"
+    } else { Write-Host "FAIL  开窗同步未接线"; $fail++ }
+
     $mmW = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $sAir
     $mmW.Show(); $mmW.UpdateLayout()
     $mmOk = $mmW.FindName('ConfirmButton')
@@ -1270,7 +1279,7 @@ try {
     # 2026-09-24 用户口径:从模型拾取的空间数据(面积/层高)保留 1 位小数
     $pickSpaces = New-Object 'System.Collections.Generic.List[HVACIDA.Core.Models.SpaceSnapshot]'
     $snap = New-Object HVACIDA.Core.Models.SpaceSnapshot
-    $snap.Name = '弱电间-自检'; $snap.Number = '901'
+    $snap.Name = '弱电间-自检'; $snap.Number = '901'; $snap.ElementId = 4242
     $snap.AreaM2 = 32.18; $snap.HeightM = 5.94; $snap.VolumeM3 = 32.18 * 5.94
     $pickSpaces.Add($snap)
     $sAir.SelectedSystem = $sAir.Systems[0]
@@ -1280,6 +1289,47 @@ try {
         Write-Host ("PASS  拾取的空间数据保留 1 位小数(面积 32.18->{0},层高 5.94->{1})" -f $pickedRoom.AreaM2, $pickedRoom.HeightM)
     } else {
         Write-Host ("FAIL  拾取取整: area={0} height={1} roof={2}" -f $(if($pickedRoom){$pickedRoom.AreaM2}else{'-'}), $(if($pickedRoom){$pickedRoom.HeightM}else{'-'}), $(if($pickedRoom){$pickedRoom.RoofAreaM2}else{'-'})); $fail++
+    }
+
+    # 2026-09-24 用户口径(选项 A:每次开窗重读模型):拾取来的行记下来源空间 Id,开窗时按 Id 重读模型
+    if ($pickedRoom -ne $null -and $pickedRoom.SourceSpaceId -eq 4242 -and (@($sAir.SourceSpaceIds()) -contains 4242)) {
+        Write-Host "PASS  拾取建行记下来源空间 Id(4242),可供开窗时按 Id 重读模型"
+    } else {
+        Write-Host ("FAIL  来源空间 Id: room={0} ids={1}" -f $(if($pickedRoom){$pickedRoom.SourceSpaceId}else{'-'}), (@($sAir.SourceSpaceIds()) -join ',')); $fail++
+    }
+
+    # 模型改了 → 开窗同步把面积/层高跟上(保留 1 位小数),屋顶面积仍等于面积时跟着走
+    $syncSpaces = New-Object 'System.Collections.Generic.List[HVACIDA.Core.Models.SpaceSnapshot]'
+    $snapS = New-Object HVACIDA.Core.Models.SpaceSnapshot
+    $snapS.ElementId = 4242; $snapS.Name = '弱电间-自检'; $snapS.AreaM2 = 40.44; $snapS.HeightM = 6.06
+    $snapS.VolumeM3 = 40.44 * 6.06
+    $syncSpaces.Add($snapS)
+    $syncText = $sAir.SyncFromModel($syncSpaces)
+    if ($pickedRoom -ne $null -and $pickedRoom.AreaM2 -eq 40.4 -and $pickedRoom.HeightM -eq 6.1 -and
+        $pickedRoom.RoofAreaM2 -eq 40.4 -and $syncText -match '已与模型同步') {
+        Write-Host ("PASS  开窗与模型同步:按 Id 重读模型(面积 32.2->{0},层高 5.9->{1})" -f $pickedRoom.AreaM2, $pickedRoom.HeightM)
+    } else {
+        Write-Host ("FAIL  模型同步: area={0} height={1} roof={2} text='{3}'" -f $(if($pickedRoom){$pickedRoom.AreaM2}else{'-'}), $(if($pickedRoom){$pickedRoom.HeightM}else{'-'}), $(if($pickedRoom){$pickedRoom.RoofAreaM2}else{'-'}), $syncText); $fail++
+    }
+
+    # 用户手改过屋顶面积 → 同步只刷面积/层高,不覆盖屋顶面积
+    $pickedRoom.RoofAreaM2 = 99.9
+    $snapS.AreaM2 = 41.5
+    $sAir.SyncFromModel($syncSpaces) | Out-Null
+    if ($pickedRoom.AreaM2 -eq 41.5 -and $pickedRoom.RoofAreaM2 -eq 99.9) {
+        Write-Host "PASS  同步不覆盖用户手改的屋顶面积(仍等于旧面积时才跟着面积走)"
+    } else {
+        Write-Host ("FAIL  同步误改屋顶面积: area={0} roof={1}" -f $pickedRoom.AreaM2, $pickedRoom.RoofAreaM2); $fail++
+    }
+
+    # 空间在模型里已删除 → 保留上次的值 + 点名提示,绝不写 0
+    $noSpaces = New-Object 'System.Collections.Generic.List[HVACIDA.Core.Models.SpaceSnapshot]'
+    $keepArea = $pickedRoom.AreaM2
+    $missText = $sAir.SyncFromModel($noSpaces)
+    if ($pickedRoom.AreaM2 -eq $keepArea -and $missText -match '已找不到' -and $missText -match '弱电间-自检') {
+        Write-Host ("PASS  空间被删时保留原值并点名提示(不写 0):{0}" -f $missText)
+    } else {
+        Write-Host ("FAIL  空间被删处理: area={0} text='{1}'" -f $pickedRoom.AreaM2, $missText); $fail++
     }
     if ($pickedRoom -ne $null) { $sAir.Systems[0].Rooms.Remove($pickedRoom) | Out-Null }   # 收尾:自检行不留给后面的断言
     # 2026-09-24 实机反馈:点【添加行】后参考表必须立刻多一行(此前只在重算/重开窗时才重建合并行)

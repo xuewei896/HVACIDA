@@ -153,11 +153,14 @@ namespace HVACIDA.Smoke
                 Check("大系统输入往返 上行上客量", large2.UpLineBoardCount, 777);
 
                 var small = repo.LoadSmallSystem();
-                small.Rooms.Add(SmallRoomInput.Create("烟测房间", 88.5, 4.5));
+                var smokeRoom = SmallRoomInput.Create("烟测房间", 88.5, 4.5);
+                smokeRoom.SourceSpaceId = 4242;          // 2026-09-24:来源空间 Id 必须能落盘(开窗按 Id 重读模型)
+                small.Rooms.Add(smokeRoom);
                 small.SystemType = SmallSystemType.AllAirOnceReturn;
                 repo.SaveSmallSystem(small);
                 var small2 = repo.LoadSmallSystem();
                 Check("小系统输入往返 房间面积", small2.Rooms[0].AreaM2, 88.5);
+                CheckInt("小系统输入往返 来源空间 Id", small2.Rooms[0].SourceSpaceId, 4242);
                 CheckText("小系统输入往返 类型", small2.SystemType.ToString(), SmallSystemType.AllAirOnceReturn.ToString());
 
                 // 损坏文件必须回退默认而不是抛异常(插件不能因数据文件坏掉而打不开窗口)

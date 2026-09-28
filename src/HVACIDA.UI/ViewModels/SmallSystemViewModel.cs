@@ -405,6 +405,7 @@ namespace HVACIDA.UI.ViewModels
                     picked.EquipmentCoolingW = HVACIDA.Core.Utils.HvacConstants.SmallEquipmentCoolingW;
                     picked.WallLengthM = 0;
                     picked.AirChangePerHour = 0;
+                    picked.SourceSpaceId = space.ElementId;   // 记住来源空间 → 下次开窗按 Id 重读模型(选项 A)
                     block.Rooms.Add(picked);
                     added++;
                 }
@@ -418,6 +419,108 @@ namespace HVACIDA.UI.ViewModels
             catch (Exception ex)
             {
                 Status = "拾取空间回填失败: " + ex.Message;
+            }
+        }
+
+        /// <summary>
+        /// 窗内所有**来自模型**的房间行记下的空间 ElementId(已去重)—— 命令层据此按 Id 重读模型。
+        /// </summary>
+        public IList<int> SourceSpaceIds()
+        {
+            var ids = new List<int>();
+            var seen = new HashSet<int>();
+            foreach (var block in _systems)
+            {
+                if (block == null) continue;
+                foreach (var room in block.Rooms)
+                {
+                    if (room == null || room.SourceSpaceId == 0) continue;
+                    if (seen.Add(room.SourceSpaceId)) ids.Add(room.SourceSpaceId);
+                }
+            }
+            return ids;
+        }
+
+        /// <summary>
+        /// **开窗时与模型同步**(2026-09-24 用户口径 选项 A:每次开窗重读模型,拾取来的数据随模型改动自动更新)。
+        /// <para>
+        /// 只处理**来自模型**的房间行(<see cref="SmallRoomInput.SourceSpaceId"/> != 0):
+        /// 按 Id 取到空间 → 刷新「面积 / 层高」(保留 1 位小数);屋顶面积**只在它仍等于旧面积时**跟着走
+        /// (用户手改过的屋顶面积不覆盖);取不到的空间(被删除 / 未放置) → **保留上次的值并逐个点名提示**,
+        /// 绝不写 0 或猜测值。
+        /// </para>
+        /// <para>手工填写的行不受影响;窗内一条模型行都没有时不改状态栏(返回空串)。</para>
+        /// </summary>
+        /// <returns>给状态栏的一句话;失败时返回失败原因。</returns>
+        public string SyncFromModel(IList<SpaceSnapshot> spaces)
+        {
+            try
+            {
+                var map = new Dictionary<int, SpaceSnapshot>();
+                if (spaces != null)
+                {
+                    foreach (var space in spaces)
+                    {
+                        if (space != null && space.ElementId != 0) map[space.ElementId] = space;
+                    }
+                }
+
+                int linked = 0;
+                int refreshed = 0;
+                int changed = 0;
+                int missing = 0;
+                var missingNames = new List<string>();
+
+                foreach (var block in _systems)
+                {
+                    if (block == null) continue;
+                    foreach (var room in block.Rooms)
+                    {
+                        if (room == null || room.SourceSpaceId == 0) continue;
+                        linked++;
+
+                        SpaceSnapshot space;
+                        if (!map.TryGetValue(room.SourceSpaceId, out space) || space == null || !space.IsPlaced)
+                        {
+                            // 模型里找不到(已删除/未放置):保留上次的值,点名提示,不写 0
+                            missing++;
+                            if (missingNames.Count < 3) missingNames.Add(room.Name ?? "");
+                            continue;
+                        }
+
+                        double area = Math.Round(space.AreaM2, 1, MidpointRounding.AwayFromZero);
+                        double height = Math.Round(space.HeightM, 1, MidpointRounding.AwayFromZero);
+
+                        bool roofWasDefault = Math.Abs(room.RoofAreaM2 - room.AreaM2) < 1e-9;
+                        if (Math.Abs(area - room.AreaM2) > 1e-9 || Math.Abs(height - room.HeightM) > 1e-9) changed++;
+
+                        room.AreaM2 = area;
+                        room.HeightM = height;
+                        if (roofWasDefault) room.RoofAreaM2 = area;
+                        refreshed++;
+                    }
+
+                    block.RefreshRows();     // 让参考表按新值重取(不做逐属性通知)
+                }
+
+                if (linked == 0) return "";  // 全是手工行:不动状态栏
+
+                string stamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+                string text = "已与模型同步(" + stamp + "):按模型重读 " + refreshed + " 个房间的面积 / 层高" +
+                              (changed > 0 ? ",其中 " + changed + " 个与上次不同" : ",数值与上次一致");
+                if (missing > 0)
+                {
+                    text += ";另有 " + missing + " 个空间在模型里已找不到(保留上次的值,请核对:" +
+                            string.Join("/", missingNames.ToArray()) + (missing > missingNames.Count ? " 等" : "") + ")";
+                }
+
+                Status = text;
+                return text;
+            }
+            catch (Exception ex)
+            {
+                Status = "与模型同步失败: " + ex.Message;
+                return Status;
             }
         }
 

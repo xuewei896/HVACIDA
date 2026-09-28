@@ -43,6 +43,16 @@ namespace HVACIDA.Core.Models
         /// <summary>房间换气次数 次/h(P27 / K64)。</summary>
         public double AirChangePerHour { get; set; }
 
+        /// <summary>
+        /// 本行的**来源空间 Id**(Revit Space 的 ElementId;0 = 手工填写、不参与模型同步)。
+        /// <para>
+        /// 2026-09-24 用户口径(选项 A「每次开窗重读模型」):由【从模型拾取空间…】建的行记下来源,
+        /// 下次开窗按 Id 重读模型的面积 / 层高,随模型改动自动更新;空间被删则保留上次的值并提示。
+        /// 仅供本机追溯,**界面不显示该编号**(见《UI设计规范》§1.4)。
+        /// </para>
+        /// </summary>
+        public int SourceSpaceId { get; set; }
+
         /// <summary>是否为防烟分区(排烟系统按分区行输入;用于表格分组显示)。</summary>
         public bool IsSmokeZone { get; set; }
 

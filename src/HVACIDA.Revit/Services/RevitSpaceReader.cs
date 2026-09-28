@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
@@ -147,6 +147,42 @@ namespace HVACIDA.Revit.Services
 
             note = "拾取 " + result.Count + " 个" + label + "空间";
             if (skipped > 0) note += "(其中 " + skipped + " 个未放置已跳过)";
+            return result;
+        }
+
+        /// <summary>
+        /// 按 ElementId **重读当前项目里的空间**(2026-09-24 用户口径 选项 A:小系统窗每次开窗重读模型)。
+        /// <para>
+        /// 只查当前文档:小系统窗的空间拾取用的是 <c>uidoc.Document</c>(<see cref="PickSpaces"/> 只接受当前项目的
+        /// 元素),故窗内记下的 Id 都来自当前项目。取不到(空间被删 / 被替换 / 未放置)的 Id **不出现在结果里**,
+        /// 由调用方保留原值并提示 —— 不写 0、不猜测。
+        /// </para>
+        /// </summary>
+        /// <returns>重读到的空间快照(顺序不保证与 <paramref name="ids"/> 一致);没有文档或没有 Id 时返回空表。</returns>
+        public static IList<SpaceSnapshot> ReadByIds(Document doc, IList<int> ids, out string note)
+        {
+            var result = new List<SpaceSnapshot>();
+            if (doc == null)
+            {
+                note = "没有活动文档。";
+                return result;
+            }
+            if (ids == null || ids.Count == 0)
+            {
+                note = "没有需要重读的空间。";
+                return result;
+            }
+
+            var wanted = new HashSet<int>(ids);
+            foreach (var space in CollectSpaces(doc))
+            {
+                if (!wanted.Contains(space.Id.IntegerValue)) continue;
+
+                var snapshot = ToSnapshot(doc, space, Transform.Identity, false);
+                if (snapshot != null) result.Add(snapshot);
+            }
+
+            note = "按 Id 重读当前项目空间:" + result.Count + "/" + ids.Count + " 个";
             return result;
         }
 
