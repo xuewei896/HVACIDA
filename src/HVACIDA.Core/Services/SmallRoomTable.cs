@@ -76,6 +76,10 @@ namespace HVACIDA.Core.Services
                     cols.Add(Col("实际换气次数", "ActualAch", 1, 100));
                     cols.Add(Col("人员新风量 m³/h", "FreshAirPersonM3H", 0, 110));
                     cols.Add(Col("新风冷负荷 kW", "UnitCoolingKw", 2, 110));
+                    cols.Add(Col("室内机台数", "IndoorUnitCount", 0, 90));
+                    cols.Add(Col("单台室内机计算冷量 kW", "UnitCalcCoolingKw", 2, 140));
+                    cols.Add(Col("单台室内机选型冷量 kW", "UnitSelectCoolingKw", 2, 140));
+                    cols.Add(Col("房间选型冷量 kW", "RoomSelectCoolingKw", 2, 120));
                     break;
                 case SmallSystemType.ExhaustVentilation:
                     cols.Add(Col("房间类型", "RoomType", 1, 100));
@@ -186,6 +190,56 @@ namespace HVACIDA.Core.Services
                 new RoomColumn { Header = "10%系统新风量", Property = "FreshAirSystemM3H", Decimals = 0, Width = 110 },
                 new RoomColumn { Header = "房间空调器冷量 (kw)", Property = "UnitCoolingKw", Decimals = 2, Width = 120 },
                 new RoomColumn { Header = "房间回风风量", Property = "ReturnAirM3H", Decimals = 0, Width = 110 }
+            };
+        }
+
+        /// <summary>
+        /// 某系统类型的**参考表**列(界面"房间参数"表用):全空气一次回风 = 23 列、多联机+新风 = 20 列;
+        /// 其余四类返回空(仍用 <see cref="InputColumnsFor"/> 的录入表)。
+        /// </summary>
+        public static IList<RoomColumn> ReferenceColumnsFor(SmallSystemType type)
+        {
+            switch (type)
+            {
+                case SmallSystemType.AllAirOnceReturn: return ReferenceColumnsForAllAir();
+                case SmallSystemType.VrfWithFreshAir: return ReferenceColumnsForVrf();
+                default: return new List<RoomColumn>();
+            }
+        }
+
+        /// <summary>
+        /// 「多联机+新风」房间表**参考列**(2026-10-12 用户口径,20 列 = 序号 + 房间名称 + 录入项 + 逐房间计算值):
+        /// 表头与顺序与用户给定的口径逐项一致,数值仍由 Core 计算(<c>SmallSystemLoadCalculator</c>),界面不自己算。
+        /// <para>
+        /// 与全空气参考表的差别:本表**不含**「与土壤接触外墙长度 / 屋顶面积 / 湿负荷」列(用户口径只列 20 列),
+        /// 结构湿负荷等照算、只是不在这张表里显示;本表**多出**「室内机台数 / 单台室内机计算冷量 /
+        /// 单台室内机选型冷量 / 房间选型冷量」4 列(台数可编辑,默认每房间 1 台)。
+        /// </para>
+        /// </summary>
+        public static IList<RoomColumn> ReferenceColumnsForVrf()
+        {
+            return new List<RoomColumn>
+            {
+                new RoomColumn { Header = "序号", Property = "Index", Decimals = 0, Width = 46 },
+                new RoomColumn { Header = "房间名称", Property = "Name", Decimals = 0, Width = 170, IsEditable = true, Kind = "text" },
+                new RoomColumn { Header = "房间面积（㎡）", Property = "AreaM2", Decimals = 1, Width = 90, IsEditable = true },
+                new RoomColumn { Header = "层高（m）", Property = "HeightM", Decimals = 1, Width = 70, IsEditable = true },
+                new RoomColumn { Header = "设备冷负荷（w）", Property = "EquipmentCoolingW", Decimals = 0, Width = 100, IsEditable = true },
+                new RoomColumn { Header = "照明冷负荷（w）", Property = "LightingCoolingW", Decimals = 0, Width = 100 },
+                new RoomColumn { Header = "房间预测人数（人）", Property = "Occupants", Decimals = 0, Width = 110, IsEditable = true },
+                new RoomColumn { Header = "人员冷负荷（w）", Property = "PeopleCoolingW", Decimals = 0, Width = 100 },
+                new RoomColumn { Header = "冷负荷（kW）", Property = "TotalCoolingKw", Decimals = 2, Width = 90 },
+                new RoomColumn { Header = "消除余热计算通风量 (m³/h)", Property = "HeatVentilationM3H", Decimals = 0, Width = 150 },
+                new RoomColumn { Header = "换气次数", Property = "AirChangePerHour", Decimals = 2, Width = 70, IsEditable = true },
+                new RoomColumn { Header = "换气次数计算通风量(m³/h)", Property = "AchVentilationM3H", Decimals = 0, Width = 140 },
+                new RoomColumn { Header = "人员新风量(m³/h)", Property = "FreshAirPersonM3H", Decimals = 0, Width = 120 },
+                new RoomColumn { Header = "计算通风量 (m³/h)", Property = "ActualVentilationM3H", Decimals = 0, Width = 120 },
+                new RoomColumn { Header = "实际换气次数", Property = "ActualAch", Decimals = 2, Width = 90 },
+                new RoomColumn { Header = "新风冷负荷（kW）", Property = "UnitCoolingKw", Decimals = 2, Width = 110 },
+                new RoomColumn { Header = "室内机台数", Property = "IndoorUnitCount", Decimals = 0, Width = 90, IsEditable = true },
+                new RoomColumn { Header = "单台室内机计算冷量", Property = "UnitCalcCoolingKw", Decimals = 2, Width = 140 },
+                new RoomColumn { Header = "单台室内机选型冷量", Property = "UnitSelectCoolingKw", Decimals = 2, Width = 140 },
+                new RoomColumn { Header = "房间选型冷量", Property = "RoomSelectCoolingKw", Decimals = 2, Width = 110 }
             };
         }
 

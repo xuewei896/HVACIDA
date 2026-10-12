@@ -270,7 +270,7 @@
                                             <Button Content="测量外墙长度(两点)…" Height="26" Margin="8,0,0,0"
                                                     Click="OnPickWallClick"
                                                     IsEnabled="{Binding DataContext.IsPickAvailable, RelativeSource={RelativeSource AncestorType=TabControl}}"
-                                                    ToolTip="先在本系统的房间表里选中一行,再点本按钮:本窗关闭后在模型里点两点(起点/终点),两点距离自动填入该行的与土壤接触外墙长度(保留 1 位小数);Esc 取消保留原值"/>
+                                                    ToolTip="先在本系统的房间表里选中一行,再点本按钮:本窗关闭后在模型里点两点(起点/终点),两点距离自动填入该行的与土壤接触外墙长度(保留 1 位小数);Esc 取消保留原值。多联机+新风表未列出该列,数值仍参与结构湿负荷与热湿比"/>
                                         </StackPanel>
                                         <DataGrid Loaded="OnRoomGridLoaded" MinHeight="150"
                                                   Visibility="{Binding DataContext.UsePlainRoomTable, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource BoolToVis}}"
@@ -292,7 +292,7 @@
                                                   AlternatingRowBackground="#F7FAFD" SelectionMode="Single"
                                                   ItemsSource="{Binding RoomRows}"
                                                   SelectedItem="{Binding SelectedRoomRow}"
-                                                  ToolTip="按《全空气一次回风系统计算参数展示格式》列出每个房间的数据:前段(名称/面积/层高/外墙/屋顶/设备冷负荷/人数/换气次数)可直接改,后段自动算,改完点【计 算】刷新、点【确 定】保存"/>
+                                                  ToolTip="按用户提供的计算参数表头列出每个房间的数据(全空气一次回风 23 列 / 多联机+新风 20 列):前段(名称/面积/层高/设备冷负荷/人数/换气次数,多联机另有室内机台数)可直接改,后段自动算,改完点【计 算】刷新、点【确 定】保存"/>
                                     </StackPanel>
                                     <!-- 最下行:本系统合计(总送风量 / 总回风量 / 总制冷量;加压送风无房间行时也照常显示) -->
                                     <Border Background="#EEF3F9" BorderBrush="#C9DCF2" BorderThickness="0,1,0,0"

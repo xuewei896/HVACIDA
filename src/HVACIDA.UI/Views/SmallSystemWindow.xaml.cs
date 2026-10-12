@@ -63,8 +63,8 @@ namespace HVACIDA.UI.Views
 
             if (string.Equals(grid.Name, "MergedRoomsGrid", StringComparison.Ordinal))
             {
-                // 全空气一次回风:参考表 23 列(前段可编辑、后段自动算)
-                SmallSystemColumns.BuildReference(grid);
+                // 全空气一次回风 23 列 / 多联机+新风 20 列:参考表(前段可编辑、后段自动算)
+                SmallSystemColumns.BuildReference(grid, viewModel.Input.SystemType);
                 return;
             }
 

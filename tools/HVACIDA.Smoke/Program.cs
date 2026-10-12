@@ -155,12 +155,14 @@ namespace HVACIDA.Smoke
                 var small = repo.LoadSmallSystem();
                 var smokeRoom = SmallRoomInput.Create("烟测房间", 88.5, 4.5);
                 smokeRoom.SourceSpaceId = 4242;          // 2026-09-28:来源空间 Id 必须能落盘(开窗按 Id 重读模型)
+                smokeRoom.IndoorUnitCount = 3;           // 2026-10-12:多联机室内机台数也必须能落盘
                 small.Rooms.Add(smokeRoom);
                 small.SystemType = SmallSystemType.AllAirOnceReturn;
                 repo.SaveSmallSystem(small);
                 var small2 = repo.LoadSmallSystem();
                 Check("小系统输入往返 房间面积", small2.Rooms[0].AreaM2, 88.5);
                 CheckInt("小系统输入往返 来源空间 Id", small2.Rooms[0].SourceSpaceId, 4242);
+                Check("小系统输入往返 室内机台数", small2.Rooms[0].IndoorUnitCount, 3);
                 CheckText("小系统输入往返 类型", small2.SystemType.ToString(), SmallSystemType.AllAirOnceReturn.ToString());
 
                 // 损坏文件必须回退默认而不是抛异常(插件不能因数据文件坏掉而打不开窗口)
@@ -726,6 +728,58 @@ namespace HVACIDA.Smoke
             Check("设备选型 PEU 风量 = 1530×1.1 = 1683 m³/h", vrfResult.Equipments[0].FlowM3H, 1683, 0.01);
             Check("设备选型 FAF 风量 = 实际通风量合计×1.1", vrfResult.Equipments[1].FlowM3H,
                 vrfResult.TotalSupplyM3H * 1.1, 1e-9);
+
+            // ---------- 2b) 多联机+新风:房间表 20 列口径(2026-10-12 用户口径) ----------
+            string[] vrfHeaders =
+            {
+                "序号", "房间名称", "房间面积（㎡）", "层高（m）", "设备冷负荷（w）", "照明冷负荷（w）",
+                "房间预测人数（人）", "人员冷负荷（w）", "冷负荷（kW）", "消除余热计算通风量 (m³/h)", "换气次数",
+                "换气次数计算通风量(m³/h)", "人员新风量(m³/h)", "计算通风量 (m³/h)", "实际换气次数",
+                "新风冷负荷（kW）", "室内机台数", "单台室内机计算冷量", "单台室内机选型冷量", "房间选型冷量"
+            };
+            var vrfCols = SmallRoomTable.ReferenceColumnsForVrf();
+            int headerBad = 0;
+            for (int i = 0; i < vrfHeaders.Length && i < vrfCols.Count; i++)
+            {
+                if (vrfCols[i].Header != vrfHeaders[i])
+                {
+                    headerBad++;
+                    Console.WriteLine("     表头不一致[" + i + "]: 期望「" + vrfHeaders[i] + "」实际「" + vrfCols[i].Header + "」");
+                }
+            }
+            int vrfEditable = 0;
+            foreach (var column in vrfCols) { if (column.IsEditable) vrfEditable++; }
+            CheckInt("多联机房间表 20 列(表头逐字一致)且 7 项录入可编辑 / 13 项自动算",
+                vrfCols.Count == 20 && headerBad == 0 && vrfEditable == 7 ? 0 : 1, 0);
+            CheckInt("参考表按系统类型分派(全空气 23 / 多联机 20 / 排风 0)",
+                SmallRoomTable.ReferenceColumnsFor(SmallSystemType.AllAirOnceReturn).Count == 23 &&
+                SmallRoomTable.ReferenceColumnsFor(SmallSystemType.VrfWithFreshAir).Count == 20 &&
+                SmallRoomTable.ReferenceColumnsFor(SmallSystemType.ExhaustVentilation).Count == 0 ? 0 : 1, 0);
+
+            // 室内机选型:台数由用户录入(默认 1 台),冷量按台数分摊
+            var vrf0Room = vrfResult.Rooms[0];
+            Check("多联机默认每房间 1 台", vrf0Room.IndoorUnitCount, 1, 1e-9);
+            Check("单台室内机计算冷量 = 房间冷负荷 ÷ 台数", vrf0Room.UnitCalcCoolingKw, vrf0Room.TotalCoolingKw, 1e-9);
+            Check("单台室内机选型冷量 = 单台计算冷量 × 1.1", vrf0Room.UnitSelectCoolingKw, vrf0Room.TotalCoolingKw * 1.1, 1e-9);
+            Check("房间选型冷量 = 台数 × 单台选型冷量", vrf0Room.RoomSelectCoolingKw, vrf0Room.TotalCoolingKw * 1.1, 1e-9);
+            double sumRoomSelect = 0;
+            foreach (var roomRow in vrfResult.Rooms) sumRoomSelect += roomRow.RoomSelectCoolingKw;
+            Check("Σ房间选型冷量 = 多联机室外机计算制冷量 E99", sumRoomSelect, vrfResult.Equipments[3].CoolingKw, 1e-9);
+            vrf.Rooms[0].IndoorUnitCount = 3;
+            var vrfThree = calc.Calculate(vrf);
+            Check("台数改为 3:单台计算冷量 = 房间冷负荷 ÷ 3", vrfThree.Rooms[0].UnitCalcCoolingKw,
+                vrfThree.Rooms[0].TotalCoolingKw / 3.0, 1e-9);
+            Check("台数改为 3:房间选型冷量不变(仍 = 房间冷负荷 × 1.1)", vrfThree.Rooms[0].RoomSelectCoolingKw,
+                vrfThree.Rooms[0].TotalCoolingKw * 1.1, 1e-9);
+            vrf.Rooms[0].IndoorUnitCount = 0;
+            var vrfZero = calc.Calculate(vrf);
+            Check("台数 0(旧数据缺该元素)按 1 台处理,不除零", vrfZero.Rooms[0].IndoorUnitCount, 1, 1e-9);
+            Check("台数 0 时单台计算冷量 = 房间冷负荷 ÷ 1", vrfZero.Rooms[0].UnitCalcCoolingKw,
+                vrfZero.Rooms[0].TotalCoolingKw, 1e-9);
+            vrf.Rooms[0].IndoorUnitCount = 1;
+            Console.WriteLine("     ✓ 口径(2026-10-12 用户确认):台数由设计人录入(默认 1 台);" +
+                              "单台计算冷量 = 房间冷负荷 ÷ 台数;单台选型冷量 = 单台计算冷量 × 选型系数;" +
+                              "房间选型冷量 = 台数 × 单台选型冷量(逐房间合计恒等于 E99)。");
 
             // ---------- 3) 排风系统:文档「卫生间、泵房等通风」8 行示例 ----------
             var exhaust = new SmallSystemInput { SystemType = SmallSystemType.ExhaustVentilation, SystemCode = "EAF-A601" };

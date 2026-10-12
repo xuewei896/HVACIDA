@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace HVACIDA.Core.Models
@@ -149,6 +149,23 @@ namespace HVACIDA.Core.Models
 
         /// <summary>房间回风量 m³/h(W27)。</summary>
         public double ReturnAirM3H { get; set; }
+
+        // ---------- 多联机+新风:室内机选型(2026-10-12 用户口径;公式文档未列该口径) ----------
+
+        /// <summary>房间室内机台数(用户录入,默认 1 台)。</summary>
+        public double IndoorUnitCount { get; set; }
+
+        /// <summary>单台室内机计算冷量 kW(= 房间冷负荷 ÷ 台数)。</summary>
+        public double UnitCalcCoolingKw { get; set; }
+
+        /// <summary>单台室内机选型冷量 kW(= 单台计算冷量 × 主设备选型系数)。</summary>
+        public double UnitSelectCoolingKw { get; set; }
+
+        /// <summary>
+        /// 房间选型冷量 kW(= 台数 × 单台选型冷量 = 房间冷负荷 × 选型系数)。
+        /// 逐房间合计恒等于系统"多联机室外机计算制冷量"(公式文档 E99)。
+        /// </summary>
+        public double RoomSelectCoolingKw { get; set; }
 
         /// <summary>计算排风量 m³/h(排风/送排风系统)。</summary>
         public double ExhaustM3H { get; set; }

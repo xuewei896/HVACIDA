@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using HVACIDA.Core.Models;
 using HVACIDA.Core.Utils;
@@ -214,11 +214,15 @@ namespace HVACIDA.Core.Services
                        "消除余热通风量 = 3600 × 房间冷负荷 / (1.01 × (室内温度 − 过渡季通风室外温度)) / 1.2;" +
                        "换气次数通风量 = 面积 × 层高 × 换气次数;实际通风量取两者之大;人员新风量 = 30 × 人数;" +
                        "室内含湿量 = (室内相对湿度 / 100) × 室内饱和含湿量(7 次多项式),据此得室内焓;新风焓按室外湿球温度算;" +
-                       "新风冷负荷 = 人员新风量 × (新风焓 − 室内焓) × 1.15 / 3600。" +
+                       "新风冷负荷 = 人员新风量 × (新风焓 − 室内焓) × 1.15 / 3600;" +
+                       "室内机选型(公式文档未列该口径,2026-10-12 用户口径) = 台数由用户录入(默认每房间 1 台)," +
+                       "单台室内机计算冷量 = 房间冷负荷 ÷ 台数,单台室内机选型冷量 = 单台计算冷量 × 选型系数," +
+                       "房间选型冷量 = 台数 × 单台选型冷量(逐房间合计恒等于系统「多联机室外机计算制冷量」)。" +
                        "输出:新风机组送风量与制冷量、送风机风量、排风机风量、多联机室外机制冷量。",
                 PendingNote = "口径(2026-09-15 确认:按公式文档文字计算,示例仅用于理解公式):" +
                               "① 消除余热通风量的分母为「1.01 × (室内温度 − 过渡季通风室外温度)」,即按过渡季温差计算;" +
-                              "② 室内计算温度取公式文档默认 27 ℃(示例的室内状态点焓 61.80 对应约 29 ℃,属示例取值,不作为基准)。"
+                              "② 室内计算温度取公式文档默认 27 ℃(示例的室内状态点焓 61.80 对应约 29 ℃,属示例取值,不作为基准);" +
+                              "③ 室内机台数公式文档未列,按用户 2026-10-12 口径由设计人录入(默认 1 台),冷量按台数分摊。"
             };
 
             double indoorHumidity = x.IndoorRhPct / 100.0 * PsychrometricHelper.SaturatedHumidityRatioGkg(x.IndoorTempC); // E83
@@ -229,6 +233,7 @@ namespace HVACIDA.Core.Services
             int index = 0;
             double sumCooling = 0, sumMoisture = 0, sumFlow = 0, sumFreshAir = 0, sumFreshCooling = 0;
             double tempDiff = x.IndoorTempC - x.TransitionOutdoorC;
+            double factor = x.EffectiveSelectionFactor();   // 设备选型系数(室内机选型冷量同口径)
 
             foreach (var room in x.Rooms ?? new List<SmallRoomInput>())
             {
@@ -258,6 +263,13 @@ namespace HVACIDA.Core.Services
                 row.FreshAirPersonM3H = x.FreshAirPerPersonM3H * room.Occupants;            // M64
                 row.UnitCoolingKw = row.FreshAirPersonM3H * (freshEnthalpy - indoorEnthalpy) *
                                     HvacConstants.SmallEnthalpyFlowFactor / 3600.0;         // P64
+                // 室内机选型(2026-10-12 用户口径;公式文档"多联机+新风"未列该口径,故按"台数由用户录入、
+                // 冷量按台数分摊"处理,不自动推算台数):单台计算冷量 = 房间冷负荷 ÷ 台数,
+                // 单台选型冷量 = 单台计算冷量 × 选型系数,房间选型冷量 = 台数 × 单台选型冷量。
+                row.IndoorUnitCount = room.EffectiveIndoorUnitCount;
+                row.UnitCalcCoolingKw = row.TotalCoolingKw / row.IndoorUnitCount;
+                row.UnitSelectCoolingKw = row.UnitCalcCoolingKw * factor;
+                row.RoomSelectCoolingKw = row.UnitSelectCoolingKw * row.IndoorUnitCount;
                 // 人员湿负荷与结构湿负荷:多联机条目未列 K/L 两式,按全空气同源口径给出(用于热湿比)
                 row.PeopleMoistureGH = x.PersonMoistureGH * room.Occupants;
                 row.StructureMoistureGH = (room.HeightM * room.WallLengthM + room.RoofAreaM2) * x.WallMoistureEmission;
@@ -285,7 +297,6 @@ namespace HVACIDA.Core.Services
             r.DewPointEnthalpy = indoorEnthalpy;
             r.FreshAirRatio = sumFlow > 1e-9 ? sumFreshAir / sumFlow : 0;
 
-            double factor = x.EffectiveSelectionFactor();
             r.Equipments.Add(new SmallEquipmentSelection
             {
                 Code = string.IsNullOrEmpty(x.SystemCode) ? "PEU" : x.SystemCode,

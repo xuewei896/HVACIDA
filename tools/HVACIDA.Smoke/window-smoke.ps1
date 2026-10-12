@@ -1441,13 +1441,69 @@ try {
     }
     $refW.Close()
     if ($mmXaml -match 'MergedRoomsGrid' -and $mmXaml -match 'UseReferenceRoomTable' -and $mmXaml -match 'UsePlainRoomTable') {
-        Write-Host "PASS  参考表网格已接入窗口(全空气用参考表、其余五类仍用录入表)"
+        Write-Host "PASS  参考表网格已接入窗口(全空气 23 列 / 多联机 20 列用参考表,其余四类仍用录入表)"
     } else { Write-Host "FAIL  参考表网格未接入"; $fail++ }
 
     # 2026-09-28 实机反馈:参考表必须把"选中的行"传回 VM(此前没接 SelectedItem → 测量总写第一行)
     if ($mmXaml -match 'SelectedItem="\{Binding SelectedRoomRow\}"') {
         Write-Host "PASS  参考表已接选中项(SelectedItem → SelectedRoomRow),测量写入所选行"
     } else { Write-Host "FAIL  参考表未接选中项"; $fail++ }
+
+    # 2026-10-12 用户口径:多联机+新风房间表也按参考表列出 20 列
+    #   (序号 / 房间名称 / 房间面积 / 层高 / 设备冷负荷 / 照明冷负荷 / 房间预测人数 / 人员冷负荷 / 冷负荷 /
+    #    消除余热计算通风量 / 换气次数 / 换气次数计算通风量 / 人员新风量 / 计算通风量 / 实际换气次数 /
+    #    新风冷负荷 / 室内机台数 / 单台室内机计算冷量 / 单台室内机选型冷量 / 房间选型冷量)
+    $vrfDir = Join-Path $env:TEMP ("HVACIDA-VrfWin-" + [guid]::NewGuid().ToString('N'))
+    $vrfRepo = New-Object HVACIDA.Core.Services.XmlProjectRepository -ArgumentList $vrfDir
+    $sVrf = New-SmallVm 'VrfWithFreshAir' $vrfRepo
+    $vrfRoom = [HVACIDA.Core.Models.SmallRoomInput]::Create('更衣室', 20.01, 3.5)
+    $vrfRoom.Occupants = 3
+    $vrfRoom.EquipmentCoolingW = 1000
+    $vrfRoom.AirChangePerHour = 6
+    $sVrf.Systems[0].Rooms.Add($vrfRoom) | Out-Null
+    $sVrf.CalculateCommand.Execute($null)
+    $vrfCols = [HVACIDA.Core.Services.SmallRoomTable]::ReferenceColumnsForVrf()
+    $vrfEditable = 0
+    foreach ($c in $vrfCols) { if ($c.IsEditable) { $vrfEditable++ } }
+    $vrfW = New-Object "$uiNs.SmallSystemWindow" -ArgumentList $sVrf
+    $vrfW.Show(); $vrfW.UpdateLayout()
+    $vrfG = @(Get-VisualDescendants $vrfW | Where-Object { $_ -is [System.Windows.Controls.DataGrid] -and $_.Name -eq 'MergedRoomsGrid' }) | Select-Object -First 1
+    if ($sVrf.UseReferenceRoomTable -eq $true -and $sVrf.UsePlainRoomTable -eq $false -and
+        $vrfCols.Count -eq 20 -and $vrfEditable -eq 7 -and
+        $vrfCols[0].Header -eq '序号' -and $vrfCols[2].Header -eq '房间面积（㎡）' -and
+        $vrfCols[9].Header -eq '消除余热计算通风量 (m³/h)' -and $vrfCols[13].Property -eq 'ActualVentilationM3H' -and
+        $vrfCols[16].Header -eq '室内机台数' -and $vrfCols[19].Header -eq '房间选型冷量' -and
+        $vrfG -ne $null -and $vrfG.Columns.Count -eq 20) {
+        Write-Host ("PASS  多联机+新风房间表按用户口径列出:{0} 列({1} 可编辑 / {2} 只读)" -f $vrfG.Columns.Count, $vrfEditable, ($vrfCols.Count - $vrfEditable))
+    } else {
+        Write-Host ("FAIL  多联机参考表: def={0} grid={1} 可编辑={2} UseRef={3}" -f $vrfCols.Count, $(if ($vrfG) { $vrfG.Columns.Count } else { 'null' }), $vrfEditable, $sVrf.UseReferenceRoomTable); $fail++
+    }
+    $vUnitCol = @($vrfG.Columns | Where-Object { $_.Header -eq '室内机台数' }) | Select-Object -First 1
+    $vAreaCol = @($vrfG.Columns | Where-Object { $_.Header -eq '房间面积（㎡）' }) | Select-Object -First 1
+    if ($vUnitCol -ne $null -and $vUnitCol.IsReadOnly -eq $false -and
+        $vAreaCol -ne $null -and $vAreaCol.Binding.Converter -is [HVACIDA.UI.Views.DecimalConverter] -and
+        "$($vAreaCol.Binding.ConverterParameter)" -eq '1') {
+        Write-Host "PASS  多联机表:室内机台数可编辑(写回房间输入)、面积按 1 位小数显示并写回"
+    } else {
+        Write-Host ("FAIL  多联机表列属性: 台数只读={0} 面积={1}" -f `
+            $(if ($vUnitCol) { $vUnitCol.IsReadOnly } else { '-' }), `
+            $(if ($vAreaCol) { "$($vAreaCol.Binding.Converter)/$($vAreaCol.Binding.ConverterParameter)" } else { '-' })); $fail++
+    }
+    $vRows = @($vrfG.ItemsSource)
+    if ($vRows.Count -eq 1 -and $vRows[0].IndoorUnitCount -eq 1 -and
+        [math]::Abs($vRows[0].UnitCalcCoolingKw - $vRows[0].TotalCoolingKw) -lt 1e-9 -and
+        [math]::Abs($vRows[0].UnitSelectCoolingKw - $vRows[0].TotalCoolingKw * 1.1) -lt 1e-9 -and
+        [math]::Abs($vRows[0].RoomSelectCoolingKw - $vRows[0].TotalCoolingKw * 1.1) -lt 1e-9) {
+        Write-Host ("PASS  多联机行:台数默认 {0} 台;单台计算冷量 = 房间冷负荷({1:N2} kW);单台选型 = ×1.1;房间选型 = 台数 × 单台选型" -f `
+            $vRows[0].IndoorUnitCount, $vRows[0].TotalCoolingKw)
+    } else {
+        Write-Host ("FAIL  多联机行数值: rows={0} 台数={1} 单台计算={2} 房间选型={3}" -f $vRows.Count, `
+            $(if ($vRows.Count -gt 0) { $vRows[0].IndoorUnitCount } else { '-' }), `
+            $(if ($vRows.Count -gt 0) { $vRows[0].UnitCalcCoolingKw } else { '-' }), `
+            $(if ($vRows.Count -gt 0) { $vRows[0].RoomSelectCoolingKw } else { '-' })); $fail++
+    }
+    $vrfW.Close()
+    try { Remove-Item $vrfDir -Recurse -Force -ErrorAction Stop } catch { }
 
     # 2026-09-28 用户口径:几何参数录入框也要 1 位小数(小系统 / 公共区 / 大系统三个窗)
     $pubXaml = Get-Content -LiteralPath (Join-Path $viewDir 'PublicAreaWindow.xaml') -Raw -Encoding UTF8

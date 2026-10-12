@@ -44,6 +44,19 @@ namespace HVACIDA.Core.Models
         public double AirChangePerHour { get; set; }
 
         /// <summary>
+        /// 房间**室内机台数**(多联机+新风;2026-10-12 用户口径:默认每房间 1 台,可在房间表里手工改)。
+        /// <para>
+        /// 公式文档"多联机+新风系统"未列该口径,故**不自动推算**,由设计人按实际布置填写;
+        /// 选型按台数分摊:单台室内机计算冷量 = 房间冷负荷 ÷ 台数,单台选型冷量 = 单台计算冷量 × 选型系数,
+        /// 房间选型冷量 = 台数 × 单台选型冷量。旧数据(无该元素)反序列化后取默认 1 台。
+        /// </para>
+        /// </summary>
+        public double IndoorUnitCount { get; set; } = 1;
+
+        /// <summary>实际参与计算的台数:≤ 0(用户清空 / 手工构造的数据)按 1 台处理,避免除零。</summary>
+        public double EffectiveIndoorUnitCount => IndoorUnitCount > 0 ? IndoorUnitCount : 1;
+
+        /// <summary>
         /// 本行的**来源空间 Id**(Revit Space 的 ElementId;0 = 手工填写、不参与模型同步)。
         /// <para>
         /// 2026-09-28 用户口径(选项 A「每次开窗重读模型」):由【从模型拾取空间…】建的行记下来源,

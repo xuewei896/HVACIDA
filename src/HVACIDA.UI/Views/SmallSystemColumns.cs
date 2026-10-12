@@ -57,15 +57,15 @@ namespace HVACIDA.UI.Views
         }
 
         /// <summary>
-        /// 「全空气一次回风」**参考表列**(23 列:前段可编辑、后段只读);
-        /// 列定义来自 Core 的 <see cref="SmallRoomTable.ReferenceColumnsForAllAir"/>。
+        /// **参考表列**(全空气一次回风 23 列 / 多联机+新风 20 列;前段可编辑、后段只读);
+        /// 列定义来自 Core 的 <see cref="SmallRoomTable.ReferenceColumnsFor"/>。
         /// </summary>
-        internal static void BuildReference(DataGrid grid)
+        internal static void BuildReference(DataGrid grid, SmallSystemType type)
         {
             if (grid == null) return;
             grid.Columns.Clear();
 
-            foreach (var column in SmallRoomTable.ReferenceColumnsForAllAir())
+            foreach (var column in SmallRoomTable.ReferenceColumnsFor(type))
             {
                 var binding = new Binding(column.Property);
                 if (column.IsEditable)

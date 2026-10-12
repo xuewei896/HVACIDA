@@ -83,6 +83,17 @@ namespace HVACIDA.UI.ViewModels
             set { if (_input != null) _input.AirChangePerHour = value; }
         }
 
+        /// <summary>
+        /// 房间**室内机台数**(多联机+新风参考表第 17 列;可编辑,写回 <see cref="SmallRoomInput.IndoorUnitCount"/>)。
+        /// 读值走 <see cref="SmallRoomInput.EffectiveIndoorUnitCount"/>:≤ 0 的旧数据显示为实际参与计算的 1 台,
+        /// 避免"表里显示 0、算的时候按 1 台"的分叉。
+        /// </summary>
+        public double IndoorUnitCount
+        {
+            get => _input == null ? 1 : _input.EffectiveIndoorUnitCount;
+            set { if (_input != null) _input.IndoorUnitCount = value; }
+        }
+
         // ---------- 只读(本次计算结果;未算时给 0) ----------
 
         public double LightingCoolingW => Value(r => r.LightingCoolingW);
@@ -99,6 +110,11 @@ namespace HVACIDA.UI.ViewModels
         public double FreshAirSystemM3H => Value(r => r.FreshAirSystemM3H);
         public double UnitCoolingKw => Value(r => r.UnitCoolingKw);
         public double ReturnAirM3H => Value(r => r.ReturnAirM3H);
+
+        // ---- 多联机+新风:室内机选型(2026-10-12 用户口径;台数可编辑,冷量按台数分摊) ----
+        public double UnitCalcCoolingKw => Value(r => r.UnitCalcCoolingKw);
+        public double UnitSelectCoolingKw => Value(r => r.UnitSelectCoolingKw);
+        public double RoomSelectCoolingKw => Value(r => r.RoomSelectCoolingKw);
 
         private double Value(System.Func<SmallRoomResult, double> pick)
         {

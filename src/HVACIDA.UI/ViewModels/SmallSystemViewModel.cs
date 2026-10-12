@@ -189,13 +189,14 @@ namespace HVACIDA.UI.ViewModels
         public bool IsPressurization => _input.SystemType == SmallSystemType.PressurizationSupply;
 
         /// <summary>
-        /// 房间表是否用「全空气一次回风」**参考表口径**(2026-09-24 用户提供的
-        /// 《全空气一次回风系统计算参数展示格式.xlsx》:23 列 = 序号 + 名称 + 录入项 + 逐房间计算值,前段可编辑后段只读)。
-        /// 其余五类维持原录入表。
+        /// 房间表是否用**参考表口径**(2026-09-24 / 2026-10-12 用户提供的表头:序号 + 名称 + 录入项 + 逐房间计算值,
+        /// 前段可编辑后段只读):全空气一次回风 23 列、多联机+新风 20 列。其余四类维持原录入表。
         /// </summary>
-        public bool UseReferenceRoomTable => _input.SystemType == SmallSystemType.AllAirOnceReturn;
+        public bool UseReferenceRoomTable =>
+            _input.SystemType == SmallSystemType.AllAirOnceReturn ||
+            _input.SystemType == SmallSystemType.VrfWithFreshAir;
 
-        /// <summary>除全空气外的五类:仍用原「房间 / 分区录入」表。</summary>
+        /// <summary>除全空气与多联机外的四类:仍用原「房间 / 分区录入」表。</summary>
         public bool UsePlainRoomTable => !UseReferenceRoomTable;
 
         /// <summary>是否显示房间录入区(加压送风为 false)。</summary>
