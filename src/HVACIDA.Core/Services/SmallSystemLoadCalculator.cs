@@ -221,8 +221,13 @@ namespace HVACIDA.Core.Services
                        "输出:新风机组送风量与制冷量、送风机风量、排风机风量、多联机室外机制冷量。",
                 PendingNote = "口径(2026-09-15 确认:按公式文档文字计算,示例仅用于理解公式):" +
                               "① 消除余热通风量的分母为「1.01 × (室内温度 − 过渡季通风室外温度)」,即按过渡季温差计算;" +
-                              "② 室内计算温度取公式文档默认 27 ℃(示例的室内状态点焓 61.80 对应约 29 ℃,属示例取值,不作为基准);" +
-                              "③ 室内机台数公式文档未列,按用户 2026-10-12 口径由设计人录入(默认 1 台),冷量按台数分摊。"
+                              "② 室内计算温度取公式文档默认 27 ℃、过渡季通风室外温度默认 14 ℃(温差 13 ℃);" +
+                              "2026-10-20 复核:示例里两张表的通风量口径互相矛盾 —— 逐房间明细表对应温差 8 ℃," +
+                              "而带设备选型的新风机表对应温差 13 ℃(空气密度取了 ≈1.14,正文写 1.2);" +
+                              "本实现按正文(27 / 14 / 1.2),故与示例逐值不会完全相同,属输入与系数取值差异、不是公式差异;" +
+                              "③ 室内机台数公式文档未列,按用户 2026-10-12 口径由设计人录入(默认 1 台),冷量按台数分摊;" +
+                              "④ 示例的排风机风量 = 送风机 × 0.9(5610 对 6233),与正文「排风机计算排风量 = 实际通风量合计」" +
+                              "不一致;本实现按正文(两者相同),若项目按 0.9 请改口径后再算。"
             };
 
             double indoorHumidity = x.IndoorRhPct / 100.0 * PsychrometricHelper.SaturatedHumidityRatioGkg(x.IndoorTempC); // E83
@@ -254,7 +259,9 @@ namespace HVACIDA.Core.Services
                 row.LightingCoolingW = x.LightingIndexWm2 * room.AreaM2;                    // F64
                 row.PeopleCoolingW = x.PersonCoolingW * room.Occupants;                     // H64
                 row.TotalCoolingKw = (row.EquipmentCoolingW + row.LightingCoolingW + row.PeopleCoolingW) / 1000.0; // I64
-                row.HeatVentilationM3H = Math.Abs(tempDiff) > 1e-9
+                // J64:只有室内温度高于过渡季通风室外温度时,通风才带得走余热;室内 ≤ 过渡季时**取 0**。
+                // (原实现用 |ΔT| 判空却除以带符号的 ΔT —— 过渡季填得比室内高时会算出负通风量并进入合计/选型。)
+                row.HeatVentilationM3H = tempDiff > 1e-9
                     ? 3600.0 * row.TotalCoolingKw / (1.01 * tempDiff) / 1.2 : 0;            // J64
                 row.AchVentilationM3H = room.VolumeFlowByAchM3H;                            // L64
                 row.ActualVentilationM3H = Math.Max(row.HeatVentilationM3H, row.AchVentilationM3H);  // N64
@@ -296,6 +303,15 @@ namespace HVACIDA.Core.Services
             r.SupplyEnthalpy = indoorEnthalpy;      // 多联机无一次回风送风点,送风点焓按室内处理点显示
             r.DewPointEnthalpy = indoorEnthalpy;
             r.FreshAirRatio = sumFlow > 1e-9 ? sumFreshAir / sumFlow : 0;
+            // 总回风量 = 总送风量 ×(1 − 新风比):与全空气 W37 同一折算口径(房间风量平衡 送风 = 新风 + 回风)。
+            // 文档"多联机+新风"未单列回风量;此前该字段未赋值,窗内合计行恒显示「总回风量 0 m³/h」。
+            r.TotalReturnM3H = sumFlow * (1.0 - r.FreshAirRatio);
+
+            if (tempDiff <= 1e-9)
+            {
+                r.Note += " ⚠ 室内计算温度(" + x.IndoorTempC.ToString("0.0") + " ℃)不高于过渡季通风室外温度(" +
+                          x.TransitionOutdoorC.ToString("0.0") + " ℃):消除余热通风量按 0 计,实际通风量只取换气次数通风量。";
+            }
 
             r.Equipments.Add(new SmallEquipmentSelection
             {

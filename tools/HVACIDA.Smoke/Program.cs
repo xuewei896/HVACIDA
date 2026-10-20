@@ -781,6 +781,27 @@ namespace HVACIDA.Smoke
                               "单台计算冷量 = 房间冷负荷 ÷ 台数;单台选型冷量 = 单台计算冷量 × 选型系数;" +
                               "房间选型冷量 = 台数 × 单台选型冷量(逐房间合计恒等于 E99)。");
 
+            // ---------- 2c) 多联机公式复核(2026-10-20):回风量折算 + 负通风量保护 ----------
+            Check("总回风量 = 总送风量 − 总新风量(与全空气 W37 同一折算口径)",
+                vrfResult.TotalReturnM3H, vrfResult.TotalSupplyM3H - vrfResult.TotalFreshAirM3H, 1e-9);
+            Check("总回风量 > 0(窗内合计行不再恒显示 0 m³/h)", vrfResult.TotalReturnM3H > 0 ? 1 : 0, 1);
+
+            var inverted = new SmallSystemInput
+            {
+                SystemType = SmallSystemType.VrfWithFreshAir,
+                SystemCode = "VRV-X",
+                IndoorTempC = 25, TransitionOutdoorC = 30,      // 过渡季比室内还热:通风带不走余热
+                LightingIndexWm2 = 20, IndoorRhPct = 50, OutdoorWetBulbC = 28.2
+            };
+            inverted.Rooms.Add(SmallRoomInput.Create("探针房间", 10, 3));
+            var invertedResult = calc.Calculate(inverted);
+            Check("室内 ≤ 过渡季时消除余热通风量取 0(不出现负风量)",
+                invertedResult.Rooms[0].HeatVentilationM3H, 0, 1e-9);
+            Check("此时实际通风量 = 换气次数通风量(10 × 3 × 6 = 180 m³/h)",
+                invertedResult.Rooms[0].ActualVentilationM3H, 180, 1e-9);
+            Check("总送风量合计不为负", invertedResult.TotalSupplyM3H, 180, 1e-9);
+            CheckInt("口径说明写明「按 0 计」", invertedResult.Note.Contains("按 0 计") ? 1 : 0, 1);
+
             // ---------- 3) 排风系统:文档「卫生间、泵房等通风」8 行示例 ----------
             var exhaust = new SmallSystemInput { SystemType = SmallSystemType.ExhaustVentilation, SystemCode = "EAF-A601" };
             double[,] exhaustRooms = { {5.83,5.90,20},{6.82,5.90,20},{4.23,4.55,10},{4.40,4.55,10},

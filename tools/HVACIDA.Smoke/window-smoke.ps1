@@ -1502,6 +1502,18 @@ try {
             $(if ($vRows.Count -gt 0) { $vRows[0].UnitCalcCoolingKw } else { '-' }), `
             $(if ($vRows.Count -gt 0) { $vRows[0].RoomSelectCoolingKw } else { '-' })); $fail++
     }
+    # 2026-10-20 复核:多联机合计行的总回风量 = 总送风量 − 总新风量(此前未赋值,恒显示 0)
+    $vRes = $sVrf.Systems[0].Result
+    $vTotals = $sVrf.Systems[0].TotalsText
+    if ($vRes -ne $null -and $vRes.TotalReturnM3H -gt 0 -and
+        [math]::Abs($vRes.TotalReturnM3H - ($vRes.TotalSupplyM3H - $vRes.TotalFreshAirM3H)) -lt 1e-6 -and
+        $vTotals -match '总回风量') {
+        Write-Host ("PASS  多联机合计行:总回风量 = 送风 − 新风 = {0:N0} m³/h(不再显示 0)" -f $vRes.TotalReturnM3H)
+    } else {
+        Write-Host ("FAIL  多联机回风量: return={0} supply={1} fresh={2} totals='{3}'" -f `
+            $(if ($vRes) { $vRes.TotalReturnM3H } else { '-' }), $(if ($vRes) { $vRes.TotalSupplyM3H } else { '-' }), `
+            $(if ($vRes) { $vRes.TotalFreshAirM3H } else { '-' }), $vTotals); $fail++
+    }
     $vrfW.Close()
     try { Remove-Item $vrfDir -Recurse -Force -ErrorAction Stop } catch { }
 

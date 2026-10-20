@@ -238,6 +238,7 @@ namespace HVACIDA.Core.Models
             {
                 case SmallSystemType.SmokeExhaust: return HvacConstants.SmokeSystemSelectionFactor;
                 case SmallSystemType.PressurizationSupply: return HvacConstants.PressurizationSelectionFactor;
+                case SmallSystemType.VrfWithFreshAir: return HvacConstants.SmallVrfSelectionFactor;   // 1.1
                 default: return HvacConstants.ExhaustSelectionFactor;   // 1.1
             }
         }

@@ -113,6 +113,12 @@ namespace HVACIDA.Core.Utils
         public const double MakeupAirSelectionFactor = 1.1;
 
         /// <summary>
+        /// 多联机+新风 的主设备选型系数 1.1(文档示例:新风机 PEU-A216、送风机 FAF-A301、排风机 EAF-A301
+        /// 的"系数"列均为 1.10)。原先该类型落到排风系统的常量上,数值相同但来源不清,故单列一条。
+        /// </summary>
+        public const double SmallVrfSelectionFactor = 1.1;
+
+        /// <summary>
         /// 排风系统 / 送排风排烟系统 的排风选型系数 1.1(文档文字:"选型排风量为计算排风量×1.1")。
         /// ⚠ 文档示例(卫生间排风 EAF-A601)用的系数是 **1.3**(5386×1.3 = 7002),与文字不一致;
         /// 代码按文字取 1.1 作默认且允许修改,示例口径在自检里单独断言。
