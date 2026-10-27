@@ -53,7 +53,7 @@
                                 </Style>
                             </DataGrid.RowStyle>
                             <DataGrid.Columns>
-                                <DataGridTemplateColumn Header="项目" Width="*">
+                                <DataGridTemplateColumn Header="项目" Width="*" MinWidth="220">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Style="{StaticResource LabelCell}" Text="{Binding Label}"

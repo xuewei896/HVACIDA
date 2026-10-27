@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 #  make-docx-report.ps1  --  turn a small Markdown subset into a Word (.docx)
 #  ASCII-only script on purpose: every Chinese string lives in the Markdown
 #  source (read as UTF-8), so this file can stay BOM-less without mojibake.
@@ -148,6 +148,9 @@ $charCount = 0
 $tableRows = 0
 $tableCount = 0
 $headingCount = 0
+$script:figures = @()
+$script:figureIndex = 0
+$figureCount = 0
 
 while ($i -lt $all.Count) {
     $line = $all[$i].TrimEnd()
@@ -197,6 +200,42 @@ while ($i -lt $all.Count) {
             $tableCount++
         }
         $pendingCols = $null
+        continue
+    }
+
+    if ($trim -match '^\[\[FIGURE\]\](.*)$') {
+        $spec = $Matches[1]
+        $parts = $spec.Split('|')
+        $figPath = $parts[0].Trim()
+        $widCm = 15.0
+        if ($parts.Count -gt 1 -and $parts[1].Trim() -ne '') { $widCm = [double]$parts[1].Trim() }
+        $figCaption = ''
+        if ($parts.Count -gt 2) { $figCaption = $parts[2].Trim() }
+        if (-not (Test-Path -LiteralPath $figPath)) { throw "figure not found: $figPath" }
+        $bytes = [System.IO.File]::ReadAllBytes($figPath)
+        $pngW = ([int]$bytes[16] -shl 24) -bor ([int]$bytes[17] -shl 16) -bor ([int]$bytes[18] -shl 8) -bor [int]$bytes[19]
+        $pngH = ([int]$bytes[20] -shl 24) -bor ([int]$bytes[21] -shl 16) -bor ([int]$bytes[22] -shl 8) -bor [int]$bytes[23]
+        if ($pngW -le 0 -or $pngH -le 0) { throw "not a png (or bad IHDR): $figPath" }
+        $script:figureIndex++
+        $rid = "rIdImg$script:figureIndex"
+        $media = "image$script:figureIndex.png"
+        $cx = [int]($widCm * 360000)
+        $cy = [int]($cx * $pngH / $pngW)
+        $drawing = '<w:p><w:pPr><w:pStyle w:val="Figure"/></w:pPr><w:r><w:drawing>' +
+        '<wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">' +
+        "<wp:extent cx=`"$cx`" cy=`"$cy`"/><wp:docPr id=`"$script:figureIndex`" name=`"Figure $script:figureIndex`"/>" +
+        '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+        '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+        "<pic:nvPicPr><pic:cNvPr id=`"$script:figureIndex`" name=`"$media`"/><pic:cNvPicPr/></pic:nvPicPr>" +
+        "<pic:blipFill><a:blip r:embed=`"$rid`"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>" +
+        "<pic:spPr><a:xfrm><a:off x=`"0`" y=`"0`"/><a:ext cx=`"$cx`" cy=`"$cy`"/></a:xfrm><a:prstGeom prst=`"rect`"><a:avLst/></a:prstGeom></pic:spPr>" +
+        '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>'
+        [void]$body.Append($drawing)
+        if ($figCaption) { [void]$body.Append((P 'Caption' $figCaption)) }
+        $script:figures += @{ Rid = $rid; Media = $media; Path = $figPath }
+        $figureCount = $script:figures.Count
+        Write-Host ("FIG   {0} -> {1} ({2} x {3} cm)" -f (Split-Path -Leaf $figPath), $media, $widCm, [Math]::Round($cy / 360000, 1))
+        $i++
         continue
     }
 
@@ -296,6 +335,11 @@ $styleXml = @'
   <w:pPr><w:spacing w:before="80" w:after="80" w:line="360" w:lineRule="auto"/><w:ind w:firstLine="0" w:firstLineChars="0"/><w:jc w:val="center"/></w:pPr>
   <w:rPr><w:rFonts w:eastAsia="\u5b8b\u4f53"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>
 </w:style>
+<w:style w:type="paragraph" w:styleId="Figure">
+  <w:name w:val="Figure"/><w:basedOn w:val="Normal"/>
+  <w:pPr><w:keepNext/><w:spacing w:before="120" w:after="60" w:line="240" w:lineRule="auto"/><w:ind w:firstLine="0" w:firstLineChars="0"/><w:jc w:val="center"/></w:pPr>
+  <w:rPr><w:sz w:val="20"/></w:rPr>
+</w:style>
 <w:style w:type="paragraph" w:styleId="TOC1">
   <w:name w:val="toc 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>
   <w:pPr><w:spacing w:before="80" w:after="40" w:line="300" w:lineRule="auto"/><w:ind w:firstLine="0" w:firstLineChars="0"/><w:jc w:val="left"/><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9070"/></w:tabs></w:pPr>
@@ -386,6 +430,10 @@ $docXml = @"
 <w:document xmlns:w="$ns" xmlns:r="$nsR"><w:body>$($coverXml.ToString())$($body.ToString())$sectPr</w:body></w:document>
 "@
 
+$imageRels = ''
+foreach ($f in $figures) {
+    $imageRels += "<Relationship Id=`"$($f.Rid)`" Type=`"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image`" Target=`"media/$($f.Media)`"/>"
+}
 $docRels = @"
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -395,7 +443,7 @@ $docRels = @"
 <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer2.xml"/>
 <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 <Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
-</Relationships>
+$($imageRels)</Relationships>
 "@
 
 $rootRels = @"
@@ -412,6 +460,7 @@ $contentTypes = @"
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 <Default Extension="xml" ContentType="application/xml"/>
+<Default Extension="png" ContentType="image/png"/>
 <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
@@ -454,6 +503,7 @@ function AddEntry([string]$name, [string]$content) {
     $s.Dispose()
 }
 
+
 AddEntry '[Content_Types].xml' $contentTypes
 AddEntry '_rels/.rels' $rootRels
 AddEntry 'word/document.xml' $docXml
@@ -466,6 +516,13 @@ AddEntry 'word/header2.xml' $emptyHdr
 AddEntry 'word/footer2.xml' $emptyFtr
 AddEntry 'docProps/core.xml' $coreXml
 AddEntry 'docProps/app.xml' $appXml
+foreach ($f in $figures) {
+    $entry = $zip.CreateEntry("word/media/$($f.Media)", [System.IO.Compression.CompressionLevel]::Optimal)
+    $s = $entry.Open()
+    $bytes = [System.IO.File]::ReadAllBytes($f.Path)
+    $s.Write($bytes, 0, $bytes.Length)
+    $s.Dispose()
+}
 $zip.Dispose()
 $fs.Dispose()
 
@@ -486,7 +543,7 @@ $sizeKb = [Math]::Round((Get-Item -LiteralPath $Out).Length / 1KB, 1)
 $estPages = [Math]::Round(4 + $charCount / 780 + $tableRows * 0.022 + $headingCount * 0.15, 0)
 
 Write-Host ("OUT   : {0} ({1} KB, {2} parts)" -f $Out, $sizeKb, $entryCount)
-Write-Host ("BODY  : {0} chars, {1} tables / {2} rows, {3} headings" -f $charCount, $tableCount, $tableRows, $headingCount)
+Write-Host ("BODY  : {0} chars, {1} tables / {2} rows, {3} headings, {4} figures" -f $charCount, $tableCount, $tableRows, $headingCount, $figures.Count)
 Write-Host ("EST   : about {0} pages (A4, 12pt body, 1.5 line spacing)" -f $estPages)
 if ($bad -gt 0) { Write-Host "XML ERRORS: $bad"; exit 1 }
 Write-Host 'XML OK'

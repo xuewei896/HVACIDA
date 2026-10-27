@@ -1,4 +1,4 @@
-<Window x:Class="HVACIDA.UI.Views.KnowledgeWindow"
+﻿<Window x:Class="HVACIDA.UI.Views.KnowledgeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="规范知识库 - HVACIDA"
@@ -240,7 +240,7 @@
                               SelectedItem="{Binding SelectedEntry, Mode=TwoWay}" AlternatingRowBackground="#F7FAFD">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="分类" Width="90" Binding="{Binding CategoryName}"/>
-                            <DataGridTextColumn Header="条目标题" Width="*" Binding="{Binding Title}"/>
+                            <DataGridTextColumn Header="条目标题" Width="*" MinWidth="320" Binding="{Binding Title}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -278,7 +278,7 @@
                           MaxHeight="150" AlternatingRowBackground="#F7FAFD">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="条目标题" Width="280" Binding="{Binding Title}"/>
-                        <DataGridTextColumn Header="命中片段" Width="*" Binding="{Binding Highlight}"/>
+                        <DataGridTextColumn Header="命中片段" Width="*" MinWidth="260" Binding="{Binding Highlight}"/>
                         <DataGridTextColumn Header="media_id" Width="170" Binding="{Binding MediaId}"/>
                     </DataGrid.Columns>
                 </DataGrid>
@@ -305,7 +305,7 @@
                         <DataGridTextColumn Header="序号" Width="50" Binding="{Binding Index}"/>
                         <DataGridTextColumn Header="分类" Width="90" Binding="{Binding Category}"/>
                         <DataGridTextColumn Header="条目标题" Width="280" Binding="{Binding Title}"/>
-                        <DataGridTextColumn Header="出处" Width="*" Binding="{Binding Source}"/>
+                        <DataGridTextColumn Header="出处" Width="*" MinWidth="220" Binding="{Binding Source}"/>
                         <DataGridTextColumn Header="相关度" Width="70" Binding="{Binding Score}"/>
                         <DataGridTextColumn Header="截断" Width="60" Binding="{Binding Truncated}"/>
                     </DataGrid.Columns>

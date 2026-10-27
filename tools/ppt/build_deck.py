@@ -6,6 +6,7 @@ content pages are built on the template's '标题和内容' layout so that the
 company footer, logo and accent band come from the template itself.
 """
 import copy
+import os
 import sys
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
@@ -31,7 +32,7 @@ INK = RGBColor(0x21, 0x2A, 0x4D)
 FONT = "微软雅黑"
 R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 
-TOTAL = 21
+TOTAL = 23
 
 
 # ---------------------------------------------------------------- helpers ----
@@ -662,17 +663,59 @@ textbox(end, 1.25, 3.62, 2.95, 0.66,
         ["汇报人: HVACIDA 项目组", "日期: 2026 年 10 月"], size=9, bold=False, color=WHITE,
         align=PP_ALIGN.LEFT, line_spacing=1.5)
 
+# ============================== UI snapshots ==============================
+SHOT_DIR = r"D:\DSH\docs\report-images"
+
+def shot(slide, name, x, y, w, caption=None, cap_gap=0.08):
+    pic = slide.shapes.add_picture(os.path.join(SHOT_DIR, name), Inches(x), Inches(y), Inches(w))
+    h = pic.height / 914400.0
+    if caption:
+        textbox(slide, x, y + h + cap_gap, w, 0.24, [caption], size=7.5, color=GRAY, line_spacing=1.0)
+    return h
+
+s = add_page(prs, "界面实例:小系统计算窗(全空气一次回风)", "UI SNAPSHOT · SMALL SYSTEM WINDOW", 10)
+h1 = shot(s, "fig-allair-window.png", 0.55, 1.24, 5.20,
+          "① 全窗:计算参数(全窗共用)+ 系统选项卡 + 参考表 + 合计行")
+h2 = shot(s, "fig-allair-table.png", 6.00, 1.24, 3.75,
+          "② 参考表局部:前 8 列可编辑")
+h3 = shot(s, "fig-vrf-table.png", 6.00, 3.18, 3.75,
+          "③ 多联机表局部:通风量 / 新风量逐房间")
+ny = 4.06
+panel(s, 0.55, ny, 5.20, 0.52, PALE2, MID, 0.10)
+textbox(s, 0.72, ny + 0.10, 4.9, 0.36,
+        ["同一份数据同时驱动界面结果表、计算书与 Excel 导出。"], size=8.5, bold=True, color=BLUE,
+        line_spacing=1.05)
+shotA = s
+
+s = add_page(prs, "界面实例:计算结果与交付件", "UI SNAPSHOT · RESULTS & DELIVERABLES", 14)
+ha = shot(s, "fig-large-result.png", 0.55, 1.24, 4.30,
+          "④ 大系统计算结果:计算参数 / 选型参数两段")
+hb = shot(s, "fig-material.png", 0.55, 1.24 + ha + 0.46, 4.30,
+          "⑤ 材料表:11 类构件按类别与规格归并")
+hc = shot(s, "fig-sheets.png", 5.05, 1.24, 4.30,
+          "⑥ 图纸清单:图框统计与批量出图记录")
+py = 1.24 + hc + 0.42
+panel(s, 5.05, py, 4.30, 1.50, NAVY, None, 0.05)
+textbox(s, 5.25, py + 0.12, 3.95, 0.26, ["界面背后的同源约定"], size=10.5, bold=True, color=WHITE,
+        line_spacing=1.0)
+textbox(s, 5.25, py + 0.44, 3.90, 1.00,
+        ["· 结果表与计算书共用一份结果对象;",
+         "· Excel 由自写最小 XLSX 写入器生成,零依赖;",
+         "· 材料表与图例表共用同一份统计。"],
+        size=8.5, color=WHITE, line_spacing=1.35)
+shotB = s
 # ---------------------------------------------------------------- order ----
 built = [sl for sl in prs.slides if all(sl is not t for t in tpl)]
 sections = [sl for sl in built if sl in (sec1, sec2, sec3, sec4)]
-content = [sl for sl in built if all(sl is not t for t in (sec1, sec2, sec3, sec4))]
+content = [sl for sl in built if all(sl is not t for t in (sec1, sec2, sec3, sec4, shotA, shotB))]
 print("content pages:", len(content))
-assert len(content) == 14 and len(built) == 18, (len(content), len(built))
+assert len(content) == 14 and len(built) == 20, (len(content), len(built))
 
 ordered = [cover, toc, sec1,
            content[0], content[1], content[2],
            sec2,
-           content[3], content[4], content[5], content[6], content[7], content[8],
+           content[3], content[4], shotA,
+           content[5], content[6], content[7], shotB, content[8],
            sec3,
            content[9], content[10], content[11],
            sec4,
@@ -680,7 +723,18 @@ ordered = [cover, toc, sec1,
            end]
 assert len(ordered) == TOTAL, (len(ordered), TOTAL)
 
+for idx, sl in enumerate(ordered, 1):
+    for sh in sl.shapes:
+        if sh.has_text_frame and sh.text_frame.text.strip().endswith("/ %d" % TOTAL):
+            rewrite(sh, ["%02d / %d" % (idx, TOTAL)], size=8.5, bold=False, color=WHITE,
+                    align=PP_ALIGN.RIGHT, line_spacing=1.0)
+
 drop = [t for t in tpl if all(t is not k for k in (cover, toc, end))]
+for idx, sl in enumerate(ordered, 1):
+    for sh in sl.shapes:
+        if sh.has_text_frame and sh.text_frame.text.strip().endswith("/ %d" % TOTAL):
+            rewrite(sh, ["%02d / %d" % (idx, TOTAL)], size=8.5, bold=False, color=WHITE,
+                    align=PP_ALIGN.RIGHT, line_spacing=1.0)
 set_order(prs, ordered, drop)
 
 prs.save(OUT)
