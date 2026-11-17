@@ -421,6 +421,7 @@ namespace HVACIDA.Core.Services
     internal sealed class XlsxCell
     {
         private bool _isText;
+        private bool _hasValue;
         private string _text;
         private double _number;
         private int _style;
@@ -436,7 +437,8 @@ namespace HVACIDA.Core.Services
         internal static XlsxCell Create(object value, int style)
         {
             var cell = new XlsxCell { _style = style };
-            if (value == null) return cell;
+            if (value == null) return cell;          // 空单元格:不写 <v>,Excel 里是真正的空白(不是 0)
+            cell._hasValue = true;
 
             if (value is string)
             {
@@ -468,6 +470,7 @@ namespace HVACIDA.Core.Services
         internal string ToXml(string reference)
         {
             string style = _style > 0 ? " s=\"" + _style + "\"" : "";
+            if (!_hasValue) return "<c r=\"" + reference + "\"" + style + "/>";
             if (_isText)
             {
                 if (string.IsNullOrEmpty(_text)) return "<c r=\"" + reference + "\"" + style + "/>";

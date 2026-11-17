@@ -238,6 +238,11 @@ namespace HVACIDA.UI.ViewModels
             if (r.TotalExhaustM3H > 0) parts.Add("总排风量 " + r.TotalExhaustM3H.ToString("N0") + " m³/h");
             if (r.TotalSmokeM3H > 0) parts.Add("总排烟量 " + r.TotalSmokeM3H.ToString("N0") + " m³/h");
             if (r.TotalMakeupAirM3H > 0) parts.Add("总补风量 " + r.TotalMakeupAirM3H.ToString("N0") + " m³/h");
+            // 多联机+新风:室外机选型冷量(示例 D54 = Σ房间选型 + 新风机选型),与"总制冷量"(I79 计算值)并列显示
+            if (r.OutdoorUnitSelectCoolingKw > 0)
+            {
+                parts.Add("室外机选型冷量 " + r.OutdoorUnitSelectCoolingKw.ToString("N2") + " kW");
+            }
 
             return string.Join("     ·     ", parts.ToArray());
         }

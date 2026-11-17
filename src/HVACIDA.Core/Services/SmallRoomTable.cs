@@ -41,6 +41,10 @@ namespace HVACIDA.Core.Services
         /// <summary>某系统类型的房间明细列。</summary>
         public static IList<RoomColumn> ColumnsFor(SmallSystemType type)
         {
+            // 2026-11-17:多联机+新风的"明细"与"参考表"合并成同一张 20 列表(与示例 xls 表头逐字一致)
+            // —— 界面房间表、Excel 计算书、文本计算书因此不会再出现两套列。
+            if (type == SmallSystemType.VrfWithFreshAir) return ReferenceColumnsForVrf();
+
             var cols = new List<RoomColumn> { Col("序号", "Index", 0, 46), Col("房间/分区", "Name", 1, 150) };
             switch (type)
             {
@@ -62,24 +66,7 @@ namespace HVACIDA.Core.Services
                     cols.Add(Col("回风量 m³/h", "ReturnAirM3H", 0, 100));
                     break;
                 case SmallSystemType.VrfWithFreshAir:
-                    cols.Add(Col("面积 m²", "AreaM2", 1));
-                    cols.Add(Col("层高 m", "HeightM", 1, 70));
-                    cols.Add(Col("设备冷负荷 W", "EquipmentCoolingW", 0, 100));
-                    cols.Add(Col("照明冷负荷 W", "LightingCoolingW", 1, 100));
-                    cols.Add(Col("人数", "Occupants", 0, 60));
-                    cols.Add(Col("人员冷负荷 W", "PeopleCoolingW", 0, 100));
-                    cols.Add(Col("冷负荷 kW", "TotalCoolingKw", 2, 90));
-                    cols.Add(Col("湿负荷 g/s", "TotalMoistureGps", 5, 90));
-                    cols.Add(Col("消除余热风量 m³/h", "HeatVentilationM3H", 0, 120));
-                    cols.Add(Col("换气风量 m³/h", "AchVentilationM3H", 0, 110));
-                    cols.Add(Col("实际通风量 m³/h", "ActualVentilationM3H", 0, 120));
-                    cols.Add(Col("实际换气次数", "ActualAch", 1, 100));
-                    cols.Add(Col("人员新风量 m³/h", "FreshAirPersonM3H", 0, 110));
-                    cols.Add(Col("新风冷负荷 kW", "UnitCoolingKw", 2, 110));
-                    cols.Add(Col("室内机台数", "IndoorUnitCount", 0, 90));
-                    cols.Add(Col("单台室内机计算冷量 kW", "UnitCalcCoolingKw", 2, 140));
-                    cols.Add(Col("单台室内机选型冷量 kW", "UnitSelectCoolingKw", 2, 140));
-                    cols.Add(Col("房间选型冷量 kW", "RoomSelectCoolingKw", 2, 120));
+                    // 已由 ColumnsFor 开头短路到 ReferenceColumnsForVrf(同一张 20 列表)
                     break;
                 case SmallSystemType.ExhaustVentilation:
                     cols.Add(Col("房间类型", "RoomType", 1, 100));
@@ -213,7 +200,12 @@ namespace HVACIDA.Core.Services
         /// <para>
         /// 与全空气参考表的差别:本表**不含**「与土壤接触外墙长度 / 屋顶面积 / 湿负荷」列(用户口径只列 20 列),
         /// 结构湿负荷等照算、只是不在这张表里显示;本表**多出**「室内机台数 / 单台室内机计算冷量 /
-        /// 单台室内机选型冷量 / 房间选型冷量」4 列(台数可编辑,默认每房间 1 台)。
+        /// 单台室内机选型冷量 / 房间选型冷量」4 列。
+        /// </para>
+        /// <para>
+        /// 可编辑 8 项(2026-11-17 按示例 xls 的黄色"输入量"补第 8 项):名称/面积/层高/设备冷负荷/人数/换气次数/
+        /// 室内机台数/**单台室内机选型冷量**(示例 S 列,按室内机样本填;留空或 0 = 按计算值)。
+        /// 其余 12 项自动算 —— 界面表格、Excel 计算书、文本计算书同源。
         /// </para>
         /// </summary>
         public static IList<RoomColumn> ReferenceColumnsForVrf()
@@ -238,7 +230,7 @@ namespace HVACIDA.Core.Services
                 new RoomColumn { Header = "新风冷负荷（kW）", Property = "UnitCoolingKw", Decimals = 2, Width = 110 },
                 new RoomColumn { Header = "室内机台数", Property = "IndoorUnitCount", Decimals = 0, Width = 90, IsEditable = true },
                 new RoomColumn { Header = "单台室内机计算冷量", Property = "UnitCalcCoolingKw", Decimals = 2, Width = 140 },
-                new RoomColumn { Header = "单台室内机选型冷量", Property = "UnitSelectCoolingKw", Decimals = 2, Width = 140 },
+                new RoomColumn { Header = "单台室内机选型冷量", Property = "UnitSelectCoolingKw", Decimals = 2, Width = 140, IsEditable = true },
                 new RoomColumn { Header = "房间选型冷量", Property = "RoomSelectCoolingKw", Decimals = 2, Width = 110 }
             };
         }
@@ -309,6 +301,51 @@ namespace HVACIDA.Core.Services
             if (row == null || col == null) return null;
             var property = typeof(SmallSystemSummaryRow).GetProperty(col.Property);
             return property == null ? null : property.GetValue(row, null);
+        }
+
+        /// <summary>
+        /// 房间表**合计行**(示例表 B34:T34):只汇总"可加"的量(面积 / 冷负荷 / 通风量 / 新风量 /
+        /// 新风冷负荷 / 室内机台数 / 房间选型冷量 …),序号与单台冷量列留空,房间名称列写「合计」。
+        /// <para>返回与 <paramref name="columns"/> 逐列对齐的一行;Excel 计算书用 <c>AddBoldRow</c> 落行。</para>
+        /// </summary>
+        public static object[] BuildTotalRow(IList<RoomColumn> columns, SmallSystemResult result)
+        {
+            if (columns == null) return new object[0];
+            var row = new object[columns.Count];
+            if (result == null) return row;
+            for (int i = 0; i < columns.Count; i++)
+            {
+                var col = columns[i];
+                if (col == null) continue;
+                if (string.Equals(col.Property, "Name", StringComparison.Ordinal))
+                {
+                    row[i] = "合计";
+                    continue;
+                }
+                if (!IsAdditive(col.Property)) continue;
+                double total = 0;
+                foreach (var room in result.Rooms) total += Convert.ToDouble(ValueOf(room, col) ?? 0d);
+                row[i] = total;
+            }
+            return row;
+        }
+
+        /// <summary>
+        /// 可逐房间相加的量(合计行只汇总这些,与示例表 B34:T34 一致:面积 / 冷负荷 / 两类通风量 /
+        /// 人员新风量 / 计算通风量 / 新风冷负荷 / 台数 / 房间选型冷量)。单台冷量与折算出量不汇总,避免重复计数。
+        /// </summary>
+        private static readonly HashSet<string> AdditiveProperties = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "AreaM2", "TotalCoolingKw",
+            "HeatVentilationM3H", "AchVentilationM3H", "ActualVentilationM3H",
+            "FreshAirPersonM3H", "UnitCoolingKw", "ReturnAirM3H",
+            "IndoorUnitCount", "RoomSelectCoolingKw",
+            "ExhaustM3H", "SupplyM3H", "SmokeM3H", "MakeupAirM3H"
+        };
+
+        private static bool IsAdditive(string property)
+        {
+            return !string.IsNullOrEmpty(property) && AdditiveProperties.Contains(property);
         }
 
         private static string Cell(SmallRoomResult room, RoomColumn col)

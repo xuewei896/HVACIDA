@@ -1469,7 +1469,7 @@ try {
     $vrfW.Show(); $vrfW.UpdateLayout()
     $vrfG = @(Get-VisualDescendants $vrfW | Where-Object { $_ -is [System.Windows.Controls.DataGrid] -and $_.Name -eq 'MergedRoomsGrid' }) | Select-Object -First 1
     if ($sVrf.UseReferenceRoomTable -eq $true -and $sVrf.UsePlainRoomTable -eq $false -and
-        $vrfCols.Count -eq 20 -and $vrfEditable -eq 7 -and
+        $vrfCols.Count -eq 20 -and $vrfEditable -eq 8 -and
         $vrfCols[0].Header -eq '序号' -and $vrfCols[2].Header -eq '房间面积（㎡）' -and
         $vrfCols[9].Header -eq '消除余热计算通风量 (m³/h)' -and $vrfCols[13].Property -eq 'ActualVentilationM3H' -and
         $vrfCols[16].Header -eq '室内机台数' -and $vrfCols[19].Header -eq '房间选型冷量' -and
@@ -1491,16 +1491,32 @@ try {
     }
     $vRows = @($vrfG.ItemsSource)
     if ($vRows.Count -eq 1 -and $vRows[0].IndoorUnitCount -eq 1 -and
-        [math]::Abs($vRows[0].UnitCalcCoolingKw - $vRows[0].TotalCoolingKw) -lt 1e-9 -and
-        [math]::Abs($vRows[0].UnitSelectCoolingKw - $vRows[0].TotalCoolingKw * 1.1) -lt 1e-9 -and
+        [math]::Abs($vRows[0].UnitCalcCoolingKw - $vRows[0].TotalCoolingKw * 1.1) -lt 1e-9 -and
+        [math]::Abs($vRows[0].UnitSelectCoolingKw - $vRows[0].UnitCalcCoolingKw) -lt 1e-9 -and
         [math]::Abs($vRows[0].RoomSelectCoolingKw - $vRows[0].TotalCoolingKw * 1.1) -lt 1e-9) {
-        Write-Host ("PASS  多联机行:台数默认 {0} 台;单台计算冷量 = 房间冷负荷({1:N2} kW);单台选型 = ×1.1;房间选型 = 台数 × 单台选型" -f `
+        Write-Host ("PASS  多联机行:台数默认 {0} 台;单台计算冷量 = 冷负荷×1.1({1:N2} kW);单台选型 = 计算值(未录样本);房间选型 = 台数 × 单台选型" -f `
             $vRows[0].IndoorUnitCount, $vRows[0].TotalCoolingKw)
     } else {
         Write-Host ("FAIL  多联机行数值: rows={0} 台数={1} 单台计算={2} 房间选型={3}" -f $vRows.Count, `
             $(if ($vRows.Count -gt 0) { $vRows[0].IndoorUnitCount } else { '-' }), `
             $(if ($vRows.Count -gt 0) { $vRows[0].UnitCalcCoolingKw } else { '-' }), `
             $(if ($vRows.Count -gt 0) { $vRows[0].RoomSelectCoolingKw } else { '-' })); $fail++
+    }
+    # 2026-11-17 按示例 xls:单台室内机选型冷量是"输入量"(样本值),录入后房间选型冷量 = 台数 × 样本
+    $vSelCol = @($vrfG.Columns | Where-Object { $_.Header -eq '单台室内机选型冷量' }) | Select-Object -First 1
+    if ($vRows.Count -gt 0) { $vRows[0].UnitSelectCoolingKw = 2.8 }
+    $sVrf.CalculateCommand.Execute($null)
+    $vRows2 = @($sVrf.Systems[0].RoomRows)
+    if ($vSelCol -ne $null -and $vSelCol.IsReadOnly -eq $false -and
+        $vRows2.Count -gt 0 -and
+        [math]::Abs($vRows2[0].UnitSelectCoolingKw - 2.8) -lt 1e-9 -and
+        [math]::Abs($vRows2[0].RoomSelectCoolingKw - 2.8) -lt 1e-9) {
+        Write-Host "PASS  多联机表:单台室内机选型冷量可编辑,录入样本 2.8 后房间选型冷量 = 台数 × 2.8"
+    } else {
+        Write-Host ("FAIL  多联机样本冷量: 只读={0} 选型={1} 房间选型={2}" -f `
+            $(if ($vSelCol) { $vSelCol.IsReadOnly } else { '-' }), `
+            $(if ($vRows2.Count -gt 0) { $vRows2[0].UnitSelectCoolingKw } else { '-' }), `
+            $(if ($vRows2.Count -gt 0) { $vRows2[0].RoomSelectCoolingKw } else { '-' })); $fail++
     }
     # 2026-10-20 复核:多联机合计行的总回风量 = 总送风量 − 总新风量(此前未赋值,恒显示 0)
     $vRes = $sVrf.Systems[0].Result

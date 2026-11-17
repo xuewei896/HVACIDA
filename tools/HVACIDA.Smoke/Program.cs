@@ -725,9 +725,12 @@ namespace HVACIDA.Smoke
             Check("人员新风量合计(本夹具 11 房间 51 人)= 1530 m³/h", vrfResult.TotalFreshAirM3H, 1530, 0.01);
             Console.WriteLine("     ⚠ 文档 M79=1560 含「保洁清扫间」(12 房间 52 人),而 I79=21.57 只含 11 房间,两表口径不同。");
             Check("热湿比 ≈ 12448 kJ/kg", vrfResult.HeatHumidityRatio, 12448.61, 5.0);
-            Check("设备选型 PEU 风量 = 1530×1.1 = 1683 m³/h", vrfResult.Equipments[0].FlowM3H, 1683, 0.01);
-            Check("设备选型 FAF 风量 = 实际通风量合计×1.1", vrfResult.Equipments[1].FlowM3H,
-                vrfResult.TotalSupplyM3H * 1.1, 1e-9);
+            Check("新风机计算风量 = 人员新风量合计 = 1530 m³/h", vrfResult.Equipments[0].CalcFlowM3H, 1530, 0.01);
+            Check("新风机选型风量 = ROUNDUP(1530×1.1/100)×100 = 1700 m³/h(示例 H47 同口径)",
+                vrfResult.Equipments[0].FlowM3H, 1700, 0.01);
+            Check("送风机选型风量 = ROUNDUP(计算通风量合计×1.1/100)×100",
+                vrfResult.Equipments[1].FlowM3H,
+                Math.Ceiling(vrfResult.TotalSupplyM3H * 1.1 / 100 - 1e-9) * 100, 1e-6);
 
             // ---------- 2b) 多联机+新风:房间表 20 列口径(2026-10-12 用户口径) ----------
             string[] vrfHeaders =
@@ -749,37 +752,52 @@ namespace HVACIDA.Smoke
             }
             int vrfEditable = 0;
             foreach (var column in vrfCols) { if (column.IsEditable) vrfEditable++; }
-            CheckInt("多联机房间表 20 列(表头逐字一致)且 7 项录入可编辑 / 13 项自动算",
-                vrfCols.Count == 20 && headerBad == 0 && vrfEditable == 7 ? 0 : 1, 0);
+            CheckInt("多联机房间表 20 列(表头逐字一致)且 8 项录入可编辑 / 12 项自动算",
+                vrfCols.Count == 20 && headerBad == 0 && vrfEditable == 8 ? 0 : 1, 0);
             CheckInt("参考表按系统类型分派(全空气 23 / 多联机 20 / 排风 0)",
                 SmallRoomTable.ReferenceColumnsFor(SmallSystemType.AllAirOnceReturn).Count == 23 &&
                 SmallRoomTable.ReferenceColumnsFor(SmallSystemType.VrfWithFreshAir).Count == 20 &&
                 SmallRoomTable.ReferenceColumnsFor(SmallSystemType.ExhaustVentilation).Count == 0 ? 0 : 1, 0);
 
-            // 室内机选型:台数由用户录入(默认 1 台),冷量按台数分摊
+            // 室内机选型(2026-11-17 按示例 xls R/S/T 三列):R = I×1.1/Q;S 由样本录入(未录按 R);T = Q×S
             var vrf0Room = vrfResult.Rooms[0];
             Check("多联机默认每房间 1 台", vrf0Room.IndoorUnitCount, 1, 1e-9);
-            Check("单台室内机计算冷量 = 房间冷负荷 ÷ 台数", vrf0Room.UnitCalcCoolingKw, vrf0Room.TotalCoolingKw, 1e-9);
-            Check("单台室内机选型冷量 = 单台计算冷量 × 1.1", vrf0Room.UnitSelectCoolingKw, vrf0Room.TotalCoolingKw * 1.1, 1e-9);
-            Check("房间选型冷量 = 台数 × 单台选型冷量", vrf0Room.RoomSelectCoolingKw, vrf0Room.TotalCoolingKw * 1.1, 1e-9);
+            Check("单台室内机计算冷量 = 房间冷负荷 × 1.1 ÷ 台数(示例 R26 = I26*1.1/Q26)", vrf0Room.UnitCalcCoolingKw,
+                vrf0Room.TotalCoolingKw * 1.1, 1e-9);
+            Check("未录样本时单台选型冷量 = 单台计算冷量", vrf0Room.UnitSelectCoolingKw, vrf0Room.UnitCalcCoolingKw, 1e-9);
+            Check("房间选型冷量 = 台数 × 单台选型冷量(示例 T26 = Q26*S26)", vrf0Room.RoomSelectCoolingKw,
+                vrf0Room.UnitSelectCoolingKw * vrf0Room.IndoorUnitCount, 1e-9);
             double sumRoomSelect = 0;
             foreach (var roomRow in vrfResult.Rooms) sumRoomSelect += roomRow.RoomSelectCoolingKw;
-            Check("Σ房间选型冷量 = 多联机室外机计算制冷量 E99", sumRoomSelect, vrfResult.Equipments[3].CoolingKw, 1e-9);
+            Check("室外机计算制冷量 E99 = Σ房间冷负荷 I79", vrfResult.OutdoorUnitCalcCoolingKw,
+                vrfResult.TotalCoolingKw, 1e-9);
+            Check("室外机选型冷量 D54 = Σ房间选型冷量 + 新风机组选型冷量(示例 D54 = T34 + I47)",
+                vrfResult.OutdoorUnitSelectCoolingKw, sumRoomSelect + vrfResult.FreshUnitSelectCoolingKw, 1e-9);
+            Check("室外机设备行冷量 = 选型冷量 D54", vrfResult.Equipments[3].CoolingKw,
+                vrfResult.OutdoorUnitSelectCoolingKw, 1e-9);
+            Check("室外机设备行计算冷量 = E99", vrfResult.Equipments[3].CalcCoolingKw, vrfResult.TotalCoolingKw, 1e-9);
+
+            vrf.Rooms[0].UnitSelectCoolingKw = 5.6;
+            var vrfSample = calc.Calculate(vrf);
+            Check("录入样本 5.6:单台选型冷量取样本值", vrfSample.Rooms[0].UnitSelectCoolingKw, 5.6, 1e-9);
+            Check("录入样本 5.6:房间选型冷量 = 台数 × 5.6", vrfSample.Rooms[0].RoomSelectCoolingKw, 5.6, 1e-9);
+            vrf.Rooms[0].UnitSelectCoolingKw = 0;
+
             vrf.Rooms[0].IndoorUnitCount = 3;
             var vrfThree = calc.Calculate(vrf);
-            Check("台数改为 3:单台计算冷量 = 房间冷负荷 ÷ 3", vrfThree.Rooms[0].UnitCalcCoolingKw,
-                vrfThree.Rooms[0].TotalCoolingKw / 3.0, 1e-9);
-            Check("台数改为 3:房间选型冷量不变(仍 = 房间冷负荷 × 1.1)", vrfThree.Rooms[0].RoomSelectCoolingKw,
-                vrfThree.Rooms[0].TotalCoolingKw * 1.1, 1e-9);
+            Check("台数改为 3:单台计算冷量 = 房间冷负荷 × 1.1 ÷ 3", vrfThree.Rooms[0].UnitCalcCoolingKw,
+                vrfThree.Rooms[0].TotalCoolingKw * 1.1 / 3.0, 1e-9);
+            Check("台数改为 3:房间选型冷量 = 3 × 单台计算冷量 = 房间冷负荷 × 1.1",
+                vrfThree.Rooms[0].RoomSelectCoolingKw, vrfThree.Rooms[0].TotalCoolingKw * 1.1, 1e-9);
             vrf.Rooms[0].IndoorUnitCount = 0;
             var vrfZero = calc.Calculate(vrf);
             Check("台数 0(旧数据缺该元素)按 1 台处理,不除零", vrfZero.Rooms[0].IndoorUnitCount, 1, 1e-9);
-            Check("台数 0 时单台计算冷量 = 房间冷负荷 ÷ 1", vrfZero.Rooms[0].UnitCalcCoolingKw,
-                vrfZero.Rooms[0].TotalCoolingKw, 1e-9);
+            Check("台数 0 时单台计算冷量 = 房间冷负荷 × 1.1 ÷ 1", vrfZero.Rooms[0].UnitCalcCoolingKw,
+                vrfZero.Rooms[0].TotalCoolingKw * 1.1, 1e-9);
             vrf.Rooms[0].IndoorUnitCount = 1;
-            Console.WriteLine("     ✓ 口径(2026-10-12 用户确认):台数由设计人录入(默认 1 台);" +
-                              "单台计算冷量 = 房间冷负荷 ÷ 台数;单台选型冷量 = 单台计算冷量 × 选型系数;" +
-                              "房间选型冷量 = 台数 × 单台选型冷量(逐房间合计恒等于 E99)。");
+            Console.WriteLine("     ✓ 口径(2026-11-17 按示例 xls 核对):台数由设计人录入(默认 1 台);" +
+                              "单台计算冷量 = 房间冷负荷 × 1.1 ÷ 台数;单台选型冷量取样本(未录按计算值);" +
+                              "房间选型冷量 = 台数 × 单台选型冷量;室外机选型冷量 = Σ房间选型 + 新风机选型。");
 
             // ---------- 2c) 多联机公式复核(2026-10-20):回风量折算 + 负通风量保护 ----------
             Check("总回风量 = 总送风量 − 总新风量(与全空气 W37 同一折算口径)",
@@ -801,6 +819,60 @@ namespace HVACIDA.Smoke
                 invertedResult.Rooms[0].ActualVentilationM3H, 180, 1e-9);
             Check("总送风量合计不为负", invertedResult.TotalSupplyM3H, 180, 1e-9);
             CheckInt("口径说明写明「按 0 计」", invertedResult.Note.Contains("按 0 计") ? 1 : 0, 1);
+
+            // ---------- 2d) 多联机+新风:示例 xls 逐格复算(2026-11-17) ----------
+            // 数据源:《多联机+新风计算公式-示例.xls》「设备区负荷」A25:T34(7 房间)、B36:F42(状态点)、
+            // B46:I54(设备选型)。期望值一律取该表的缓存值,用来卡"公式链有没有被改坏"。
+            var xls = new SmallSystemInput
+            {
+                SystemType = SmallSystemType.VrfWithFreshAir,
+                SystemCode = "VRF3",
+                IndoorTempC = 27, TransitionOutdoorC = 14, IndoorRhPct = 50,
+                OutdoorDryBulbC = 33.5, OutdoorWetBulbC = 26.4,
+                LightingIndexWm2 = 8, PersonCoolingW = 134, FreshAirPerPersonM3H = 30
+            };
+            double[,] xlsRooms = { {15.0, 2}, {24.8, 4}, {25.0, 4}, {30.4, 4}, {20.7, 4}, {20.3, 8}, {49.0, 2} };
+            string[] xlsNames = { "男更衣室", "女更衣室", "交接班室", "警务室", "票务室", "战区管理用房", "车站控制室" };
+            for (int i = 0; i < xlsRooms.GetLength(0); i++)
+            {
+                var xlsRoom = SmallRoomInput.Create(xlsNames[i], xlsRooms[i, 0], 2.8);
+                xlsRoom.EquipmentCoolingW = 1500;
+                xlsRoom.Occupants = xlsRooms[i, 1];
+                xlsRoom.AirChangePerHour = 6;
+                xlsRoom.UnitSelectCoolingKw = 2.8;      // 示例 S26:S32 全填 2.8(样本值)
+                xls.Rooms.Add(xlsRoom);
+            }
+            var xlsResult = calc.Calculate(xls);
+            Console.WriteLine("—— 多联机+新风:示例 xls 逐格复算(面积 185.2 / 冷负荷 15.7336 / 计算通风量 3924.56 / 新风 840 / 室外机 27.3184)——");
+            Check("xls C34 总面积 = 185.2", xlsResult.TotalAreaM2, 185.2, 0.01);
+            Check("xls I26 冷负荷 = (1500+8×15+134×2)/1000 = 1.888", xlsResult.Rooms[0].TotalCoolingKw, 1.888, 1e-9);
+            Check("xls J26 消除余热通风量 = 3600×1.888/(1.01×13)/1.2 = 431.3785",
+                xlsResult.Rooms[0].HeatVentilationM3H, 431.378522467631, 0.01);
+            Check("xls N26 计算通风量 = 431.3785(J > L)", xlsResult.Rooms[0].ActualVentilationM3H,
+                431.378522467631, 0.01);
+            Check("xls O26 实际换气次数 = 10.2709", xlsResult.Rooms[0].ActualAch, 10.2709172016103, 1e-6);
+            Check("xls P26 新风冷负荷 = 60×(C87−C86)×1.15/3600 = 0.501193",
+                xlsResult.Rooms[0].UnitCoolingKw, 0.501193315341956, 1e-9);
+            Check("xls R26 单台计算冷量 = 1.888×1.1/1 = 2.0768", xlsResult.Rooms[0].UnitCalcCoolingKw, 2.0768, 1e-9);
+            Check("xls S26 单台选型冷量 = 样本 2.8", xlsResult.Rooms[0].UnitSelectCoolingKw, 2.8, 1e-9);
+            Check("xls T26 房间选型冷量 = Q26×S26 = 2.8", xlsResult.Rooms[0].RoomSelectCoolingKw, 2.8, 1e-9);
+            Check("xls I34 冷负荷合计 = 15.7336", xlsResult.TotalCoolingKw, 15.7336, 1e-6);
+            Check("xls N34 计算通风量合计 = 3924.5557", xlsResult.TotalSupplyM3H, 3924.55567402894, 1e-3);
+            Check("xls M34 人员新风量合计 = 840", xlsResult.TotalFreshAirM3H, 840, 1e-9);
+            Check("xls P34 新风冷负荷合计 = 7.016706", xlsResult.TotalUnitCoolingKw, 7.01670641478738, 1e-6);
+            Check("xls T34 房间选型冷量合计 = 19.6", xlsResult.TotalRoomSelectCoolingKw, 19.6, 1e-9);
+            Check("xls Q34 室内机台数合计 = 7", xlsResult.IndoorUnitCount, 7, 1e-9);
+            Check("xls C41 室内状态点焓 = 56.5245", xlsResult.IndoorEnthalpy, 56.5244690284536, 1e-6);
+            Check("xls C42 新风状态点焓 = 82.6737", xlsResult.FreshEnthalpy, 82.6736854810774, 1e-6);
+            Check("xls H47 新风机选型风量 = ROUNDUP(840×1.1/100)×100 = 1000",
+                xlsResult.Equipments[0].FlowM3H, 1000, 1e-9);
+            Check("xls I47 新风机选型冷量 = 7.0167×1.1 = 7.718377",
+                xlsResult.Equipments[0].CoolingKw, 7.71837705626612, 1e-6);
+            Check("xls H48 送风机选型风量 = ROUNDUP(3924.56×1.1/100)×100 = 4400",
+                xlsResult.Equipments[1].FlowM3H, 4400, 1e-9);
+            Check("xls H49 排风机选型风量 = 4400(与送风机同量)", xlsResult.Equipments[2].FlowM3H, 4400, 1e-9);
+            Check("xls D54 室外机选型冷量 = 19.6 + 7.718377 = 27.318377",
+                xlsResult.OutdoorUnitSelectCoolingKw, 27.3183770562661, 1e-6);
 
             // ---------- 3) 排风系统:文档「卫生间、泵房等通风」8 行示例 ----------
             var exhaust = new SmallSystemInput { SystemType = SmallSystemType.ExhaustVentilation, SystemCode = "EAF-A601" };
@@ -1859,19 +1931,19 @@ namespace HVACIDA.Smoke
                 smallInput.Rooms.Add(SmallRoomInput.Create("弱电间2", 30, 5.9));
                 var smallResult = new SmallSystemLoadCalculator().Calculate(smallInput);
                 var smallBook = SmallSystemExcelExporter.BuildSystem(smallInput, smallResult);
-                CheckInt("小系统工作簿 4 页(系统结果/房间明细/设备选型/口径)", smallBook.SheetCount, 4);
+                CheckInt("小系统工作簿 5 页(计算参数/系统结果/房间明细/设备选型/口径)", smallBook.SheetCount, 5);
 
                 string smallPath = Path.Combine(dir, "小系统计算书.xlsx");
                 smallBook.Save(smallPath);
                 string xwb, xs1, xentries, roomXml, equipXml;
                 ReadXlsxSheets(smallPath, out xwb, out xs1, out xentries,
-                    new[] { "xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml" }, out roomXml, out equipXml);
+                    new[] { "xl/worksheets/sheet3.xml", "xl/worksheets/sheet4.xml" }, out roomXml, out equipXml);
                 CheckText("小系统房间明细页含房间名与面积",
                     roomXml.Contains("弱电间1") && roomXml.Contains("50") ? "有" : "缺", "有");
                 CheckText("小系统设备选型页含设备代码", equipXml.Contains("AHU-X101") ? "有" : "缺", "有");
                 CheckText("小系统工作簿页名",
-                    xwb.Contains("系统结果") && xwb.Contains("房间明细") && xwb.Contains("设备选型") &&
-                    xwb.Contains("口径与待补") ? "齐" : xwb, "齐");
+                    xwb.Contains("计算参数") && xwb.Contains("系统结果") && xwb.Contains("房间明细") &&
+                    xwb.Contains("设备选型") && xwb.Contains("口径与待补") ? "齐" : xwb, "齐");
 
                 // ---------- 4) 小系统全站汇总(多系统 + 每套明细页)----------
                 string sumDir = Path.Combine(Path.GetTempPath(), "HVACIDA-SmallSum-" + Guid.NewGuid().ToString("N"));

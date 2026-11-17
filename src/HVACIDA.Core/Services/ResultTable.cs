@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -351,6 +351,11 @@ namespace HVACIDA.Core.Services
             {
                 totals.Add("热湿比", "", r.HeatHumidityRatio, "kJ/kg", 0);
             }
+            if (r.IndoorUnitCount > 0) totals.AddTotal("室内机台数", "", r.IndoorUnitCount, "台", 0);
+            if (r.TotalRoomSelectCoolingKw > 0)
+            {
+                totals.AddTotal("房间选型冷量合计", "", r.TotalRoomSelectCoolingKw, "kW", 2);
+            }
 
             var air = t.Section("二、风量与冷量");
             if (r.TotalSupplyM3H > 0) air.Add("总送风量", "", r.TotalSupplyM3H, "m³/h", 0);
@@ -397,13 +402,34 @@ namespace HVACIDA.Core.Services
                 var units = t.Section("四、设备选型(选型系数见各行)");
                 foreach (var e in r.Equipments)
                 {
-                    string label = e.Code + " " + e.Name + "(×" + Num(e.Factor) + ")";
-                    units.Add(label + " 风量", "", e.FlowM3H, "m³/h", 0);
+                    string label = e.Code + " " + e.Name + (e.Factor > 0 ? "(×" + Num(e.Factor) + ")" : "");
+                    if (e.CalcFlowM3H > 0 && Math.Abs(e.CalcFlowM3H - e.FlowM3H) > 1e-9)
+                    {
+                        units.Add(label + " 计算风量", "", e.CalcFlowM3H, "m³/h", 0);
+                    }
+                    if (e.FlowM3H > 0) units.Add(label + " 选型风量", "", e.FlowM3H, "m³/h", 0);
+                    if (e.HasCooling && e.CalcCoolingKw > 0 && Math.Abs(e.CalcCoolingKw - e.CoolingKw) > 1e-9)
+                    {
+                        units.Add(label + " 计算冷量", "", e.CalcCoolingKw, "kW", 2);
+                    }
                     if (e.HasCooling)
                     {
-                        units.Add(label + " 冷量", "", e.CoolingKw, "kW", 2);
+                        units.Add(label + " 选型冷量", "", e.CoolingKw, "kW", 2);
                     }
                 }
+            }
+
+            // 多联机+新风:室外机口径(公式文档 E99 = Σ房间冷负荷;示例 D54 = Σ房间选型冷量 + 新风机组选型冷量)
+            if (r.OutdoorUnitSelectCoolingKw > 0)
+            {
+                var outdoor = t.Section("五、多联机室外机");
+                outdoor.Add("计算制冷量(Σ房间冷负荷)", "", r.OutdoorUnitCalcCoolingKw, "kW", 2);
+                outdoor.Add("房间选型冷量合计", "", r.TotalRoomSelectCoolingKw, "kW", 2);
+                if (r.FreshUnitSelectCoolingKw > 0)
+                {
+                    outdoor.Add("新风机组选型冷量", "", r.FreshUnitSelectCoolingKw, "kW", 2);
+                }
+                outdoor.AddTotal("室外机选型冷量(Σ房间选型 + 新风机组选型)", "", r.OutdoorUnitSelectCoolingKw, "kW", 2);
             }
 
             return t;

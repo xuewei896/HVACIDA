@@ -44,10 +44,11 @@ namespace HVACIDA.Core.Models
         public double AirChangePerHour { get; set; }
 
         /// <summary>
-        /// 房间**室内机台数**(多联机+新风;2026-10-12 用户口径:默认每房间 1 台,可在房间表里手工改)。
+        /// 房间**室内机台数**(多联机+新风;默认每房间 1 台,可在房间表里手工改)。
         /// <para>
         /// 公式文档"多联机+新风系统"未列该口径,故**不自动推算**,由设计人按实际布置填写;
-        /// 选型按台数分摊:单台室内机计算冷量 = 房间冷负荷 ÷ 台数,单台选型冷量 = 单台计算冷量 × 选型系数,
+        /// 选型按台数分摊(2026-11-17 按示例表 R/S/T 三列核对):单台室内机计算冷量 = 房间冷负荷 × 选型系数 ÷ 台数,
+        /// 单台室内机选型冷量取样本值(<see cref="UnitSelectCoolingKw"/>,未录按计算值),
         /// 房间选型冷量 = 台数 × 单台选型冷量。旧数据(无该元素)反序列化后取默认 1 台。
         /// </para>
         /// </summary>
@@ -55,6 +56,16 @@ namespace HVACIDA.Core.Models
 
         /// <summary>实际参与计算的台数:≤ 0(用户清空 / 手工构造的数据)按 1 台处理,避免除零。</summary>
         public double EffectiveIndoorUnitCount => IndoorUnitCount > 0 ? IndoorUnitCount : 1;
+
+        /// <summary>
+        /// 房间**单台室内机选型冷量** kW(多联机+新风;2026-11-17 按示例表《多联机+新风计算公式-示例.xls》
+        /// 第 S 列补入 —— 示例里该列是黄色"输入量",由设计人按室内机样本填)。
+        /// <para>
+        /// ≤ 0 = 未录样本 → 取「单台室内机计算冷量」(即按计算值选型,不额外放大);
+        /// &gt; 0 = 按样本值,房间选型冷量 = 台数 × 本值(示例 T26 = Q26×S26)。
+        /// </para>
+        /// </summary>
+        public double UnitSelectCoolingKw { get; set; }
 
         /// <summary>
         /// 本行的**来源空间 Id**(Revit Space 的 ElementId;0 = 手工填写、不参与模型同步)。

@@ -111,9 +111,23 @@ namespace HVACIDA.UI.ViewModels
         public double UnitCoolingKw => Value(r => r.UnitCoolingKw);
         public double ReturnAirM3H => Value(r => r.ReturnAirM3H);
 
-        // ---- 多联机+新风:室内机选型(2026-10-12 用户口径;台数可编辑,冷量按台数分摊) ----
+        // ---- 多联机+新风:室内机选型(2026-10-12 用户口径;2026-11-17 按示例表补"单台选型冷量"为输入) ----
         public double UnitCalcCoolingKw => Value(r => r.UnitCalcCoolingKw);
-        public double UnitSelectCoolingKw => Value(r => r.UnitSelectCoolingKw);
+
+        /// <summary>
+        /// 单台室内机**选型冷量**(多联机+新风参考表第 19 列;可编辑,写回 <see cref="SmallRoomInput.UnitSelectCoolingKw"/>)。
+        /// 显示取本次计算值(Core 在未录样本时按单台计算冷量补);录入后按样本值参与「房间选型冷量 = 台数 × 本值」。
+        /// </summary>
+        public double UnitSelectCoolingKw
+        {
+            get
+            {
+                if (_result != null) return _result.UnitSelectCoolingKw;
+                return _input == null ? 0 : _input.UnitSelectCoolingKw;
+            }
+            set { if (_input != null) _input.UnitSelectCoolingKw = value; }
+        }
+
         public double RoomSelectCoolingKw => Value(r => r.RoomSelectCoolingKw);
 
         private double Value(System.Func<SmallRoomResult, double> pick)

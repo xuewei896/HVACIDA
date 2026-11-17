@@ -59,6 +59,26 @@ namespace HVACIDA.Core.Models
         /// <summary>空调器/多联机冷量合计 kW(V37 / I79)。</summary>
         public double TotalUnitCoolingKw { get; set; }
 
+        // ---------- 多联机+新风:室内机与室外机(2026-11-17 按示例表补口径) ----------
+
+        /// <summary>室内机台数合计(Q34)。</summary>
+        public double IndoorUnitCount { get; set; }
+
+        /// <summary>房间选型冷量合计 kW(T34 = Σ 台数 × 单台选型冷量)。</summary>
+        public double TotalRoomSelectCoolingKw { get; set; }
+
+        /// <summary>多联机室外机**计算**制冷量 kW(公式文档 E99 = I79 = Σ 房间冷负荷)。</summary>
+        public double OutdoorUnitCalcCoolingKw { get; set; }
+
+        /// <summary>
+        /// 多联机室外机**选型**冷量 kW(示例 D54 = Σ房间选型冷量 + 新风机组选型冷量,
+        /// 即室外机同时负担室内机与新风机)。
+        /// </summary>
+        public double OutdoorUnitSelectCoolingKw { get; set; }
+
+        /// <summary>新风机组选型冷量 kW(I47 = Σ新风冷负荷 × 冷量附加系数;室外机选型冷量的组成部分)。</summary>
+        public double FreshUnitSelectCoolingKw { get; set; }
+
         // ---------- 状态点(焓湿过程,文档"各点参数统计") ----------
         public double SupplyTempC { get; set; }
         public double DewPointTempC { get; set; }
@@ -155,15 +175,15 @@ namespace HVACIDA.Core.Models
         /// <summary>房间室内机台数(用户录入,默认 1 台)。</summary>
         public double IndoorUnitCount { get; set; }
 
-        /// <summary>单台室内机计算冷量 kW(= 房间冷负荷 ÷ 台数)。</summary>
+        /// <summary>单台室内机计算冷量 kW(= 房间冷负荷 × 选型系数 ÷ 台数;示例 R26 = I26*1.1/Q26)。</summary>
         public double UnitCalcCoolingKw { get; set; }
 
-        /// <summary>单台室内机选型冷量 kW(= 单台计算冷量 × 主设备选型系数)。</summary>
+        /// <summary>单台室内机选型冷量 kW(示例 S26,取设计人录入的样本值;未录样本时取单台计算冷量)。</summary>
         public double UnitSelectCoolingKw { get; set; }
 
         /// <summary>
-        /// 房间选型冷量 kW(= 台数 × 单台选型冷量 = 房间冷负荷 × 选型系数)。
-        /// 逐房间合计恒等于系统"多联机室外机计算制冷量"(公式文档 E99)。
+        /// 房间选型冷量 kW(= 台数 × 单台选型冷量;示例 T26 = Q26*S26)。
+        /// 示例的室外机冷量 D54 = Σ本列 + 新风机组选型冷量。
         /// </summary>
         public double RoomSelectCoolingKw { get; set; }
 
@@ -189,10 +209,19 @@ namespace HVACIDA.Core.Models
         /// <summary>设备名称/说明(柜式空调机组 / 回排风机 / 新风机组 / 送风机 / 排风机 / 排烟风机 / 补风机)。</summary>
         public string Name { get; set; } = "";
 
-        /// <summary>选型系数。</summary>
+        /// <summary>选型系数(风量附加系数;冷量附加系数见 <see cref="CoolingFactor"/>)。</summary>
         public double Factor { get; set; }
 
-        /// <summary>选型风量 m³/h。</summary>
+        /// <summary>冷量附加系数(无冷量的通风设备为 0)。示例"设备编号及选型"表 F/G 两列。</summary>
+        public double CoolingFactor { get; set; }
+
+        /// <summary>计算风量 m³/h(选型前;示例 D47/D48/D49)。</summary>
+        public double CalcFlowM3H { get; set; }
+
+        /// <summary>计算冷量 kW(选型前;示例 E47)。</summary>
+        public double CalcCoolingKw { get; set; }
+
+        /// <summary>选型风量 m³/h(示例 H47/H48/H49;多联机系统按 100 m³/h 向上取整)。</summary>
         public double FlowM3H { get; set; }
 
         /// <summary>选型冷量 kW(通风类设备为 0,界面显示"—")。</summary>

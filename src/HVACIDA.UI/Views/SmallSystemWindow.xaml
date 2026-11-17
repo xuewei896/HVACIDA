@@ -292,7 +292,7 @@
                                                   AlternatingRowBackground="#F7FAFD" SelectionMode="Single"
                                                   ItemsSource="{Binding RoomRows}"
                                                   SelectedItem="{Binding SelectedRoomRow}"
-                                                  ToolTip="按用户提供的计算参数表头列出每个房间的数据(全空气一次回风 23 列 / 多联机+新风 20 列):前段(名称/面积/层高/设备冷负荷/人数/换气次数,多联机另有室内机台数)可直接改,后段自动算,改完点【计 算】刷新、点【确 定】保存"/>
+                                                  ToolTip="按示例计算参数表的表头列出每个房间的数据(全空气一次回风 23 列 / 多联机+新风 20 列):前段(名称/面积/层高/设备冷负荷/人数/换气次数,多联机另有室内机台数与单台室内机选型冷量)可直接改,后段自动算,改完点【计 算】刷新、点【确 定】保存"/>
                                     </StackPanel>
                                     <!-- 最下行:本系统合计(总送风量 / 总回风量 / 总制冷量;加压送风无房间行时也照常显示) -->
                                     <Border Background="#EEF3F9" BorderBrush="#C9DCF2" BorderThickness="0,1,0,0"

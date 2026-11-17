@@ -186,6 +186,9 @@ namespace HVACIDA.Core.Services
                 Code = string.IsNullOrEmpty(x.SystemCode) ? "AHU" : x.SystemCode,
                 Name = "柜式空调机组",
                 Factor = factor,
+                CoolingFactor = factor,
+                CalcFlowM3H = sumFlow,
+                CalcCoolingKw = totalUnitCooling,
                 FlowM3H = sumFlow * factor,
                 CoolingKw = totalUnitCooling * factor,
                 HasCooling = true
@@ -196,6 +199,7 @@ namespace HVACIDA.Core.Services
                 Code = string.IsNullOrEmpty(x.SystemCode) ? "RAF" : "RAF-" + Suffix(x.SystemCode),
                 Name = "回排风机",
                 Factor = rafFactor,
+                CalcFlowM3H = totalReturn,
                 FlowM3H = totalReturn * rafFactor
             });
             return r;
@@ -212,22 +216,22 @@ namespace HVACIDA.Core.Services
                 Note = "公式链:照明冷负荷 = 照明指标 × 面积;人员冷负荷 = 134 × 人数;" +
                        "房间冷负荷 = (设备 + 照明 + 人员) / 1000;" +
                        "消除余热通风量 = 3600 × 房间冷负荷 / (1.01 × (室内温度 − 过渡季通风室外温度)) / 1.2;" +
-                       "换气次数通风量 = 面积 × 层高 × 换气次数;实际通风量取两者之大;人员新风量 = 30 × 人数;" +
+                       "换气次数通风量 = 面积 × 层高 × 换气次数;计算通风量取两者之大;人员新风量 = 30 × 人数;" +
                        "室内含湿量 = (室内相对湿度 / 100) × 室内饱和含湿量(7 次多项式),据此得室内焓;新风焓按室外湿球温度算;" +
                        "新风冷负荷 = 人员新风量 × (新风焓 − 室内焓) × 1.15 / 3600;" +
-                       "室内机选型(公式文档未列该口径,2026-10-12 用户口径) = 台数由用户录入(默认每房间 1 台)," +
-                       "单台室内机计算冷量 = 房间冷负荷 ÷ 台数,单台室内机选型冷量 = 单台计算冷量 × 选型系数," +
-                       "房间选型冷量 = 台数 × 单台选型冷量(逐房间合计恒等于系统「多联机室外机计算制冷量」)。" +
-                       "输出:新风机组送风量与制冷量、送风机风量、排风机风量、多联机室外机制冷量。",
-                PendingNote = "口径(2026-09-15 确认:按公式文档文字计算,示例仅用于理解公式):" +
-                              "① 消除余热通风量的分母为「1.01 × (室内温度 − 过渡季通风室外温度)」,即按过渡季温差计算;" +
-                              "② 室内计算温度取公式文档默认 27 ℃、过渡季通风室外温度默认 14 ℃(温差 13 ℃);" +
-                              "2026-10-20 复核:示例里两张表的通风量口径互相矛盾 —— 逐房间明细表对应温差 8 ℃," +
-                              "而带设备选型的新风机表对应温差 13 ℃(空气密度取了 ≈1.14,正文写 1.2);" +
-                              "本实现按正文(27 / 14 / 1.2),故与示例逐值不会完全相同,属输入与系数取值差异、不是公式差异;" +
-                              "③ 室内机台数公式文档未列,按用户 2026-10-12 口径由设计人录入(默认 1 台),冷量按台数分摊;" +
-                              "④ 示例的排风机风量 = 送风机 × 0.9(5610 对 6233),与正文「排风机计算排风量 = 实际通风量合计」" +
-                              "不一致;本实现按正文(两者相同),若项目按 0.9 请改口径后再算。"
+                       "室内机:单台室内机计算冷量 = 房间冷负荷 × 选型系数 ÷ 台数,单台室内机选型冷量取样本值(未录样本按计算值)," +
+                       "房间选型冷量 = 台数 × 单台选型冷量;" +
+                       "设备:新风机组计算风量 = Σ人员新风量、计算冷量 = Σ新风冷负荷;送风机 / 排风机计算风量 = Σ计算通风量;" +
+                       "选型风量 = 计算风量 × 1.1 后按 100 m³/h 向上取整,选型冷量 = 计算冷量 × 1.1;" +
+                       "多联机室外机:计算制冷量 = Σ房间冷负荷,选型冷量 = Σ房间选型冷量 + 新风机组选型冷量。",
+                PendingNote = "口径(2026-11-17 对照《多联机+新风计算公式.docx》与《多联机+新风计算公式-示例.xls》逐格核对):" +
+                              "① 消除余热通风量按示例逐格一致 = 3600×房间冷负荷/(1.01×(室内温度−过渡季温度))/1.2," +
+                              "即温差 27−14 = 13 ℃、空气密度 1.2;" +
+                              "② 公式文档只给「多联机室外机计算制冷量 = Σ房间冷负荷」,示例的室外机冷量 = Σ房间选型冷量 + " +
+                              "新风机组选型冷量(室外机同时负担室内机与新风机)—— 本实现两个数都出,选型时看「室外机选型冷量」;" +
+                              "③ 示例把「单台室内机选型冷量」当输入量,按室内机样本填(示例统一填 2.8);本实现同此," +
+                              "未录样本时按单台计算冷量,房间选型冷量 = 台数 × 该值;" +
+                              "④ 示例送风机与排风机风量相同(均 = 计算通风量合计),公式文档亦同,故两者同值。"
             };
 
             double indoorHumidity = x.IndoorRhPct / 100.0 * PsychrometricHelper.SaturatedHumidityRatioGkg(x.IndoorTempC); // E83
@@ -237,6 +241,7 @@ namespace HVACIDA.Core.Services
 
             int index = 0;
             double sumCooling = 0, sumMoisture = 0, sumFlow = 0, sumFreshAir = 0, sumFreshCooling = 0;
+            double sumRoomSelect = 0, sumIndoorUnits = 0;
             double tempDiff = x.IndoorTempC - x.TransitionOutdoorC;
             double factor = x.EffectiveSelectionFactor();   // 设备选型系数(室内机选型冷量同口径)
 
@@ -270,12 +275,14 @@ namespace HVACIDA.Core.Services
                 row.FreshAirPersonM3H = x.FreshAirPerPersonM3H * room.Occupants;            // M64
                 row.UnitCoolingKw = row.FreshAirPersonM3H * (freshEnthalpy - indoorEnthalpy) *
                                     HvacConstants.SmallEnthalpyFlowFactor / 3600.0;         // P64
-                // 室内机选型(2026-10-12 用户口径;公式文档"多联机+新风"未列该口径,故按"台数由用户录入、
-                // 冷量按台数分摊"处理,不自动推算台数):单台计算冷量 = 房间冷负荷 ÷ 台数,
-                // 单台选型冷量 = 单台计算冷量 × 选型系数,房间选型冷量 = 台数 × 单台选型冷量。
+                // 室内机选型(2026-11-17 按示例表 R/S/T 三列核对):
+                // 单台计算冷量 R64 = 房间冷负荷 × 选型系数 ÷ 台数(示例 R26 = I26*1.1/Q26);
+                // 单台选型冷量 S64 = 设计人录入的样本值(示例 S26 为黄色输入量),未录样本(≤0)时取单台计算冷量;
+                // 房间选型冷量 T64 = 台数 × 单台选型冷量(示例 T26 = Q26*S26)。
                 row.IndoorUnitCount = room.EffectiveIndoorUnitCount;
-                row.UnitCalcCoolingKw = row.TotalCoolingKw / row.IndoorUnitCount;
-                row.UnitSelectCoolingKw = row.UnitCalcCoolingKw * factor;
+                row.UnitCalcCoolingKw = row.TotalCoolingKw * factor / row.IndoorUnitCount;
+                row.UnitSelectCoolingKw = room.UnitSelectCoolingKw > 0
+                    ? room.UnitSelectCoolingKw : row.UnitCalcCoolingKw;
                 row.RoomSelectCoolingKw = row.UnitSelectCoolingKw * row.IndoorUnitCount;
                 // 人员湿负荷与结构湿负荷:多联机条目未列 K/L 两式,按全空气同源口径给出(用于热湿比)
                 row.PeopleMoistureGH = x.PersonMoistureGH * room.Occupants;
@@ -287,6 +294,8 @@ namespace HVACIDA.Core.Services
                 sumFlow += row.ActualVentilationM3H;       // N79
                 sumFreshAir += row.FreshAirPersonM3H;      // M79
                 sumFreshCooling += row.UnitCoolingKw;      // P79
+                sumRoomSelect += row.RoomSelectCoolingKw;  // T34
+                sumIndoorUnits += row.IndoorUnitCount;     // Q34
                 r.Rooms.Add(row);
             }
 
@@ -310,30 +319,50 @@ namespace HVACIDA.Core.Services
             if (tempDiff <= 1e-9)
             {
                 r.Note += " ⚠ 室内计算温度(" + x.IndoorTempC.ToString("0.0") + " ℃)不高于过渡季通风室外温度(" +
-                          x.TransitionOutdoorC.ToString("0.0") + " ℃):消除余热通风量按 0 计,实际通风量只取换气次数通风量。";
+                          x.TransitionOutdoorC.ToString("0.0") + " ℃):消除余热通风量按 0 计,计算通风量只取换气次数通风量。";
             }
+
+            // 设备选型(示例「设备编号及选型」表):
+            // 计算风量/计算冷量先按公式出,选型风量 = 计算风量 × 系数后按 100 m³/h 向上取整(H47/H48/H49),
+            // 选型冷量 = 计算冷量 × 冷量附加系数(I47)。
+            double freshSelectFlow = RoundUpToStep(sumFreshAir * factor, HvacConstants.SmallSelectionFlowStepM3H);
+            double freshSelectCooling = sumFreshCooling * factor;
+            double fanSelectFlow = RoundUpToStep(sumFlow * factor, HvacConstants.SmallSelectionFlowStepM3H);
+
+            r.IndoorUnitCount = sumIndoorUnits;                                  // Q34
+            r.TotalRoomSelectCoolingKw = sumRoomSelect;                          // T34
+            r.OutdoorUnitCalcCoolingKw = sumCooling;                             // E99 = I79
+            r.FreshUnitSelectCoolingKw = freshSelectCooling;                     // I47
+            r.OutdoorUnitSelectCoolingKw = sumRoomSelect + freshSelectCooling;   // D54 = T34 + I47
 
             r.Equipments.Add(new SmallEquipmentSelection
             {
                 Code = string.IsNullOrEmpty(x.SystemCode) ? "PEU" : x.SystemCode,
                 Name = "新风机组",
                 Factor = factor,
-                FlowM3H = sumFreshAir * factor,              // D92
-                CoolingKw = sumFreshCooling * factor,        // E92
+                CoolingFactor = factor,
+                CalcFlowM3H = sumFreshAir,                   // D47 = M79
+                CalcCoolingKw = sumFreshCooling,             // E47 = P79
+                FlowM3H = freshSelectFlow,                   // H47 = ROUNDUP(M79×1.1/100)×100
+                CoolingKw = freshSelectCooling,              // I47 = P79×1.1
                 HasCooling = true
             });
             r.Equipments.Add(new SmallEquipmentSelection
             {
-                Code = "FAF", Name = "送风机", Factor = factor, FlowM3H = sumFlow * factor   // D93
+                Code = "FAF", Name = "送风机", Factor = factor,
+                CalcFlowM3H = sumFlow, FlowM3H = fanSelectFlow     // D48 = N79,H48 = ROUNDUP(N79×1.1/100)×100
             });
             r.Equipments.Add(new SmallEquipmentSelection
             {
-                Code = "EAF", Name = "排风机", Factor = factor, FlowM3H = sumFlow * factor   // D94
+                Code = "EAF", Name = "排风机", Factor = factor,
+                CalcFlowM3H = sumFlow, FlowM3H = fanSelectFlow     // D49 = N79,H49 同上(送/排风同量)
             });
             r.Equipments.Add(new SmallEquipmentSelection
             {
-                Code = "VRV", Name = "多联机室外机", Factor = factor,
-                CoolingKw = sumCooling * factor, HasCooling = true                          // E99
+                Code = "VRV", Name = "多联机室外机",
+                CalcCoolingKw = sumCooling,                  // E99 = I79
+                CoolingKw = r.OutdoorUnitSelectCoolingKw,    // D54 = Σ房间选型冷量 + 新风机组选型冷量
+                HasCooling = true
             });
             return r;
         }
@@ -379,6 +408,7 @@ namespace HVACIDA.Core.Services
                 Code = string.IsNullOrEmpty(x.SystemCode) ? "EAF" : x.SystemCode,
                 Name = "排风机",
                 Factor = factor,
+                CalcFlowM3H = r.TotalExhaustM3H,
                 FlowM3H = r.TotalExhaustM3H * factor
             });
             return r;
@@ -422,12 +452,16 @@ namespace HVACIDA.Core.Services
             r.Equipments.Add(new SmallEquipmentSelection
             {
                 Code = "SEF", Name = "排烟风机",
-                Factor = x.SmokeSelectionFactor, FlowM3H = r.TotalSmokeM3H * x.SmokeSelectionFactor
+                Factor = x.SmokeSelectionFactor,
+                CalcFlowM3H = r.TotalSmokeM3H,
+                FlowM3H = r.TotalSmokeM3H * x.SmokeSelectionFactor
             });
             r.Equipments.Add(new SmallEquipmentSelection
             {
                 Code = "FAF", Name = "补风机",
-                Factor = x.MakeupAirSelectionFactor, FlowM3H = r.TotalMakeupAirM3H * x.MakeupAirSelectionFactor
+                Factor = x.MakeupAirSelectionFactor,
+                CalcFlowM3H = r.TotalMakeupAirM3H,
+                FlowM3H = r.TotalMakeupAirM3H * x.MakeupAirSelectionFactor
             });
             return r;
         }
@@ -483,16 +517,19 @@ namespace HVACIDA.Core.Services
             r.Equipments.Add(new SmallEquipmentSelection
             {
                 Code = "EAF", Name = "排风机", Factor = exhaustFactor,
+                CalcFlowM3H = r.TotalExhaustM3H,
                 FlowM3H = r.TotalExhaustM3H * exhaustFactor                                // EAF-A401 = 20307×1.1
             });
             r.Equipments.Add(new SmallEquipmentSelection
             {
                 Code = "SEF", Name = "排烟风机", Factor = x.SmokeSelectionFactor,
+                CalcFlowM3H = r.TotalSmokeM3H,
                 FlowM3H = r.TotalSmokeM3H * x.SmokeSelectionFactor                         // SEF-A401 = 31020×1.2
             });
             r.Equipments.Add(new SmallEquipmentSelection
             {
                 Code = "FAF", Name = "补风机/送风机", Factor = HvacConstants.SupplySelectionFactor,
+                CalcFlowM3H = maxSupplyOrMakeup,
                 FlowM3H = maxSupplyOrMakeup * HvacConstants.SupplySelectionFactor          // FAF-A401 = 18612×1.1
             });
             return r;
@@ -536,6 +573,7 @@ namespace HVACIDA.Core.Services
             {
                 Code = "SAF", Name = "加压送风机",
                 Factor = HvacConstants.PressurizationSelectionFactor,
+                CalcFlowM3H = r.TotalSupplyM3H,
                 FlowM3H = r.TotalSupplyM3H * HvacConstants.PressurizationSelectionFactor              // D392
             });
             return r;
@@ -548,6 +586,16 @@ namespace HVACIDA.Core.Services
         {
             if (enthalpyDiff <= 1e-9) return 0;
             return coolingKw / enthalpyDiff / HvacConstants.SmallEnthalpyFlowFactor * 3600.0;
+        }
+
+        /// <summary>
+        /// 选型风量按步长向上取整(示例 H47 = ROUNDUP(D47×1.1/100,)×100):
+        /// 840×1.1 = 924 → 1000,3924.6×1.1 = 4317 → 4400。减 1e-9 避免 1683.0000000000002 被抬成 1800。
+        /// </summary>
+        private static double RoundUpToStep(double value, double step)
+        {
+            if (value <= 0 || step <= 0) return value;
+            return Math.Ceiling(value / step - 1e-9) * step;
         }
 
         /// <summary>

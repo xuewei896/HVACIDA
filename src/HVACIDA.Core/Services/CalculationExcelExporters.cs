@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using HVACIDA.Core.Models;
+using HVACIDA.Core.Utils;
 
 namespace HVACIDA.Core.Services
 {
@@ -127,6 +128,7 @@ namespace HVACIDA.Core.Services
             var workbook = new XlsxWorkbook();
             if (result == null) return workbook;
 
+            AddParameterSheet(workbook, input, result);
             ExcelReportBuilder.AddResultTable(workbook.AddSheet("系统结果"), ResultTable.ForSmallSystem(input, result));
 
             var rooms = workbook.AddSheet("房间明细");
@@ -138,6 +140,52 @@ namespace HVACIDA.Core.Services
             ExcelReportBuilder.AddNoteSheet(workbook, "小系统计算书(" + ResultTable.SystemTypeName(result.SystemType) + ")",
                 result.Note, result.PendingNote);
             return workbook;
+        }
+
+        /// <summary>
+        /// 「计算参数」页:把参与计算的系统级参数逐条列出(与公式文档单元格代号对应),
+        /// 打印出来就知道这套数是按什么参数算的(示例表顶部"一、空气计算参数及标准"同一目的)。
+        /// </summary>
+        private static void AddParameterSheet(XlsxWorkbook workbook, SmallSystemInput input, SmallSystemResult result)
+        {
+            if (input == null) return;
+            var sheet = workbook.AddSheet("计算参数");
+            sheet.SetColumnWidths(40, 16, 14);
+            sheet.FreezeRows(1);
+            sheet.AddHeader("参数", "数值", "单位");
+
+            sheet.AddSectionTitle("一、空气计算参数", 3);
+            sheet.AddRow("夏季空调室外计算干球温度", input.OutdoorDryBulbC, "℃");
+            sheet.AddRow("夏季空调室外计算湿球温度", input.OutdoorWetBulbC, "℃");
+            sheet.AddRow("室内计算干球温度", input.IndoorTempC, "℃");
+            if (result != null && result.SystemType == SmallSystemType.VrfWithFreshAir)
+            {
+                sheet.AddRow("过渡季通风室外计算干球温度", input.TransitionOutdoorC, "℃");
+                sheet.AddRow("室内相对湿度", input.IndoorRhPct, "%");
+            }
+            else
+            {
+                sheet.AddRow("送风温差", input.SupplyTempDiffC, "℃");
+                sheet.AddRow("管道温升", input.DuctTempRiseC, "℃");
+                sheet.AddRow("露点相对湿度", input.DewPointRhPct, "%");
+            }
+            sheet.AddRow("空气比热", HvacConstants.AirCp, "kJ/(kg·K)");
+            sheet.AddRow("空气密度", HvacConstants.AirDensity, "kg/m³");
+
+            sheet.AddSectionTitle("二、负荷指标与标准", 3);
+            sheet.AddRow("照明指标", input.LightingIndexWm2, "W/m²");
+            sheet.AddRow("人员冷负荷(显热+潜热)", input.PersonCoolingW, "W/人");
+            sheet.AddRow("人员湿负荷", input.PersonMoistureGH, "g/(h·人)");
+            sheet.AddRow("人员新风量", input.FreshAirPerPersonM3H, "m³/(h·人)");
+            sheet.AddRow("壁面单位面积产湿量", input.WallMoistureEmission, "g/(m²·h)");
+
+            sheet.AddSectionTitle("三、选型参数", 3);
+            sheet.AddRow("风量附加系数", input.EffectiveSelectionFactor(), "—");
+            sheet.AddRow("冷量附加系数", input.EffectiveSelectionFactor(), "—");
+            if (result != null && result.SystemType == SmallSystemType.VrfWithFreshAir)
+            {
+                sheet.AddRow("选型风量取整步长", HvacConstants.SmallSelectionFlowStepM3H, "m³/h");
+            }
         }
 
         /// <summary>小系统**全站汇总**工作簿。</summary>
@@ -190,7 +238,9 @@ namespace HVACIDA.Core.Services
         private static void AddRoomTable(XlsxSheet sheet, SmallSystemResult result)
         {
             if (result == null) return;
+            // 列定义一律走 ColumnsFor(多联机+新风已短路到示例表的 20 列,其余类型维持原明细列)
             var columns = SmallRoomTable.ColumnsFor(result.SystemType);
+            if (columns.Count == 0) return;
             var headers = new List<string>();
             foreach (var column in columns) headers.Add(column.Header);
             var rows = new List<object[]>();
@@ -201,14 +251,23 @@ namespace HVACIDA.Core.Services
                 rows.Add(values.ToArray());
             }
             ExcelReportBuilder.AddTable(sheet, headers, rows);
-            if (rows.Count == 0) sheet.AddRow("(该系统没有房间 / 分区行)");
+            if (rows.Count == 0)
+            {
+                sheet.AddRow("(该系统没有房间 / 分区行)");
+                return;
+            }
+            sheet.AddBoldRow(SmallRoomTable.BuildTotalRow(columns, result));   // B34 行:合计
         }
 
         private static void AddEquipmentTable(XlsxSheet sheet, SmallSystemResult result)
         {
             if (result == null) return;
             ExcelReportBuilder.AddTable(sheet,
-                new List<string> { "系统代码", "设备", "选型系数", "风量 m³/h", "冷量 kW" },
+                new List<string>
+                {
+                    "系统代码", "设备", "计算风量 m³/h", "计算冷量 kW",
+                    "风量附加系数", "冷量附加系数", "选型风量 m³/h", "选型冷量 kW"
+                },
                 BuildEquipmentRows(result));
         }
 
@@ -219,8 +278,15 @@ namespace HVACIDA.Core.Services
             {
                 rows.Add(new object[]
                 {
-                    equipment.Code, equipment.Name, equipment.Factor, equipment.FlowM3H,
-                    equipment.HasCooling ? (object)equipment.CoolingKw : "—"
+                    equipment.Code,
+                    equipment.Name,
+                    equipment.CalcFlowM3H > 0 ? (object)equipment.CalcFlowM3H : null,
+                    equipment.HasCooling && equipment.CalcCoolingKw != 0 ? (object)equipment.CalcCoolingKw : null,
+                    equipment.Factor > 0 ? (object)equipment.Factor : "—",
+                    equipment.CoolingFactor > 0 ? (object)equipment.CoolingFactor
+                        : (equipment.HasCooling ? (object)"—" : (object)null),
+                    equipment.FlowM3H > 0 ? (object)equipment.FlowM3H : null,
+                    equipment.HasCooling ? (object)equipment.CoolingKw : (object)"—"
                 });
             }
             return rows;

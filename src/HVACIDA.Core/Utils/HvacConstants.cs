@@ -119,6 +119,12 @@ namespace HVACIDA.Core.Utils
         public const double SmallVrfSelectionFactor = 1.1;
 
         /// <summary>
+        /// 多联机+新风 选型风量的取整步长 m³/h:示例 H47/H48/H49 = ROUNDUP(计算风量×1.1/100)×100
+        /// (840×1.1 = 924 → 1000;3924.6×1.1 = 4317 → 4400)。按风机样本"整百"选型。
+        /// </summary>
+        public const double SmallSelectionFlowStepM3H = 100.0;
+
+        /// <summary>
         /// 排风系统 / 送排风排烟系统 的排风选型系数 1.1(文档文字:"选型排风量为计算排风量×1.1")。
         /// ⚠ 文档示例(卫生间排风 EAF-A601)用的系数是 **1.3**(5386×1.3 = 7002),与文字不一致;
         /// 代码按文字取 1.1 作默认且允许修改,示例口径在自检里单独断言。
