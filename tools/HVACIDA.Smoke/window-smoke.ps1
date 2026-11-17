@@ -445,7 +445,7 @@ try {
     $exRooms = @(@(5.83,5.90,'男卫'),@(6.82,5.90,'女卫'),@(4.23,4.55,'淋浴间'),@(4.40,4.55,'淋浴间'),
                   @(11.46,4.55,'男卫生间'),@(15.62,4.55,'女卫生间'),@(7.87,4.55,'无障碍卫生间'),@(17.62,4.55,'污水泵房'))
     foreach ($row in $exRooms) {
-        $ach = [HVACIDA.Core.Models.SmallSystemInput]::DefaultAirChangePerHour($row[2])
+        $ach = [HVACIDA.Core.Models.SmallSystemInput]::ReferenceAirChangePerHour($row[2])
         Add-Room $ex $row[2] $row[0] $row[1] 0 0 $ach $row[2] | Out-Null
     }
     $ex.CalculateCommand.Execute($null)
@@ -1501,6 +1501,22 @@ try {
             $(if ($vRows.Count -gt 0) { $vRows[0].IndoorUnitCount } else { '-' }), `
             $(if ($vRows.Count -gt 0) { $vRows[0].UnitCalcCoolingKw } else { '-' }), `
             $(if ($vRows.Count -gt 0) { $vRows[0].RoomSelectCoolingKw } else { '-' })); $fail++
+    }
+    # 2026-11-17 用户口径:换气次数默认一律 6 次/h(模型拾取/新行/清空都是 6,表里不出现 0)
+    $vAchCol = @($vrfG.Columns | Where-Object { $_.Header -eq '换气次数' }) | Select-Object -First 1
+    $vAchOk = ($vRows.Count -gt 0 -and [math]::Abs($vRows[0].AirChangePerHour - 6) -lt 1e-9)
+    if ($vRows.Count -gt 0) { $vRows[0].AirChangePerHour = 0 }
+    $sVrf.CalculateCommand.Execute($null)
+    $vRows3 = @($sVrf.Systems[0].RoomRows)
+    if ($vAchCol -ne $null -and $vAchCol.IsReadOnly -eq $false -and $vAchOk -and
+        $vRows3.Count -gt 0 -and [math]::Abs($vRows3[0].AirChangePerHour - 6) -lt 1e-9 -and
+        [math]::Abs($vRows3[0].AchVentilationM3H - ($vRows3[0].AreaM2 * $vRows3[0].HeightM * 6)) -lt 1e-9) {
+        Write-Host "PASS  换气次数默认 6 次/h:新行显示 6,清成 0 仍按 6 计算(面积×层高×6)"
+    } else {
+        Write-Host ("FAIL  换气次数默认: 列只读={0} 新行={1} 清0后={2}" -f `
+            $(if ($vAchCol) { $vAchCol.IsReadOnly } else { '-' }), `
+            $(if ($vRows.Count -gt 0) { $vRows[0].AirChangePerHour } else { '-' }), `
+            $(if ($vRows3.Count -gt 0) { $vRows3[0].AirChangePerHour } else { '-' })); $fail++
     }
     # 2026-11-17 按示例 xls:单台室内机选型冷量是"输入量"(样本值),录入后房间选型冷量 = 台数 × 样本
     $vSelCol = @($vrfG.Columns | Where-Object { $_.Header -eq '单台室内机选型冷量' }) | Select-Object -First 1

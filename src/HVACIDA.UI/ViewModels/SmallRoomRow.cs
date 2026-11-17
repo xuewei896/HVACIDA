@@ -77,9 +77,14 @@ namespace HVACIDA.UI.ViewModels
             set { if (_input != null) _input.Occupants = value; }
         }
 
+        /// <summary>
+        /// 房间换气次数(可编辑,写回 <see cref="SmallRoomInput.AirChangePerHour"/>)。
+        /// 读值走 <see cref="SmallRoomInput.EffectiveAirChangePerHour"/>:未填(0)显示为实际参与计算的 6 次/h,
+        /// 表里不再出现"显示 0、按 6 算"的分叉(2026-11-17 用户口径:默认一律 6)。
+        /// </summary>
         public double AirChangePerHour
         {
-            get => _input == null ? 0 : _input.AirChangePerHour;
+            get => _input == null ? 0 : _input.EffectiveAirChangePerHour;
             set { if (_input != null) _input.AirChangePerHour = value; }
         }
 

@@ -354,7 +354,7 @@ namespace HVACIDA.UI.ViewModels
         /// 命令层拾取空间后的回填:**追加**房间行(同名房间跳过)。
         /// 名称 / 面积 / 层高取自空间快照,屋顶面积默认与面积相同(F27 默认 = C27),
         /// 设备冷负荷取系统默认 1000 W,外墙长度留 0(由【测量外墙长度(两点)…】按钮量取),
-        /// 换气次数留 0(= 按房间类型取默认值)。
+        /// 换气次数用默认 6 次/h(2026-11-17 用户口径;不再按房间类型猜,需要时在表里改)。
         /// </summary>
         public void ApplyPickedSpaces(IList<SpaceSnapshot> spaces, string note)
         {
@@ -405,7 +405,6 @@ namespace HVACIDA.UI.ViewModels
                     picked.RoofAreaM2 = area;
                     picked.EquipmentCoolingW = HVACIDA.Core.Utils.HvacConstants.SmallEquipmentCoolingW;
                     picked.WallLengthM = 0;
-                    picked.AirChangePerHour = 0;
                     picked.SourceSpaceId = space.ElementId;   // 记住来源空间 → 下次开窗按 Id 重读模型(选项 A)
                     block.Rooms.Add(picked);
                     added++;

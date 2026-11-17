@@ -950,11 +950,27 @@ namespace HVACIDA.Smoke
             Check("加压送风机 D392 = S388×1.2 = 14412 m³/h", pressResult.Equipments[0].FlowM3H, 14412.4, 0.5);
 
             // ---------- 7) 行业口径:房间类型默认换气次数 + 结果表/明细表结构 ----------
-            CheckInt("卫生间默认换气次数 = 20", (int)SmallSystemInput.DefaultAirChangePerHour("男卫生间"), 20);
-            CheckInt("淋浴间默认换气次数 = 10", (int)SmallSystemInput.DefaultAirChangePerHour("淋浴间"), 10);
-            CheckInt("环控机房默认换气次数 = 6", (int)SmallSystemInput.DefaultAirChangePerHour("环控机房"), 6);
-            CheckInt("气瓶间默认换气次数 = 4", (int)SmallSystemInput.DefaultAirChangePerHour("气瓶间"), 4);
-            CheckInt("未识别类型默认换气次数 = 4", (int)SmallSystemInput.DefaultAirChangePerHour("其他房间"), 4);
+            CheckInt("参考换气次数:卫生间 20", (int)SmallSystemInput.ReferenceAirChangePerHour("男卫生间"), 20);
+            CheckInt("参考换气次数:淋浴间 10", (int)SmallSystemInput.ReferenceAirChangePerHour("淋浴间"), 10);
+            CheckInt("参考换气次数:环控机房 6", (int)SmallSystemInput.ReferenceAirChangePerHour("环控机房"), 6);
+            CheckInt("参考换气次数:气瓶间 4", (int)SmallSystemInput.ReferenceAirChangePerHour("气瓶间"), 4);
+            CheckInt("参考换气次数:未识别类型 4", (int)SmallSystemInput.ReferenceAirChangePerHour("其他房间"), 4);
+
+            // 2026-11-17 用户口径:换气次数默认一律 6 次/h(不再按房间类型猜;类型值只作工程参考)
+            var achBlank = new SmallRoomInput { Name = "未填换气次数", AreaM2 = 20, HeightM = 3 };
+            Check("未填换气次数按 6 次/h 参与计算", achBlank.EffectiveAirChangePerHour, 6, 1e-9);
+            Check("此时换气次数通风量 = 面积 × 层高 × 6", achBlank.VolumeFlowByAchM3H, 20 * 3 * 6, 1e-9);
+            var achZero = new SmallRoomInput { Name = "填0", AreaM2 = 20, HeightM = 3, AirChangePerHour = 0 };
+            Check("显式填 0 也按 6(界面不出现 0 次/h)", achZero.EffectiveAirChangePerHour, 6, 1e-9);
+            Check("SmallRoomInput.Create 默认换气次数 = 6", SmallRoomInput.Create("新行", 10, 3).AirChangePerHour, 6, 1e-9);
+            var exhaustBlank = new SmallSystemInput { SystemType = SmallSystemType.ExhaustVentilation };
+            exhaustBlank.Rooms.Add(new SmallRoomInput
+            {
+                Name = "男卫生间", RoomType = "男卫生间", AreaM2 = 5, HeightM = 3
+            });
+            var exhaustBlankResult = calc.Calculate(exhaustBlank);
+            Check("排风系统未填换气次数也按 6(不再按类型取 20)",
+                exhaustBlankResult.Rooms[0].ExhaustM3H, 5 * 3 * 6, 1e-9);
 
             CheckInt("全空气结果表分区数 >= 4", ResultTable.ForSmallSystem(allAir, allAirResult).Sections.Count >= 4 ? 1 : 0, 1);
             CheckInt("排烟系统房间明细列数 = 5(序号/分区/面积/排烟量/补风量)",

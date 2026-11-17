@@ -17,8 +17,8 @@ namespace HVACIDA.Core.Models
         public string Name { get; set; } = "";
 
         /// <summary>
-        /// 房间类型(排风系统据此取默认换气次数:卫生间 20、气瓶间 4、环控机房 6、
-        /// 电缆引入间 4、淋浴间 10、污水/废水泵房 4、其他 4)。空 = 其他。
+        /// 房间类型(排风系统用来标注/分组;换气次数不再按类型自动套值 —— 默认一律 6 次/h,
+        /// 卫生间 20、淋浴间 10、环控机房 6、气瓶间 / 电缆引入间 / 泵房 4 属工程常用值,由设计人按需填)。
         /// </summary>
         public string RoomType { get; set; } = "";
 
@@ -40,8 +40,16 @@ namespace HVACIDA.Core.Models
         /// <summary>房间预测人数(人)(I27 / G64)。</summary>
         public double Occupants { get; set; }
 
-        /// <summary>房间换气次数 次/h(P27 / K64)。</summary>
+        /// <summary>房间换气次数 次/h(P27 / K64,公式文档默认 6,用户可修改)。</summary>
         public double AirChangePerHour { get; set; }
+
+        /// <summary>
+        /// 实际参与计算的换气次数:≤ 0(未填 / 旧数据 / 模型拾取后清空)一律按 **6 次/h**(P27 / K64 的文档默认值),
+        /// 不再按房间类型猜(卫生间 20 之类属工程常用值,需要就填进 <see cref="AirChangePerHour"/>)。
+        /// <para>2026-11-17 用户口径:「换气次数默认的应该都是 6 次」。</para>
+        /// </summary>
+        public double EffectiveAirChangePerHour =>
+            AirChangePerHour > 0 ? AirChangePerHour : Utils.HvacConstants.SmallRoomAirChangePerHour;
 
         /// <summary>
         /// 房间**室内机台数**(多联机+新风;默认每房间 1 台,可在房间表里手工改)。
@@ -94,7 +102,7 @@ namespace HVACIDA.Core.Models
             };
         }
 
-        /// <summary>面积×层高×换气次数 m³/h(排风/送排风系统与换气次数通风量都用它)。</summary>
-        public double VolumeFlowByAchM3H => AreaM2 * HeightM * AirChangePerHour;
+        /// <summary>面积×层高×换气次数 m³/h(排风/送排风系统与换气次数通风量都用它;换气次数按 <see cref="EffectiveAirChangePerHour"/>)。</summary>
+        public double VolumeFlowByAchM3H => AreaM2 * HeightM * EffectiveAirChangePerHour;
     }
 }

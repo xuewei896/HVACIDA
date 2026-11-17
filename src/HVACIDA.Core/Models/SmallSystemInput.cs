@@ -243,8 +243,15 @@ namespace HVACIDA.Core.Models
             }
         }
 
-        /// <summary>按房间类型取默认换气次数(文档给定值)。</summary>
-        public static double DefaultAirChangePerHour(string roomType)
+        /// <summary>
+        /// 按房间类型给出的**工程参考**换气次数(卫生间 20、淋浴间 10、环控机房 6、气瓶间 / 电缆引入间 / 泵房 / 其他 4)。
+        /// <para>
+        /// ⚠ 这不是计算默认值:2026-11-17 用户口径「换气次数默认都是 6 次」,计算一律走
+        /// <see cref="SmallRoomInput.EffectiveAirChangePerHour"/>(未填按 6,公式文档 P27 / K64 默认值)。
+        /// 本方法只作参考值/示例取值(界面提示、自检验证文档示例 5386 时显式填用)。
+        /// </para>
+        /// </summary>
+        public static double ReferenceAirChangePerHour(string roomType)
         {
             string t = roomType ?? "";
             if (t.Contains("卫生间") || t.Contains("男卫") || t.Contains("女卫") || t.Contains("厕所")) return 20.0;

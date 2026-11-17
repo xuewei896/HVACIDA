@@ -103,7 +103,7 @@ namespace HVACIDA.Core.Services
                     RoofAreaM2 = room.RoofAreaM2,
                     EquipmentCoolingW = room.EquipmentCoolingW,
                     Occupants = room.Occupants,
-                    AirChangePerHour = GetAch(x, room)
+                    AirChangePerHour = room.EffectiveAirChangePerHour
                 };
 
                 row.LightingCoolingW = x.LightingIndexWm2 * room.AreaM2;                       // H27
@@ -258,7 +258,7 @@ namespace HVACIDA.Core.Services
                     WallLengthM = room.WallLengthM,
                     RoofAreaM2 = room.RoofAreaM2,
                     Occupants = room.Occupants,
-                    AirChangePerHour = GetAch(x, room)
+                    AirChangePerHour = room.EffectiveAirChangePerHour
                 };
 
                 row.LightingCoolingW = x.LightingIndexWm2 * room.AreaM2;                    // F64
@@ -376,7 +376,7 @@ namespace HVACIDA.Core.Services
             {
                 SystemType = x.SystemType,
                 Note = "计算排风量 = 空间面积 × 高度 × 换气次数;选型排风量 = 计算排风量 × 选型系数。" +
-                       "换气次数按房间类型取默认值(卫生间 20、淋浴间 10、环控机房 6、气瓶间/电缆引入间/泵房/其他 4),可逐房间修改。",
+                       "换气次数默认 6 次/h(公式文档默认值),可逐房间修改;卫生间 20、淋浴间 10、环控机房 6、气瓶间 / 电缆引入间 / 泵房 4 属工程常用值,按需填。",
                 PendingNote = "口径(2026-09-15 确认:按公式文档文字计算,示例仅用于理解公式):" +
                               "选型排风量 = 计算排风量 × 1.1。示例 EAF-A601 用的 1.3 属示例取值,不作为基准;" +
                               "选型系数可在本窗修改。"
@@ -385,7 +385,7 @@ namespace HVACIDA.Core.Services
             int index = 0;
             foreach (var room in x.Rooms ?? new List<SmallRoomInput>())
             {
-                double ach = GetAch(x, room);
+                double ach = room.EffectiveAirChangePerHour;
                 var row = new SmallRoomResult
                 {
                     Index = ++index,
@@ -486,7 +486,7 @@ namespace HVACIDA.Core.Services
             double maxSupplyOrMakeup = 0;
             foreach (var room in x.Rooms ?? new List<SmallRoomInput>())
             {
-                double ach = GetAch(x, room);
+                double ach = room.EffectiveAirChangePerHour;
                 var row = new SmallRoomResult
                 {
                     Index = ++index,
@@ -610,15 +610,6 @@ namespace HVACIDA.Core.Services
             double numerator = supplyEnthalpy * 1000.0 - dewHumidityGkg * ratio - 1.01 * indoorTempC * 1000.0;
             double humidity = numerator / denominator;
             return humidity < 0 ? 0 : humidity;
-        }
-
-        /// <summary>房间换气次数:未填(0)时按房间类型取文档默认值。</summary>
-        private static double GetAch(SmallSystemInput x, SmallRoomInput room)
-        {
-            if (room.AirChangePerHour > 0) return room.AirChangePerHour;
-            return string.IsNullOrEmpty(room.RoomType)
-                ? HvacConstants.SmallRoomAirChangePerHour
-                : SmallSystemInput.DefaultAirChangePerHour(room.RoomType);
         }
 
         private static double TotalArea(SmallSystemInput x)
