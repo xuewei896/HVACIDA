@@ -44,9 +44,8 @@
         <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6"
                 ToolTip="需求 2.3 / 2.4:在模型里选取本系统任意构件 → 自动读管网 → 算最不利环路 → 给出需求全压 / 扬程">
             <StackPanel>
-                <TextBlock Text="{Binding KindName, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E"/>
+                <TextBlock Text="{Binding KindName, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E" ToolTip="{Binding PendingNote}"/>
                 <TextBlock Text="{Binding SourceNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,4,0,0"/>
-                <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
             </StackPanel>
         </Border>
 

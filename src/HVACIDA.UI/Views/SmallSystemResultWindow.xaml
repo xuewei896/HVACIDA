@@ -34,9 +34,8 @@
         <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6"
                 ToolTip="全站多系统汇总;数据源 small-systems.xml(全站所有已保存的小系统);公式源《小系统空调负荷、送排风、排烟计算公式.docx》">
             <StackPanel>
-                <TextBlock Text="{Binding SummaryTitle, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E"/>
+                <TextBlock Text="{Binding SummaryTitle, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E" ToolTip="{Binding PendingNote}"/>
                 <TextBlock Text="{Binding WeatherNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,4,0,0"/>
-                <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
             </StackPanel>
         </Border>
 
@@ -124,8 +123,7 @@
             </DataGrid>
 
             <StackPanel Grid.Row="8" Margin="0,8,0,0">
-                <TextBlock Text="{Binding DetailNote}" TextWrapping="Wrap" Foreground="#C0392B"/>
-                <Border Margin="0,6,0,0" Padding="8,6" Background="#F3F7FD"
+                <Border ToolTip="{Binding DetailNote}" Margin="0,6,0,0" Padding="8,6" Background="#F3F7FD"
                         BorderBrush="#D6E2F0" BorderThickness="1">
                     <TextBlock Text="{Binding Note}" TextWrapping="Wrap" Foreground="#5A5A5A"/>
                 </Border>

@@ -36,7 +36,6 @@
                 <TextBlock Text="{Binding SummaryTitle, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E"
                            ToolTip="按「类别 + 族 + 类型 + 单位」归并;单位进归并键,长度与件数不互相求和"/>
                 <TextBlock Text="{Binding SourceNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,4,0,0"/>
-                <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
             </StackPanel>
         </Border>
 

@@ -34,8 +34,7 @@
         <Border DockPanel.Dock="Top" Background="#E8F0FE" Padding="8,6"
                 ToolTip="数据源 hydraulic.xml;打开即算 —— 每套系统各自算,汇总只相加可加量(压力不可加)">
             <StackPanel>
-                <TextBlock Text="{Binding SummaryTitle, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E"/>
-                <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
+                <TextBlock Text="{Binding SummaryTitle, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E" ToolTip="{Binding PendingNote}"/>
             </StackPanel>
         </Border>
 

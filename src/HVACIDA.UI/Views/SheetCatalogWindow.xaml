@@ -36,7 +36,6 @@
                 <TextBlock Text="{Binding SummaryTitle, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#23486E"
                            ToolTip="需求 2.6:DWG / DXF 走 Revit 导出接口;PDF 走系统打印机(依赖本机 PDF 打印机驱动)"/>
                 <TextBlock Text="{Binding SourceNote}" TextWrapping="Wrap" Foreground="#5A5A5A" Margin="0,4,0,0"/>
-                <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
             </StackPanel>
         </Border>
 
@@ -120,8 +119,7 @@
                        Text="三、自动标注结果"
                        ToolTip="平面视图里的空间名称 + 编号;逐视图计数"/>
             <StackPanel Grid.Row="7">
-                <TextBlock Text="{Binding TagNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,0,0,4"/>
-                <DataGrid x:Name="TagGrid" Style="{StaticResource Grid}" MaxHeight="140"
+                <DataGrid x:Name="TagGrid" Style="{StaticResource Grid}" ToolTip="{Binding TagNote}" MaxHeight="140"
                           ItemsSource="{Binding TagRows}" AlternatingRowBackground="#F7FAFD"
                           HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Columns>

@@ -48,8 +48,7 @@
         <Border DockPanel.Dock="Top" Background="#FFF4E5" Padding="8,6"
                 ToolTip="公式来源《小系统空调负荷、送排风、排烟计算公式.docx》(需求 2.2.3.2);一个系统可录入多个房间 / 防烟分区,结果为「系统结果 + 房间明细 + 设备选型」三张表">
             <StackPanel>
-                <TextBlock Text="{Binding SystemTypeName, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#8A6100"/>
-                <TextBlock Text="{Binding PendingNote}" TextWrapping="Wrap" Foreground="#C0392B" Margin="0,4,0,0"/>
+                <TextBlock Text="{Binding SystemTypeName, Mode=OneWay}" TextWrapping="Wrap" FontWeight="Bold" Foreground="#8A6100" ToolTip="{Binding PendingNote}"/>
             </StackPanel>
         </Border>
 
