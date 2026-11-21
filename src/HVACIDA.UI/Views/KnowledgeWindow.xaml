@@ -1,4 +1,4 @@
-﻿<Window x:Class="HVACIDA.UI.Views.KnowledgeWindow"
+<Window x:Class="HVACIDA.UI.Views.KnowledgeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="规范知识库 - HVACIDA"
@@ -267,7 +267,7 @@
                          Background="#F7FAFD" BorderBrush="#DDDDDD" BorderThickness="1" Padding="8"
                          FontFamily="Consolas"/>
                 <TextBlock x:Name="ScopeBox" Text="{Binding ScopeNote}" TextWrapping="Wrap"
-                           Foreground="#C0392B" Margin="0,4,0,0"/>
+                           Foreground="#5A5A5A" Margin="0,4,0,0"/>
             </StackPanel>
 
             <!-- 四、ima 在线知识库命中(没查过 / 没配凭证时不摆空表) -->

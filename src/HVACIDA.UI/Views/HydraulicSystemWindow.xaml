@@ -238,7 +238,7 @@
                 </Border>
                 <StackPanel Grid.Row="2" Margin="0,6,0,0">
                     <TextBlock Text="{Binding Summary}" FontWeight="Bold" Foreground="#23486E" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding CheckVerdict}" Foreground="#C0392B" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    <TextBlock Text="{Binding CheckVerdict}" Foreground="#5A5A5A" TextWrapping="Wrap" Margin="0,2,0,0"/>
                     <TextBlock Text="{Binding Note}" Foreground="#5A5A5A" TextWrapping="Wrap" Margin="0,2,0,0"/>
                 </StackPanel>
             </Grid>
