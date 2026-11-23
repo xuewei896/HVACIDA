@@ -25,3 +25,18 @@ deploy/HVACIDA.addin.installed
 *API key*.txt
 *apikey*.txt
 /Revit AI助手使用的API key.txt
+
+# 论文(LaTeX)构建中间件:只入库 tex/bib/figures/pdf
+paper/*.aux
+paper/*.log
+paper/*.blg
+paper/*.out
+paper/*.synctex.gz
+paper/.preview/
+paper2/*.aux
+paper2/*.log
+paper2/*.blg
+paper2/*.out
+paper2/*.synctex.gz
+paper2/.preview/
+
