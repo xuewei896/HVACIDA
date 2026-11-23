@@ -118,11 +118,56 @@ Revit 2020 的空间(Space)属于"存在于 API、不在原生对象模型"的�
 \item \textbf{示例只用于理解}。文档中的算例作为回归输入,而不是口径来源;当算例与正文文字不一致时,以正文为准并在结果中说明差异。
 \end{enumerate}
 
+表\ref{tab:formula} 以多联机+新风为例,把一段公式链按"文档给出的量—代码中的实现—示例校核值"三列对齐。这样排的好处是:评审时不必读代码,只要对着表看三列是否自洽,就能判断口径有没有走样;改公式时也只需改一行并更新校核值。
+
+\begin{table}[H]
+\centering
+\caption{多联机+新风公式链的文档—代码—校核值对照(示例 7 房间)}\label{tab:formula}
+\footnotesize
+\begin{tabular}{p{3.1cm}p{5.6cm}p{4.1cm}}
+\toprule
+计算量 & 代码实现(节选) & 示例校核值 \\
+\midrule
+房间冷负荷 & \texttt{SmallRoomResult.TotalCoolingKw} & 1.888 kW \\
+消除余热通风量 & \texttt{HeatVentilationM3H} & 431.3785 m³/h \\
+计算通风量 & \texttt{ActualVentilationM3H} & 431.3785 m³/h \\
+新风冷负荷 & \texttt{UnitCoolingKw} & 0.5012 kW \\
+单台计算/选型冷量 & \texttt{UnitCalcCoolingKw} / \texttt{UnitSelectCoolingKw} & 2.0768 / 2.8 kW \\
+房间选型冷量 & \texttt{RoomSelectCoolingKw} & 2.8 kW \\
+室外机选型冷量 & \texttt{OutdoorUnitSelectCoolingKw} & 27.3184 kW \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 以多联机+新风系统为例,房间冷负荷由设备、照明与人员三项构成,消除余热通风量与换气次数通风量取大得到计算通风量,室内状态点由 7 次多项式饱和含湿量与相对湿度确定,新风冷负荷取人员新风量与新风/室内焓差之积并乘管道附加系数。室内机选型按"台数 $\times$ 单台选型冷量"分摊,单台计算冷量在设计人录入台数后按房间冷负荷乘选型系数再除以台数;室外机选型冷量由房间选型冷量合计与新风机组选型冷量相加。上述链条在代码中与示例工作簿的 20 列逐格对应,任一环节改动都会被断言捕获。
 
 \subsection{结果同源与计算书生成}
 
-计算结果先组织为与界面无关的结果表对象(分节、行、单位、小数位),再由三个渲染器分别输出:界面表格、文本计算书、Excel 工作簿。三者读同一份对象,因此不会出现"界面一个数、计算书另一个数"。
+计算结果先组织为与界面无关的结果表对象(分节、行、单位、小数位),再由三个渲染器分别输出:界面表格、文本计算书、Excel 工作簿。三者读同一份对象,因此不会出现"界面一个数、计算书另一个数"。图\ref{fig:pipeline} 给出这条"一次计算、三处呈现"的链路。
+
+\begin{figure}[H]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=0.5cm,
+  box/.style={draw,rounded corners=2pt,minimum height=1.05cm,text width=3.1cm,align=center,font=\small},
+  arr/.style={-{Stealth[length=2mm]},thick}
+]
+\node[box,fill=blue!6] (model) {模型空间 / 录入参数};
+\node[box,fill=green!6,right=of model] (core) {计算内核\\六类系统 + 水力};
+\node[box,fill=orange!8,right=of core] (table) {结果对象\\分节 · 行 · 单位 · 小数位};
+\node[box,fill=gray!8,below=0.75cm of table] (ui) {界面表格};
+\node[box,fill=gray!8,left=of ui] (txt) {文本计算书};
+\node[box,fill=gray!8,left=of txt] (xls) {Excel 计算书};
+
+\draw[arr] (model) -- (core);
+\draw[arr] (core) -- (table);
+\draw[arr] (table) -- (ui);
+\draw[arr] (table.south west) -- (txt.north);
+\draw[arr] (table.west) -- (xls.north east);
+\end{tikzpicture}}
+\caption{一次计算、三处呈现:结果对象与三个渲染器}\label{fig:pipeline}
+\end{figure}
 
 Excel 计算书由自写的 XLSX 写入器生成(直接拼装 ZIP 与 XML 部件),不依赖第三方库,与"不引入额外运行时依赖"的约束一致。小系统单套计算书包含计算参数、系统结果、房间明细(带合计行)、设备选型、口径与待补五页;房间明细的列定义与界面参考表共用同一份元数据,列名、顺序与小数位不会分叉。
 
@@ -131,6 +176,34 @@ Excel 计算书由自写的 XLSX 写入器生成(直接拼装 ZIP 与 XML 部件
 材料表按"类别 + 族 + 类型 + 单位"归并,单位进入归并键,长度与件数不互相求和;图框模块读取模型中的图纸,列出编号、名称、图框类型、图幅、视图数与是否空图框,支持按 DWG/DXF 逐张导出、PDF 走系统打印机,以及在平面视图中批量标注空间名称与编号。
 
 \section{工程应用}
+
+软件推荐的使用顺序如图\ref{fig:workflow}:先把项目级参数(工程、气象、公共区)填准,再做大系统与小系统计算,最后按需用水力、统计与出图。这个顺序不是界面排列的偶然,而是数据依赖决定的——气象参数影响负荷,公共区面积影响排烟,负荷结果又决定选型,顺序颠倒会得到"改一处、全表重算"的返工。
+
+\begin{figure}[H]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=0.45cm,
+  pstep/.style={draw,rounded corners=2pt,minimum height=0.9cm,text width=2.55cm,align=center,font=\small\songti},
+  arr/.style={-{Stealth[length=1.8mm]},thick}
+]
+\node[pstep,fill=blue!6] (s1) {1. 工程信息};
+\node[pstep,fill=blue!6,right=of s1] (s2) {2. 气象参数};
+\node[pstep,fill=blue!6,right=of s2] (s3) {3. 公共区参数};
+\node[pstep,fill=green!6,right=of s3] (s4) {4. 大系统负荷};
+\node[pstep,fill=green!6,below=0.55cm of s4] (s5) {5. 大系统结果};
+\node[pstep,fill=orange!8,left=of s5] (s6) {6. 小系统六类};
+\node[pstep,fill=gray!8,left=of s6] (s7) {7. 水力 / 统计 / 出图};
+
+\draw[arr] (s1) -- (s2);
+\draw[arr] (s2) -- (s3);
+\draw[arr] (s3) -- (s4);
+\draw[arr] (s4) -- (s5);
+\draw[arr] (s5) -- (s6);
+\draw[arr] (s6) -- (s7);
+\end{tikzpicture}}
+\caption{推荐使用顺序:先参数、再负荷、后小系统与出图}\label{fig:workflow}
+\end{figure}
 
 以某地铁车站为例:站厅公共区 2\,860 m$^2$、站台公共区 1\,980 m$^2$,设 8 个设备管理用房。设计人在公共区参数窗完成空间识别与客流录入后,大系统负荷计算窗按 7 个分区录入围护结构、客流、照明、设备与新风参数,计算结果窗给出计算参数与选型参数两段(图\ref{fig:large})。小系统按房间类型分别建立全空气一次回风与多联机+新风系统,房间表按参考表列出每个房间的逐项计算值(图\ref{fig:vrf}),设计人只需维护面积、人数、设备冷负荷与选型冷量等少量输入。
 
@@ -182,11 +255,56 @@ Excel 计算书由自写的 XLSX 写入器生成(直接拼装 ZIP 与 XML 部件
 
 \subsection{软件自检}
 
-数值之外,软件把"能不能打开、绑定是否有效、功能结构是否完整"也做成可执行检查。计算内核的数值与结构自检含 900 余条断言,覆盖六类系统、气象库、材料表、水力、知识库与 AI 助手;窗口自检在无 Revit 的环境下实例化每个窗口,逐条校验 12 个窗口约 450 个数据绑定均可解析,并检查按钮、表格列数与保存行为;功能区自检校验 7 个面板、24 个按钮、24 组 16/32 像素图标齐全且可解码。三套检查在每次提交前运行,任一失败即阻断。
+数值之外,软件把"能不能打开、绑定是否有效、功能结构是否完整"也做成可执行检查。计算内核的数值与结构自检含 900 余条断言,覆盖六类系统、气象库、材料表、水力、知识库与 AI 助手;窗口自检在无 Revit 的环境下实例化每个窗口,逐条校验 12 个窗口约 450 个数据绑定均可解析,并检查按钮、表格列数与保存行为;功能区自检校验 7 个面板、24 个按钮、24 组 16/32 像素图标齐全且可解码。三套检查在每次提交前运行,任一失败即阻断(表\ref{tab:gates})。
+
+\begin{table}[H]
+\centering
+\caption{三套提交前门禁}\label{tab:gates}
+\small
+\begin{tabular}{p{3.0cm}p{6.2cm}p{3.2cm}p{2.2cm}}
+\toprule
+门禁 & 覆盖内容 & 规模 & 失败处理 \\
+\midrule
+计算内核自检 & 大系统负荷/排烟、六类小系统、气象库、水力、材料表、知识库 & 900+ 条断言 & 阻断提交 \\
+窗口装载自检 & 12 个窗口、约 450 个数据绑定、按钮与保存行为 & 190+ 项 & 阻断提交 \\
+功能区自检 & 7 面板 / 24 按钮 / 16·32 像素图标 & 24 组图标 & 阻断提交 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{讨论}
 
-本文的验证是"口径一致性"验证,回答的是"算出来的数是否等于文档规定",而不是"设计结果是否最优"。后者依赖工程判断,不属于软件职责。软件的局限主要有三点:一是公式以院内文档为准,若文档修订,代码需要同步移植并更新回归基线;二是模型取值依赖空间已放置且已计算体积,未放置空间的面积取不到,需要设计人补录;三是目前仅在 Revit 2020 上验证,高版本的 API 差异(如单位制接口)尚未覆盖。
+本文的验证是"口径一致性"验证,回答的是"算出来的数是否等于文档规定",而不是"设计结果是否最优"。后者依赖工程判断,不属于软件职责。
+
+\paragraph{为什么把"同源"放在"自动化"之前。}
+设计院真正的成本不在"算一遍",而在"复核一遍":同一组数出现在界面、计算书和 Excel 里,只要有一处对不上,校审就要停下来找源头。因此本软件先解决"一次计算、三处呈现",再谈减少录入。反过来,如果只做自动化而各出口各自计算,速度越快、返工越大。这也是三层架构把结果表对象放在 Core、让三个渲染器都只读它的原因。
+
+\paragraph{门禁是不是过度工程。}
+写一条断言的成本与移植一条公式相当,看起来是"多花一倍时间"。但回归的成本被摊薄了:没有断言时,改一处公式要人工翻六类算例、逐个对数;有断言时,一条命令跑完 900 项,失败项直接定位到行。以本项目 112 次提交计,断言在所有改动上重复使用,单次成本早已抵消。
+
+\paragraph{示例与正文冲突时怎么办。}
+院内文档的算例常有"表里的数对不上正文公式"的情况。本软件的选择是:以正文为准、把差异写进口径说明、并让断言只锚定正文。这不是"绕过矛盾",而是把矛盾显式化——设计人看到"示例 157.6 / 本软件 162.2,差 3%,原因是示例按消除余热通风量取值"时,能自行判断该信哪个;若悄悄挑一个,反而埋下隐患。
+
+表\ref{tab:compare} 从五个维度对比了三种常见做法。需要说明的是,通用 BIM 工具并非"更差",而是在"通用"与"贴合院内口径"之间存在取舍;本软件牺牲了通用性,换取口径可追溯与成果同源。
+
+\begin{table}[H]
+\centering
+\caption{三种做法的对比}\label{tab:compare}
+\small
+\begin{tabular}{p{2.6cm}p{4.0cm}p{4.0cm}p{4.2cm}}
+\toprule
+维度 & Excel 表格 & 通用 BIM 插件 & 本软件 \\
+\midrule
+几何来源 & 图纸/模型人工抄录 & 模型 & 模型(记录来源空间 Id) \\
+计算口径 & 分散在多份工作簿 & 通用引擎,口径不可见 & 院内文档逐条移植,可对照 \\
+成果一致性 & 手工整理,易分叉 & 部分同源 & 界面/文本/Excel 同源 \\
+可回归 & 无 & 弱 & 900+ 条断言 \\
+适用面 & 任意项目 & 通用建筑 & 地铁车站暖通 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+软件的局限主要有三点:一是公式以院内文档为准,若文档修订,代码需要同步移植并更新回归基线;二是模型取值依赖空间已放置且已计算体积,未放置空间的面积取不到,需要设计人补录;三是目前仅在 Revit 2020 上验证,高版本的 API 差异(如单位制接口)尚未覆盖。
 
 \section{结论}
 

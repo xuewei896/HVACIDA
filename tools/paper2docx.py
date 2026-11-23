@@ -26,7 +26,7 @@ def write(p, s):
     io.open(p, "w", encoding="utf-8", newline="").write(s)
 
 
-def build(paper_dir, out_docx, tikz_png, tikz_name, title, author_name, affiliation):
+def build(paper_dir, out_docx, tikz_pngs, title, author_name, affiliation):
     tex = read(os.path.join(paper_dir, "main.tex"))
     body = tex.split(r"\begin{document}", 1)[1].split(r"\end{document}", 1)[0]
     body = body.replace(r"\maketitle", "")
@@ -60,7 +60,9 @@ def build(paper_dir, out_docx, tikz_png, tikz_name, title, author_name, affiliat
         fig_no["n"] += 1
         cap = re.search(r"\\caption\{([^}]*)\}", block)
         caption = cap.group(1) if cap else ""
-        return "\n\n[[FIG:%s|%s]]\n\n" % (tikz_name, caption)
+        lab = re.search(r"\\label\{fig:([^}]+)\}", block)
+        name = lab.group(1) if lab else ("fig%d" % fig_no["n"])
+        return "\n\n[[FIG:%s|%s]]\n\n" % (name, caption)
 
     body = re.sub(r"\\begin\{figure\}(?:\[H\])?[\s\S]*?\\end\{figure\}", fig_repl, body)
 
@@ -197,11 +199,14 @@ def build(paper_dir, out_docx, tikz_png, tikz_name, title, author_name, affiliat
         if not p.text.strip().startswith("[[FIG:"):
             continue
         spec = p.text.strip()[6:-2]
-        _, caption = spec.split("|", 1)
+        name, caption = spec.split("|", 1)
+        img_path = tikz_pngs.get(name, "")
+        if not img_path or not os.path.exists(img_path):
+            raise SystemExit("missing tikz png for " + name)
         for r in list(p.runs):
             r._r.getparent().remove(r._r)
         run = p.add_run()
-        run.add_picture(tikz_png, width=Cm(15))
+        run.add_picture(img_path, width=Cm(15))
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.paragraph_format.first_line_indent = Pt(0)
         cap_para = doc.add_paragraph(caption, style="Caption")
@@ -270,10 +275,13 @@ if __name__ == "__main__":
     if which == "1":
         build(r"D:\DSH\paper",
               r"D:\DSH\paper\论文一-基于Revit二次开发的地铁车站机电系统BIM正向设计软件研发与应用.docx",
-              r"D:\DSH\.tmp-docx\fig1\png288\page-0001.png", "arch",
+              {"arch": r"D:\DSH\paper\figures\fig-arch.png",
+               "pipeline": r"D:\DSH\paper\figures\fig-pipeline.png",
+               "workflow": r"D:\DSH\paper\figures\fig-workflow.png"},
               "基于 Revit 二次开发的地铁车站机电系统BIM 正向设计软件研发与应用", name, org)
     else:
         build(r"D:\DSH\paper2",
               r"D:\DSH\paper2\论文二-面向地铁暖通设计的规范知识库与大模型工具调用方法及实现.docx",
-              r"D:\DSH\.tmp-docx\fig2\png\page-0001.png", "flow",
+              {"flow": r"D:\DSH\paper2\figures\fig-flow.png",
+               "perm": r"D:\DSH\paper2\figures\fig-perm.png"},
               "面向地铁暖通设计的规范知识库与大模型工具调用方法及实现", name, org)
