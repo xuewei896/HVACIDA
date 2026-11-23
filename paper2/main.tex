@@ -188,7 +188,13 @@ AI 对话窗(图\ref{fig:ai})把对话、工具调用与设置放在同一窗口
 
 本文把大模型进入设计软件的门槛归纳为两条:知识可溯源、操作可审计。方法上以条目化知识库提供出处,以受控命令总线隔离模型与模型数据,以两级开关和原生确认限制修改权限,以离线降级保证不可用时的可用性。在 Revit 插件中的实现与 20 余项回归表明,这些约束可以被工程化地落实,而不是停留在提示词层面。后续将扩展命令集(批量读取与建模)、引入回答质量的人工评价,并把知识条目与院内文档的版本管理打通。
 
-\bibliographystyle{plain}
-\bibliography{references}
+
+\begin{thebibliography}{9}
+\bibitem{lewis2020rag} Lewis P, Perez E, Piktus A, et al. Retrieval-augmented generation for knowledge-intensive NLP tasks[J]. arXiv preprint arXiv:2005.11401, 2020.
+\bibitem{yao2022react} Yao S, Zhao J, Yu D, et al. ReAct: synergizing reasoning and acting in language models[J]. arXiv preprint arXiv:2210.03629, 2022.
+\bibitem{schick2023toolformer} Schick T, Dwivedi-Yu J, Dess\`i R, et al. Toolformer: language models can teach themselves to use tools[J]. arXiv preprint arXiv:2302.04761, 2023.
+\bibitem{du2025bimcommand} Du C, Deng Z, Nousias S, et al. Predictive modeling: BIM command recommendation based on large-scale usage logs[J]. arXiv preprint arXiv:2504.05319, 2025.
+\bibitem{taghaddos2019} Taghaddos H, Mashayekhi A, Sherafat B. Automation of construction quantity take-off: using building information modeling (BIM)[J]. arXiv preprint arXiv:1906.02400, 2019.
+\end{thebibliography}
 
 \end{document}

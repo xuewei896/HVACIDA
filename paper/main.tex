@@ -110,7 +110,7 @@ Revit 2020 的空间(Space)属于"存在于 API、不在原生对象模型"的�
 
 \subsection{计算内核的文档化移植}
 
-计算口径以院内《大系统负荷计算公式》《小系统空调负荷、送排风、排烟计算公式》为准。移植时遵循三条约束:
+计算口径以院内《大系统负荷计算公式》《小系统空调负荷、送排风、排烟计算公式》为准;室外气象数据取自 GB 50736 附录 A\cite{gb50736},车站室内设计参数按 GB 50157 取用\cite{gb50157},排烟量按 GB 51251 的单位面积风量口径复核\cite{gb51251}。移植时遵循三条约束:
 
 \begin{enumerate}
 \item \textbf{逐式对应}。每个方法在注释中标注公式在文档中的位置与含义,系数集中定义为常量,便于与文档逐条对照。
@@ -192,7 +192,15 @@ Excel 计算书由自写的 XLSX 写入器生成(直接拼装 ZIP 与 XML 部件
 
 本文实现的机电系统 BIM 正向设计软件以三层架构把计算内核与 Revit 解耦,用文档化移植保证计算口径可追溯,用同源渲染保证界面、计算书与 Excel 一致,用可执行的数值与结构自检保证改动可控。北京站负荷算例与六类小系统算例的逐格校核表明,软件的关键计算结果与院内工作簿一致;工程应用表明,设计人可以把精力从"抄数与整理"转向"判断与选型"。后续工作将围绕高版本 Revit 适配、模型回写(把选型结果写回设备参数)以及计算书模板的可配置化展开。
 
-\bibliographystyle{plain}
-\bibliography{references}
+
+\begin{thebibliography}{9}
+\bibitem{taghaddos2019} Taghaddos H, Mashayekhi A, Sherafat B. Automation of construction quantity take-off: using building information modeling (BIM)[J]. arXiv preprint arXiv:1906.02400, 2019.
+\bibitem{noardo2020} Noardo F, Wu T, Arroyo Ohori K, et al. IFC models for (semi)automating common planning checks for building permits[J]. arXiv preprint arXiv:2011.03117, 2020.
+\bibitem{quinn2022} Quinn C, Zargar Shabestari A, Litoiu M, et al. Building automation system data integration with BIM: data structure and supporting case study[J]. arXiv preprint arXiv:2205.05518, 2022.
+\bibitem{revitapi2020} Autodesk. Revit 2020 API developer guide[EB/OL]. https://www.autodesk.com/developer-network/platform-technologies/revit, 2019.
+\bibitem{gb50736} 中华人民共和国住房和城乡建设部. 民用建筑供暖通风与空气调节设计规范: GB 50736---2012[S]. 北京: 中国建筑工业出版社, 2012.
+\bibitem{gb50157} 中华人民共和国住房和城乡建设部. 地铁设计规范: GB 50157---2013[S]. 北京: 中国建筑工业出版社, 2013.
+\bibitem{gb51251} 中华人民共和国住房和城乡建设部. 建筑防烟排烟系统技术标准: GB 51251---2017[S]. 北京: 中国计划出版社, 2017.
+\end{thebibliography}
 
 \end{document}
