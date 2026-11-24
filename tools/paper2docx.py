@@ -136,7 +136,7 @@ def build(paper_dir, out_docx, tikz_pngs, title, author_name, affiliation):
     normal.paragraph_format.space_before = Pt(0)
     normal.paragraph_format.space_after = Pt(0)
 
-    for name, size, align, cjk in (("Title", 18, WD_ALIGN_PARAGRAPH.CENTER, "黑体"),
+    for name, size, align, cjk in (("Title", 18, WD_ALIGN_PARAGRAPH.CENTER, "微软雅黑"),
                                    ("Author", 12, WD_ALIGN_PARAGRAPH.CENTER, "宋体")):
         try:
             st = styles[name]
@@ -153,7 +153,7 @@ def build(paper_dir, out_docx, tikz_pngs, title, author_name, affiliation):
             st = styles[name]
         except KeyError:
             continue
-        set_font(st, cjk="黑体", size=size, bold=True)
+        set_font(st, cjk="微软雅黑", size=size, bold=True)
         st.paragraph_format.space_before = Pt(before)
         st.paragraph_format.space_after = Pt(after)
         st.paragraph_format.line_spacing = 1.3
@@ -169,6 +169,12 @@ def build(paper_dir, out_docx, tikz_pngs, title, author_name, affiliation):
         st.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
         st.paragraph_format.space_before = Pt(3)
         st.paragraph_format.space_after = Pt(6)
+
+    # 标题与各级标题的 run 也强制中文字体(避免 theme 字体丢字)
+    for p in doc.paragraphs:
+        if p.style.name == "Title" or p.style.name.startswith("Heading"):
+            for r in p.runs:
+                set_font(r, cjk="微软雅黑")
 
     # 标题:作者分两行;摘要标题居中
     for p in doc.paragraphs:
@@ -279,6 +285,11 @@ if __name__ == "__main__":
                "pipeline": r"D:\DSH\paper\figures\fig-pipeline.png",
                "workflow": r"D:\DSH\paper\figures\fig-workflow.png"},
               "基于 Revit 二次开发的地铁车站机电系统BIM 正向设计软件研发与应用", name, org)
+    elif which == "3":
+        build(r"D:\DSH\paper3",
+              r"D:\DSH\paper3\论文三-从公式文档到设计交付-地铁暖通BIM正向设计工具链的构建.docx",
+              {"chain": r"D:\DSH\paper3\figures\fig-chain.png"},
+              "从公式文档到设计交付:地铁暖通 BIM 正向设计工具链的构建", name, org)
     else:
         build(r"D:\DSH\paper2",
               r"D:\DSH\paper2\论文二-面向地铁暖通设计的规范知识库与大模型工具调用方法及实现.docx",

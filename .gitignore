@@ -40,3 +40,9 @@ paper2/*.out
 paper2/*.synctex.gz
 paper2/.preview/
 
+paper3/*.aux
+paper3/*.log
+paper3/*.blg
+paper3/*.out
+paper3/*.synctex.gz
+paper3/.preview/
